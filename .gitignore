@@ -1,0 +1,82 @@
+# ============================================================
+# Neo-MoFox-WebUI — 根目录 .gitignore
+# ============================================================
+
+# ── Python ──────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# 虚拟环境
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+
+# 测试 / 覆盖率
+.pytest_cache/
+.coverage
+coverage/
+htmlcov/
+.tox/
+
+# mypy / pyright
+.mypy_cache/
+.pyright/
+pyrightconfig.json
+
+# ── Node / 前端 ──────────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+
+# Vite / 构建产物
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
+
+# 日志
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 本地环境变量
+*.local
+.env
+.env.*
+!.env.example
+
+# ── 运行时数据 ───────────────────────────────────────────────
+data/
+*.pid
+*.sock
+
+# ── IDE / 编辑器 ─────────────────────────────────────────────
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.sublime-workspace
+*.sublime-project
+
+# ── OS ──────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
