@@ -12,6 +12,8 @@ const password = ref('')
 const loading = ref(false)
 const showPwd = ref(false)
 
+const IS_DEV = import.meta.env.DEV
+
 async function handleLogin() {
   if (!password.value.trim()) {
     toast.show('请输入密码', 'error')
@@ -22,6 +24,14 @@ async function handleLogin() {
     const res = await login({ password: password.value })
     sessionStorage.setItem('neo_token', res.token)
     await router.push({ name: 'home' })
+  } catch (e: any) {
+    // 开发模式：后端未启动时，任意密码可直接进入预览
+    if (IS_DEV && (e?.code === 'ERR_NETWORK' || e?.message?.includes('Network'))) {
+      toast.show('[DEV] 后端未启动，已进入预览模式', 'info')
+      sessionStorage.setItem('neo_token', 'dev-mock-token')
+      await router.push({ name: 'home' })
+    }
+    // 生产模式下错误已由 api/base.ts 拦截器统一处理，无需再次提示
   } finally {
     loading.value = false
   }

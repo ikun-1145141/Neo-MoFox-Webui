@@ -34,11 +34,16 @@ const themeModes: { label: string; value: ThemeMode; icon: string }[] = [
   { label: '深色', value: 'dark', icon: 'material-symbols:dark-mode-outline-rounded' },
 ]
 
+const IS_DEV = import.meta.env.DEV
+
 async function fetchSettings() {
   loading.value = true
   try {
     const data = await getSettings()
     settings.value = data
+    applyCurrentTheme()
+  } catch {
+    if (IS_DEV) toast.show('[DEV] 后端未启动，使用默认配置', 'info')
     applyCurrentTheme()
   } finally {
     loading.value = false
@@ -67,6 +72,8 @@ async function handleSave() {
   try {
     await saveSettings(settings.value)
     toast.show('主题设置已保存', 'success')
+  } catch {
+    if (IS_DEV) toast.show('[DEV] 后端未启动，预览模式下更改不会持久化', 'info')
   } finally {
     saving.value = false
   }
