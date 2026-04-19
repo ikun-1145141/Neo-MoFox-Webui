@@ -42,16 +42,22 @@ const tabs = [
 <style scoped>
 .settings-layout {
   display: flex;
-  gap: 2rem;
   align-items: flex-start;
+  min-height: 100%;
 }
 
 /* 侧边选项卡 */
 .settings-sidebar {
-  width: 180px;
-  flex-shrink: 0;
-  position: sticky;
-  top: 1rem;
+  width: 220px;
+  position: fixed;
+  left: 80px; /* 紧贴左侧 nav-rail (在桌面端) */
+  top: 72px;  /* 避开顶栏，top-bar 高度大约 72px */
+  bottom: 0;
+  padding: 1.5rem 1rem;
+  background: var(--md-sys-color-surface-container-lowest);
+  border-right: 1px solid var(--md-sys-color-outline-variant);
+  overflow-y: auto;
+  z-index: 5;
 }
 .settings-sidebar-title {
   margin: 0 0 1rem 0.5rem;
@@ -92,11 +98,29 @@ const tabs = [
 .settings-content {
   flex: 1;
   min-width: 0;
+  margin-left: 180px; /* 如果用固定的话给点 margin */
+}
+
+@media (min-width: 1300px) {
+  .settings-content {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .settings-sidebar { left: 0; top: 60px; /* 移动端 nav-rail 隐藏或变形，重新适配 */ }
 }
 
 @media (max-width: 700px) {
   .settings-layout { flex-direction: column; }
-  .settings-sidebar { width: 100%; position: static; }
-  .settings-tabs { flex-direction: row; }
+  .settings-sidebar { 
+    width: 100%; 
+    position: static; 
+    border-right: none;
+    border-bottom: 1px solid var(--md-sys-color-outline-variant);
+    padding: 1rem;
+  }
+  .settings-tabs { flex-direction: row; flex-wrap: wrap; }
+  .settings-content { padding-left: 0; }
 }
 </style>

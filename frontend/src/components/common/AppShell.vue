@@ -13,6 +13,7 @@ const navItems = [
 ]
 
 const drawerOpen = ref(false)
+const railMode = ref(false) // Rail 模式：仅显示图标
 
 const isActive = (path: string) => route.path === path || route.path.startsWith(path + '/')
 
@@ -28,38 +29,49 @@ async function handleLogout() {
 
 <template>
   <div class="layout">
-    <!-- 侧边导航栏 (Navigation Drawer) -->
-    <aside class="nav-drawer" :class="{ open: drawerOpen }">
-      <div class="drawer-header">
-        <div class="drawer-brand">
-          <Icon icon="material-symbols:robot-2-outline-rounded" width="24" height="24" />
-          <span>Neo-MoFox</span>
-        </div>
-        <button class="drawer-close" @click="drawerOpen = false" aria-label="关闭导航">
-          <Icon icon="material-symbols:menu-open-rounded" width="24" height="24" />
+    <!-- M3 Navigation Rail (侧边导航栏) -->
+    <aside class="nav-rail" :class="{ open: drawerOpen, rail: railMode }">
+      <!-- Logo / 品牌区 -->
+      <div class="rail-header">
+        <button class="rail-fab" @click="router.push('/')" aria-label="导航到主页">
+          <Icon icon="material-symbols:robot-2-outline-rounded" width="28" height="28" />
         </button>
       </div>
 
-      <nav class="drawer-nav">
+      <!-- 导航项区域 -->
+      <nav class="rail-nav">
         <router-link
           v-for="item in navItems"
           :key="item.name"
           :to="item.path"
-          class="nav-item"
+          class="rail-item"
           :class="{ active: isActive(item.path) }"
           @click="drawerOpen = false"
+          :aria-label="item.label"
         >
-          <Icon :icon="item.icon" width="22" height="22" />
-          <span>{{ item.label }}</span>
+          <div class="rail-item-indicator"></div>
+          <Icon :icon="item.icon" width="24" height="24" class="rail-item-icon" />
+          <span class="rail-item-label">{{ item.label }}</span>
         </router-link>
       </nav>
 
-      <div class="drawer-footer">
-        <button class="nav-item nav-logout" @click="handleLogout">
-          <Icon icon="material-symbols:logout-rounded" width="22" height="22" />
-          <span>退出登录</span>
+      <!-- 底部操作区 -->
+      <div class="rail-footer">
+        <button 
+          class="rail-item rail-logout" 
+          @click="handleLogout"
+          aria-label="退出登录"
+        >
+          <div class="rail-item-indicator"></div>
+          <Icon icon="material-symbols:logout-rounded" width="24" height="24" class="rail-item-icon" />
+          <span class="rail-item-label">退出</span>
         </button>
       </div>
+
+      <!-- 移动端关闭按钮 -->
+      <button class="rail-close-mobile" @click="drawerOpen = false" aria-label="关闭导航">
+        <Icon icon="material-symbols:close-rounded" width="24" height="24" />
+      </button>
     </aside>
 
     <!-- 遮罩层（移动端） -->
@@ -98,105 +110,204 @@ async function handleLogout() {
   background: var(--md-sys-color-surface);
 }
 
-/* ====== 侧边栏 ====== */
-.nav-drawer {
-  width: 260px;
+/* ====== M3 Navigation Rail (仿 Material Design 3 官网) ====== */
+.nav-rail {
+  width: 80px;
   flex-shrink: 0;
   background: var(--md-sys-color-surface-container-low);
   display: flex;
   flex-direction: column;
-  padding: 1.5rem 1rem;
+  align-items: center;
+  padding: 0.75rem 0;
   gap: 0.5rem;
   position: fixed;
   inset: 0;
-  width: 260px;
   z-index: 200;
   transform: translateX(-100%);
-  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0px 20px 40px rgba(24, 28, 32, 0.06);
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), width 0.28s;
+  box-shadow: 0px 8px 24px rgba(0, 0, 0, 0.15);
 }
+
 /* 桌面端始终显示 */
 @media (min-width: 900px) {
-  .nav-drawer {
+  .nav-rail {
     position: sticky;
     top: 0;
     height: 100dvh;
     transform: none;
     box-shadow: none;
   }
-  .drawer-close { display: none; }
   .menu-btn { display: none; }
+  .rail-close-mobile { display: none !important; }
 }
-.nav-drawer.open {
+
+/* 移动端打开状态 */
+.nav-rail.open {
   transform: translateX(0);
 }
+
 .drawer-overlay {
   position: fixed;
   inset: 0;
   z-index: 199;
-  background: rgba(0,0,0,0.3);
+  background: rgba(0, 0, 0, 0.4);
 }
 
-.drawer-header {
+/* ====== Rail 头部 - FAB 样式 Logo ====== */
+.rail-header {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 0.5rem;
-  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
 }
-.drawer-brand {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
-  font-size: 1.125rem;
-  font-weight: 700;
-  color: var(--md-sys-color-on-surface);
-}
-.drawer-close {
-  background: none;
+
+.rail-fab {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--md-sys-color-surface-container-high);
   border: none;
   cursor: pointer;
-  color: var(--md-sys-color-on-surface-variant);
   display: flex;
   align-items: center;
-  padding: 0.25rem;
-  border-radius: 0.5rem;
-  transition: background 0.15s;
+  justify-content: center;
+  color: var(--md-sys-color-primary);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
-.drawer-close:hover { background: var(--md-sys-color-surface-container); }
 
-.drawer-nav {
+.rail-fab:hover {
+  background: var(--md-sys-color-primary-container);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transform: scale(1.02);
+}
+
+.rail-fab:active {
+  transform: scale(0.98);
+}
+
+/* ====== Rail 导航项区域 ====== */
+.rail-nav {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-}
-.nav-item {
-  display: flex;
   align-items: center;
-  gap: 0.875rem;
-  padding: 0.75rem 1rem;
-  border-radius: 9999px;
-  text-decoration: none;
-  font-size: 0.9375rem;
-  font-weight: 500;
-  color: var(--md-sys-color-on-surface-variant);
-  transition: background 0.15s, color 0.15s;
-  border: none;
-  background: none;
-  cursor: pointer;
+  gap: 0.75rem;
   width: 100%;
-  text-align: left;
+  padding: 0 0.5rem;
+  overflow-y: auto;
 }
-.nav-item:hover {
-  background: var(--md-sys-color-surface-container);
-  color: var(--md-sys-color-on-surface);
+
+.rail-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  width: 100%;
+  min-height: 56px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 16px;
+  text-decoration: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--md-sys-color-on-surface-variant);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
 }
-.nav-item.active {
+
+.rail-item:hover {
+  background: var(--md-sys-color-surface-container-highest);
+}
+
+/* Active 状态指示器（左侧竖条） */
+.rail-item-indicator {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%) scaleY(0);
+  width: 3px;
+  height: 32px;
+  background: var(--md-sys-color-primary);
+  border-radius: 0 2px 2px 0;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: center;
+}
+
+.rail-item.active .rail-item-indicator {
+  transform: translateY(-50%) scaleY(1);
+}
+
+.rail-item.active {
   background: var(--md-sys-color-secondary-container);
   color: var(--md-sys-color-on-secondary-container);
-  font-weight: 600;
+}
+
+.rail-item-icon {
+  transition: transform 0.2s;
+}
+
+.rail-item:hover .rail-item-icon {
+  transform: scale(1.1);
+}
+
+.rail-item-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-align: center;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+}
+
+/* ====== Rail 底部 ====== */
+.rail-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.5rem 0;
+  width: 100%;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.rail-logout {
+  color: var(--md-sys-color-error);
+}
+
+.rail-logout:hover {
+  background: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-on-error-container);
+}
+
+/* ====== 移动端关闭按钮 ====== */
+.rail-close-mobile {
+  display: none;
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--md-sys-color-surface-container-high);
+  border: none;
+  cursor: pointer;
+  color: var(--md-sys-color-on-surface);
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.rail-close-mobile:hover {
+  background: var(--md-sys-color-surface-container-highest);
+}
+
+@media (max-width: 899px) {
+  .nav-rail.open .rail-close-mobile {
+    display: flex;
+  }
 }
 .drawer-footer {
   padding-top: 0.5rem;

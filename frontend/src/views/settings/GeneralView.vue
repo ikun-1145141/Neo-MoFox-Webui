@@ -17,14 +17,12 @@ const settings = ref<SettingsData>({
   wallpaper_path: null,
 })
 
-const IS_DEV = import.meta.env.DEV
-
 async function fetchSettings() {
   loading.value = true
   try {
     settings.value = await getSettings()
   } catch {
-    if (IS_DEV) toast.show('[DEV] 后端未启动，使用默认配置', 'info')
+    // 错误已由 axios 拦截器统一处理
   } finally {
     loading.value = false
   }
@@ -36,7 +34,7 @@ async function handleSave() {
     await saveSettings(settings.value)
     toast.show('设置已保存', 'success')
   } catch {
-    if (IS_DEV) toast.show('[DEV] 后端未启动，预览模式下更改不会持久化', 'info')
+    // 错误已由 axios 拦截器统一处理
   } finally {
     saving.value = false
   }

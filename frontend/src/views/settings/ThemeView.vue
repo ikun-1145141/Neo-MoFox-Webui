@@ -10,6 +10,7 @@ const toast = useToastStore()
 
 const loading = ref(true)
 const saving = ref(false)
+const fileInput = ref<HTMLInputElement | null>(null)
 
 const settings = ref<SettingsData>({
   theme: 'auto',
@@ -34,8 +35,6 @@ const themeModes: { label: string; value: ThemeMode; icon: string }[] = [
   { label: '深色', value: 'dark', icon: 'material-symbols:dark-mode-outline-rounded' },
 ]
 
-const IS_DEV = import.meta.env.DEV
-
 async function fetchSettings() {
   loading.value = true
   try {
@@ -43,7 +42,6 @@ async function fetchSettings() {
     settings.value = data
     applyCurrentTheme()
   } catch {
-    if (IS_DEV) toast.show('[DEV] 后端未启动，使用默认配置', 'info')
     applyCurrentTheme()
   } finally {
     loading.value = false
@@ -67,13 +65,27 @@ function selectColor(hex: string) {
 // 实时预览主题模式切换
 watch(() => settings.value.theme, applyCurrentTheme)
 
+function triggerUpload() {
+  fileInput.value?.click()
+}
+
+function handleMockUpload(event: Event) {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (file) {
+    const url = URL.createObjectURL(file)
+    settings.value.wallpaper_path = url
+    toast.show('壁纸选定 (仅前端展示预览)', 'success')
+  }
+}
+
 async function handleSave() {
   saving.value = true
   try {
     await saveSettings(settings.value)
     toast.show('主题设置已保存', 'success')
   } catch {
-    if (IS_DEV) toast.show('[DEV] 后端未启动，预览模式下更改不会持久化', 'info')
+    // 错误已由 axios 拦截器统一处理
   } finally {
     saving.value = false
   }
@@ -98,7 +110,10 @@ onMounted(fetchSettings)
     <template v-else>
       <!-- 外观模式 -->
       <section class="setting-section">
-        <h3 class="section-heading">外观模式</h3>
+        <div class="section-text">
+          <h3 class="section-heading">外观模式</h3>
+          <p class="section-desc">选择界面的亮暗主题，或设置随系统自动切换</p>
+        </div>
         <div class="mode-grid">
           <button
             v-for="mode in themeModes"
@@ -118,8 +133,10 @@ onMounted(fetchSettings)
 
       <!-- 主题颜色 -->
       <section class="setting-section">
-        <h3 class="section-heading">主题颜色</h3>
-        <p class="section-desc">选择主色调，MD3 色彩引擎将自动生成完整配色方案</p>
+        <div class="section-text">
+          <h3 class="section-heading">主题主色调</h3>
+          <p class="section-desc">选择全局界面的主导配色，UI引擎将基于该色彩生成完整的MD3衍生色板</p>
+        </div>
 
         <!-- 预设色板 -->
         <div class="color-presets">
@@ -158,12 +175,32 @@ onMounted(fetchSettings)
             <span class="color-hex-val">{{ settings.theme_source_color }}</span>
           </div>
         </div>
+      </section>
 
-        <!-- 颜色预览块 -->
-        <div class="color-preview-strip">
-          <div class="preview-chip primary-chip">Primary</div>
-          <div class="preview-chip secondary-chip">Secondary</div>
-          <div class="preview-chip tertiary-chip">Tertiary</div>
+      <!-- 自定义壁纸 -->
+      <section class="setting-section">
+        <div class="section-text">
+          <h3 class="section-heading">自定义壁纸</h3>
+          <p class="section-desc">上传一张背景图片，它将显示在主界面的底层背景中。</p>
+        </div>
+        
+        <div class="wallpaper-upload-area">
+          <div class="upload-box" @click="triggerUpload">
+            <Icon icon="material-symbols:image-outline-rounded" width="48" height="48" class="upload-icon" />
+            <div class="upload-labels">
+              <p class="upload-text">点击此处选择图片上传</p>
+              <p class="upload-hint">支持 JPG, PNG, WebP 格式（推荐小于 5MB）</p>
+            </div>
+            <!-- Mock upload file input -->
+            <input type="file" ref="fileInput" accept="image/*" class="hidden-input" @change="handleMockUpload" />
+          </div>
+          <!-- Mock preview when image exists -->
+          <div v-if="settings.wallpaper_path" class="wallpaper-preview">
+            <img :src="settings.wallpaper_path" alt="wallpaper" class="preview-img" />
+            <button class="remove-btn" @click="settings.wallpaper_path = null">
+              <Icon icon="material-symbols:delete-outline-rounded" width="16" height="16" />
+            </button>
+          </div>
         </div>
       </section>
 
@@ -218,23 +255,31 @@ onMounted(fetchSettings)
 
 /* 章节 */
 .setting-section {
-  background: var(--md-sys-color-surface-container-low);
-  border-radius: 1.25rem;
-  padding: 1.5rem;
+  background: var(--md-sys-color-surface);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 12px;
+  padding: 2rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.5rem;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.02), 0 1px 3px rgba(0,0,0,0.01);
+}
+.section-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 .section-heading {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  font-size: 1.25rem;
+  font-weight: 700;
   color: var(--md-sys-color-on-surface);
 }
 .section-desc {
   margin: 0;
-  font-size: 0.8125rem;
-  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.875rem;
+  color: var(--md-sys-color-outline);
 }
 
 /* 外观模式卡片 */
@@ -344,29 +389,87 @@ onMounted(fetchSettings)
   border-radius: 0.5rem;
 }
 
-/* MD3 颜色预览条 */
-.color-preview-strip {
+/* 壁纸上传区域 */
+.wallpaper-upload-area {
   display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 1.5rem;
 }
-.preview-chip {
-  padding: 0.375rem 1rem;
-  border-radius: 9999px;
-  font-size: 0.8125rem;
+.upload-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 3rem 1.5rem;
+  border: 2px dashed var(--md-sys-color-outline-variant);
+  border-radius: 12px;
+  background: var(--md-sys-color-surface-container-lowest);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+.upload-box:hover {
+  background: var(--md-sys-color-surface-container);
+  border-color: var(--md-sys-color-primary);
+}
+.upload-icon {
+  color: var(--md-sys-color-outline);
+}
+.upload-labels {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+.upload-text {
+  margin: 0;
+  font-size: 1rem;
   font-weight: 600;
+  color: var(--md-sys-color-on-surface);
 }
-.primary-chip {
-  background: var(--md-sys-color-primary);
-  color: var(--md-sys-color-on-primary);
+.upload-hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--md-sys-color-outline);
 }
-.secondary-chip {
-  background: var(--md-sys-color-secondary);
-  color: var(--md-sys-color-on-secondary);
+.hidden-input {
+  display: none;
 }
-.tertiary-chip {
-  background: var(--md-sys-color-tertiary);
-  color: var(--md-sys-color-on-tertiary);
+.wallpaper-preview {
+  position: relative;
+  width: 100%;
+  max-height: 240px;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.06);
+  border: 1px solid var(--md-sys-color-outline-variant);
+}
+.preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.remove-btn {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+  background: rgba(0,0,0,0.5);
+  color: #fff;
+  border: none;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s, background 0.15s;
+}
+.remove-btn:hover {
+  background: rgba(220, 38, 38, 0.8);
+  transform: scale(1.1);
 }
 
 /* 操作按钮行 */

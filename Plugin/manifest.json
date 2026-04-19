@@ -1,0 +1,19 @@
+{
+    "name": "webui",
+    "version": "1.0.0",
+    "description": "Neo-MoFox WebUI 后端插件",
+    "author": "MoFox Team",
+    "dependencies": {
+        "plugins": [],
+        "components": []
+    },
+    "include": [
+        {
+            "component_type": "router",
+            "component_name": "webui",
+            "dependencies": []
+        }
+    ],
+    "entry_point": "plugin.py",
+    "min_core_version": "1.0.0"
+}
