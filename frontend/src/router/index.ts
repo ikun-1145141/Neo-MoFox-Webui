@@ -34,6 +34,11 @@ const router = createRouter({
           name: 'settings-general',
           component: () => import('../views/settings/GeneralView.vue'),
         },
+        {
+          path: 'data',
+          name: 'settings-data',
+          component: () => import('../views/settings/DataView.vue'),
+        },
       ],
     },
     {

@@ -8,6 +8,7 @@ const route = useRoute()
 const tabs = [
   { label: '主题', icon: 'material-symbols:palette-outline-rounded', to: '/settings/theme' },
   { label: '通用', icon: 'material-symbols:tune-rounded', to: '/settings/general' },
+  { label: '数据', icon: 'material-symbols:database-outline-rounded', to: '/settings/data' },
 ]
 </script>
 

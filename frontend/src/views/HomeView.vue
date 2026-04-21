@@ -1,23 +1,43 @@
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
 import AppShell from '../components/common/AppShell.vue'
 import PageHeader from '../components/common/PageHeader.vue'
 import { Icon } from '@iconify/vue'
 import { useRouter } from 'vue-router'
+import { healthCheck } from '../api/modules/settings'
 
 const router = useRouter()
+
+type HealthStatus = 'loading' | 'healthy' | 'error'
+const healthStatus = ref<HealthStatus>('loading')
+
+onMounted(async () => {
+  try {
+    await healthCheck()
+    healthStatus.value = 'healthy'
+  } catch {
+    healthStatus.value = 'error'
+  }
+})
 
 const quickLinks = [
   {
     label: '主题设置',
-    desc: '自定义颜色、外观与壁纸',
+    desc: '自定义颜色、外观主题',
     icon: 'material-symbols:palette-outline-rounded',
     to: '/settings/theme',
   },
   {
     label: '通用设置',
-    desc: '机器人名称、语言等基础配置',
+    desc: '语言、字体与系统行为',
     icon: 'material-symbols:tune-rounded',
     to: '/settings/general',
+  },
+  {
+    label: '数据管理',
+    desc: '导出 / 导入配置文件',
+    icon: 'material-symbols:database-outline-rounded',
+    to: '/settings/data',
   },
 ]
 </script>
@@ -33,11 +53,27 @@ const quickLinks = [
     <!-- 状态卡片组 -->
     <section class="stat-grid">
       <div class="stat-card">
-        <Icon icon="material-symbols:check-circle-outline-rounded" width="28" height="28" class="stat-icon success" />
-        <div>
-          <div class="stat-val">运行中</div>
-          <div class="stat-label">Bot 状态</div>
-        </div>
+        <template v-if="healthStatus === 'loading'">
+          <Icon icon="material-symbols:progress-activity" width="28" height="28" class="stat-icon spin" style="color: var(--md-sys-color-outline)" />
+          <div>
+            <div class="stat-val">检测中…</div>
+            <div class="stat-label">后端状态</div>
+          </div>
+        </template>
+        <template v-else-if="healthStatus === 'healthy'">
+          <Icon icon="material-symbols:check-circle-outline-rounded" width="28" height="28" class="stat-icon success" />
+          <div>
+            <div class="stat-val">运行中</div>
+            <div class="stat-label">后端状态</div>
+          </div>
+        </template>
+        <template v-else>
+          <Icon icon="material-symbols:cancel-outline-rounded" width="28" height="28" class="stat-icon error" />
+          <div>
+            <div class="stat-val">未连接</div>
+            <div class="stat-label">后端状态</div>
+          </div>
+        </template>
       </div>
       <div class="stat-card">
         <Icon icon="material-symbols:message-outline-rounded" width="28" height="28" class="stat-icon primary" />
@@ -98,8 +134,11 @@ const quickLinks = [
 }
 .stat-icon { flex-shrink: 0; }
 .stat-icon.success { color: var(--md-sys-color-tertiary, #4caf82); }
+.stat-icon.error { color: var(--md-sys-color-error); }
 .stat-icon.primary { color: var(--md-sys-color-primary); }
 .stat-icon.secondary { color: var(--md-sys-color-secondary); }
+.spin { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .stat-val {
   font-size: 1.25rem;
   font-weight: 700;
