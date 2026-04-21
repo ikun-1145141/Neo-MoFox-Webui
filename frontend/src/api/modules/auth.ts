@@ -1,5 +1,7 @@
 import http from '../base'
-import type { LoginRequest, LoginResponse } from '../types/base'
+
+export interface LoginRequest { password: string }
+export interface LoginResponse { token: string }
 
 export function login(payload: LoginRequest): Promise<LoginResponse> {
   return http.post('/api/auth/login', payload)
