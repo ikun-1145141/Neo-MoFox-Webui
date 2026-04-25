@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 import AppShell from '../components/common/AppShell.vue'
-import { Icon } from '@iconify/vue'
-
 const route = useRoute()
 
 const tabs = [
-  { label: '主题', icon: 'material-symbols:palette-outline-rounded', to: '/settings/theme' },
+  { label: '主题', icon: 'material-symbols:format-paint-outline-rounded', to: '/settings/theme' },
   { label: '通用', icon: 'material-symbols:tune-rounded', to: '/settings/general' },
-  { label: '数据', icon: 'material-symbols:database-outline-rounded', to: '/settings/data' },
+  { label: '数据', icon: 'material-symbols:storage-rounded', to: '/settings/data' },
 ]
 </script>
 

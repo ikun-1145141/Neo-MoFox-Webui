@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Icon } from '@iconify/vue'
 import { login } from '../api/modules/auth'
 import { useToastStore } from '../utils/toast'
 

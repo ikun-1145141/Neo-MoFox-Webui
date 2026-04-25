@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Icon } from '@iconify/vue'
 import { logout } from '../../api/modules/auth'
 
 const router = useRouter()
@@ -9,7 +8,7 @@ const route = useRoute()
 
 const navItems = [
   { label: '主页', icon: 'material-symbols:home-outline-rounded', name: 'home', path: '/' },
-  { label: '设置', icon: 'material-symbols:settings-outline-rounded', name: 'settings-theme', path: '/settings' },
+  { label: '设置', icon: 'material-symbols:setting-outline-rounded', name: 'settings-theme', path: '/settings' },
 ]
 
 const drawerOpen = ref(false)
@@ -20,6 +19,8 @@ const isActive = (path: string) => route.path === path || route.path.startsWith(
 async function handleLogout() {
   try {
     await logout()
+  } catch {
+    // 后端不可用时也允许前端本地退出，避免未捕获异常影响页面。
   } finally {
     sessionStorage.removeItem('neo_token')
     router.push({ name: 'login' })
@@ -85,6 +86,13 @@ async function handleLogout() {
           <Icon icon="material-symbols:menu-rounded" width="24" height="24" />
         </button>
         <h2 class="page-title">
+          <Icon
+            v-if="typeof route.meta?.icon === 'string'"
+            :icon="route.meta.icon"
+            width="20"
+            height="20"
+            class="page-title-icon"
+          />
           {{ route.meta?.title ?? 'Neo-MoFox WebUI' }}
         </h2>
         <div class="top-bar-actions">
@@ -356,11 +364,18 @@ async function handleLogout() {
 .page-title {
   flex: 1;
   margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
   font-size: 1.25rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--md-sys-color-on-surface);
+}
+
+.page-title-icon {
+  color: var(--md-sys-color-primary);
 }
 
 .top-bar-actions {

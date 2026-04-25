@@ -1,18 +1,49 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onBeforeUnmount, onMounted } from 'vue'
 import ToastManager from './components/common/ToastManager.vue'
 import { applyMd3Theme } from './utils/md3theme'
+import { getSettings } from './api/modules/settings'
 
-// 应用启动时加载默认主题（后端返回后会覆盖）
-onMounted(() => {
-  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-  applyMd3Theme('#0058bd', isDark)
+type ThemeMode = 'auto' | 'light' | 'dark'
+
+let mediaQuery: MediaQueryList | null = null
+let currentThemeMode: ThemeMode = 'auto'
+let currentPrimaryColor = '#0058bd'
+
+function handleSystemThemeChange() {
+  applyThemeFromState()
+}
+
+function applyThemeFromState() {
+  const prefersDark = mediaQuery?.matches ?? window.matchMedia('(prefers-color-scheme: dark)').matches
+  const isDark = currentThemeMode === 'dark' || (currentThemeMode === 'auto' && prefersDark)
+  applyMd3Theme(currentPrimaryColor, isDark)
   document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
+}
 
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-    applyMd3Theme('#0058bd', e.matches)
-    document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light')
-  })
+async function syncSettingsAndApplyTheme() {
+  try {
+    const settings = await getSettings()
+    currentThemeMode = settings.theme.mode
+    currentPrimaryColor = settings.theme.primary_color
+  } catch {
+    // 后端不可用时回退到默认主题
+  } finally {
+    applyThemeFromState()
+  }
+}
+
+// 应用启动时同步设置并应用主题
+onMounted(() => {
+  mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+  void syncSettingsAndApplyTheme()
+
+  mediaQuery.addEventListener('change', handleSystemThemeChange)
+})
+
+onBeforeUnmount(() => {
+  if (!mediaQuery) return
+  mediaQuery.removeEventListener('change', handleSystemThemeChange)
 })
 </script>
 

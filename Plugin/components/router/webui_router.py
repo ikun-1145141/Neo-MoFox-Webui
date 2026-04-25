@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from src.core.components.base.router import BaseRouter
 from src.app.plugin_system.api.log_api import get_logger
+from src.core.utils.security import VerifiedDep
 
 from ...managers.config_manager import get_config_manager
 from ...storage.settings import WebuiSettings
@@ -72,7 +73,7 @@ class WebuiSettingsRouter(BaseRouter):
     def register_endpoints(self) -> None:
         """注册 API 端点。"""
 
-        @self.app.get("/settings", response_model=BaseResponse[WebuiSettings])
+        @self.app.get("/settings", response_model=BaseResponse[WebuiSettings], dependencies=[VerifiedDep])
         async def get_settings() -> BaseResponse[WebuiSettings]:
             """获取当前设置。
 
@@ -86,7 +87,7 @@ class WebuiSettingsRouter(BaseRouter):
                 logger.error(f"获取设置失败: {e}")
                 raise HTTPException(status_code=500, detail=f"获取设置失败: {str(e)}")
 
-        @self.app.post("/settings", response_model=BaseResponse[WebuiSettings])
+        @self.app.post("/settings", response_model=BaseResponse[WebuiSettings], dependencies=[VerifiedDep])
         async def update_settings(request: UpdateSettingsRequest) -> BaseResponse[WebuiSettings]:
             """更新设置（部分更新）。
 
@@ -103,7 +104,7 @@ class WebuiSettingsRouter(BaseRouter):
                 logger.error(f"更新设置失败: {e}")
                 raise HTTPException(status_code=400, detail=f"更新设置失败: {str(e)}")
 
-        @self.app.put("/settings", response_model=BaseResponse[WebuiSettings])
+        @self.app.put("/settings", response_model=BaseResponse[WebuiSettings], dependencies=[VerifiedDep])
         async def replace_settings(request: ReplaceSettingsRequest) -> BaseResponse[WebuiSettings]:
             """替换设置（完全替换）。
 
@@ -120,7 +121,7 @@ class WebuiSettingsRouter(BaseRouter):
                 logger.error(f"替换设置失败: {e}")
                 raise HTTPException(status_code=400, detail=f"替换设置失败: {str(e)}")
 
-        @self.app.post("/settings/reset", response_model=BaseResponse[WebuiSettings])
+        @self.app.post("/settings/reset", response_model=BaseResponse[WebuiSettings], dependencies=[VerifiedDep])
         async def reset_settings() -> BaseResponse[WebuiSettings]:
             """重置设置为默认值。
 

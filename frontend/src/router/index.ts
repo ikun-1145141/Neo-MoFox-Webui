@@ -13,12 +13,12 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: () => import('../views/HomeView.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, title: '主页', icon: 'material-symbols:home-outline-rounded' },
     },
     {
       path: '/settings',
       component: () => import('../views/SettingsView.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, title: '设置', icon: 'material-symbols:settings-outline-rounded' },
       children: [
         {
           path: '',
@@ -28,16 +28,19 @@ const router = createRouter({
           path: 'theme',
           name: 'settings-theme',
           component: () => import('../views/settings/ThemeView.vue'),
+          meta: { requiresAuth: true, title: '主题设置', icon: 'material-symbols:format-paint-outline-rounded' },
         },
         {
           path: 'general',
           name: 'settings-general',
           component: () => import('../views/settings/GeneralView.vue'),
+          meta: { requiresAuth: true, title: '通用设置', icon: 'material-symbols:tune-rounded' },
         },
         {
           path: 'data',
           name: 'settings-data',
           component: () => import('../views/settings/DataView.vue'),
+          meta: { requiresAuth: true, title: '数据管理', icon: 'material-symbols:storage-rounded' },
         },
       ],
     },

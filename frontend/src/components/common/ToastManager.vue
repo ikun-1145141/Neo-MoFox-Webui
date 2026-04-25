@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { Icon } from '@iconify/vue'
 import { useToastStore } from '../../utils/toast'
 import type { ToastType } from '../../utils/toast'
 

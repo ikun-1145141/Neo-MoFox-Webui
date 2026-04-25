@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Icon } from '@iconify/vue'
 import { getSettings, replaceSettings } from '../../api/modules/settings'
 import { useToastStore } from '../../utils/toast'
-import type { WebuiSettings } from '../../api/types/base'
+import type { WebuiSettings } from '../../api/types/settings'
 
 const IS_DEV = import.meta.env.DEV
 const toast = useToastStore()

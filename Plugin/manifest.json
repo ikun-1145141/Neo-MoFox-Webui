@@ -10,6 +10,11 @@
     "include": [
         {
             "component_type": "router",
+            "component_name": "auth",
+            "dependencies": []
+        },
+        {
+            "component_type": "router",
             "component_name": "webui",
             "dependencies": []
         }

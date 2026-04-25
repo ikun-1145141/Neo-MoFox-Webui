@@ -9,6 +9,7 @@ from src.core.components.base.plugin import BasePlugin
 from src.core.components.loader import register_plugin
 from src.app.plugin_system.api.log_api import get_logger
 
+from .components.router.auth_router import AuthRouter
 from .components.router.webui_router import WebuiSettingsRouter
 
 logger = get_logger("webui_plugin")
@@ -38,6 +39,7 @@ class WebuiPlugin(BasePlugin):
             组件类列表
         """
         components: list[type] = [
+            AuthRouter,
             WebuiSettingsRouter,
         ]
         return components
@@ -46,6 +48,7 @@ class WebuiPlugin(BasePlugin):
         """插件加载钩子。"""
         logger.info(f"WebUI 插件 v{self.plugin_version} 已加载")
         logger.info("API 路径: /api/webui")
+        logger.info("认证路径: /api/auth")
 
     async def on_plugin_unloaded(self) -> None:
         """插件卸载钩子。"""

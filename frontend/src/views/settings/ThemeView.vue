@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
-import { Icon } from '@iconify/vue'
+import { ref, onBeforeUnmount, onMounted, watch } from 'vue'
 import { getSettings, updateSettings, resetSettings } from '../../api/modules/settings'
 import { applyMd3Theme } from '../../utils/md3theme'
 import { useToastStore } from '../../utils/toast'
-import type { WebuiSettings } from '../../api/types/base'
+import type { WebuiSettings } from '../../api/types/settings'
 
 const IS_DEV = import.meta.env.DEV
 const toast = useToastStore()
 const loading = ref(true)
 const saving = ref(false)
+const autoSaveEnabled = ref(false)
+const lastSavedThemeSnapshot = ref('')
+
+let autoSaveTimer: number | null = null
+const AUTO_SAVE_DELAY_MS = 600
 
 const DEFAULT_SETTINGS: WebuiSettings = {
   theme: { mode: 'auto', primary_color: '#0058bd' },
@@ -34,8 +38,47 @@ const themeModes: { label: string; value: WebuiSettings['theme']['mode']; icon: 
   { label: '深色', value: 'dark', icon: 'material-symbols:dark-mode-outline-rounded' },
 ]
 
+function getCurrentThemeSnapshot(): string {
+  return JSON.stringify(settings.value.theme)
+}
+
+function clearAutoSaveTimer() {
+  if (autoSaveTimer !== null) {
+    window.clearTimeout(autoSaveTimer)
+    autoSaveTimer = null
+  }
+}
+
+async function persistThemeChanges() {
+  if (loading.value) return
+
+  const currentSnapshot = getCurrentThemeSnapshot()
+  if (currentSnapshot === lastSavedThemeSnapshot.value) return
+
+  saving.value = true
+  try {
+    const updated = await updateSettings({ theme: settings.value.theme })
+    settings.value.theme = updated.theme
+    lastSavedThemeSnapshot.value = JSON.stringify(updated.theme)
+  } catch {
+    if (IS_DEV) toast.show('[DEV] 后端未启动，更改不会持久化', 'info')
+  } finally {
+    saving.value = false
+  }
+}
+
+function scheduleAutoSave() {
+  if (!autoSaveEnabled.value) return
+  clearAutoSaveTimer()
+  autoSaveTimer = window.setTimeout(() => {
+    void persistThemeChanges()
+  }, AUTO_SAVE_DELAY_MS)
+}
+
 async function fetchSettings() {
   loading.value = true
+  autoSaveEnabled.value = false
+  clearAutoSaveTimer()
   try {
     settings.value = await getSettings()
     applyCurrentTheme()
@@ -43,6 +86,8 @@ async function fetchSettings() {
     if (IS_DEV) toast.show('[DEV] 后端未启动，使用默认配置', 'info')
     applyCurrentTheme()
   } finally {
+    lastSavedThemeSnapshot.value = getCurrentThemeSnapshot()
+    autoSaveEnabled.value = true
     loading.value = false
   }
 }
@@ -63,21 +108,17 @@ function selectColor(hex: string) {
 
 watch(() => settings.value.theme.mode, applyCurrentTheme)
 
-async function handleSave() {
-  saving.value = true
-  try {
-    const updated = await updateSettings({ theme: settings.value.theme })
-    settings.value.theme = updated.theme
-    toast.show('主题设置已保存', 'success')
-  } catch {
-    if (IS_DEV) toast.show('[DEV] 后端未启动，更改不会持久化', 'info')
-  } finally {
-    saving.value = false
+watch(
+  () => [settings.value.theme.mode, settings.value.theme.primary_color],
+  () => {
+    scheduleAutoSave()
   }
-}
+)
 
 async function handleReset() {
   saving.value = true
+  autoSaveEnabled.value = false
+  clearAutoSaveTimer()
   try {
     const data = await resetSettings()
     settings.value = data
@@ -86,9 +127,15 @@ async function handleReset() {
   } catch {
     if (IS_DEV) toast.show('[DEV] 后端未启动', 'info')
   } finally {
+    lastSavedThemeSnapshot.value = getCurrentThemeSnapshot()
+    autoSaveEnabled.value = true
     saving.value = false
   }
 }
+
+onBeforeUnmount(() => {
+  clearAutoSaveTimer()
+})
 
 onMounted(fetchSettings)
 </script>
@@ -98,6 +145,10 @@ onMounted(fetchSettings)
     <div class="view-header">
       <h2 class="view-title">主题设置</h2>
       <p class="view-sub">自定义颜色方案与外观偏好，所有设置同步至后端持久化</p>
+      <p class="autosave-hint">
+        <Icon icon="material-symbols:cloud-done-outline-rounded" width="16" height="16" />
+        修改后自动保存
+      </p>
     </div>
 
     <div v-if="loading" class="loading-wrap">
@@ -186,11 +237,6 @@ onMounted(fetchSettings)
           <Icon icon="material-symbols:restart-alt-rounded" width="18" height="18" />
           恢复默认
         </button>
-        <button class="btn-primary" @click="handleSave" :disabled="saving">
-          <Icon v-if="saving" icon="material-symbols:progress-activity" class="spin" width="18" height="18" />
-          <Icon v-else icon="material-symbols:save-outline-rounded" width="18" height="18" />
-          <span>{{ saving ? '保存中…' : '保存设置' }}</span>
-        </button>
       </div>
     </template>
   </div>
@@ -205,6 +251,14 @@ onMounted(fetchSettings)
   color: var(--md-sys-color-on-surface);
 }
 .view-sub { margin: 0; font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant); }
+.autosave-hint {
+  margin: 0.5rem 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--md-sys-color-on-surface-variant);
+}
 .loading-wrap {
   display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 3rem;
   color: var(--md-sys-color-on-surface-variant); font-size: 0.9rem;
@@ -269,15 +323,6 @@ onMounted(fetchSettings)
 .secondary-chip { background: var(--md-sys-color-secondary); color: var(--md-sys-color-on-secondary); }
 .tertiary-chip { background: var(--md-sys-color-tertiary); color: var(--md-sys-color-on-tertiary); }
 .actions-row { display: flex; justify-content: flex-end; gap: 0.75rem; flex-wrap: wrap; }
-.btn-primary {
-  display: flex; align-items: center; gap: 0.5rem;
-  height: 2.75rem; padding: 0 1.5rem; border: none; border-radius: 9999px;
-  background: linear-gradient(135deg, var(--md-sys-color-primary) 0%, #2771df 100%);
-  color: var(--md-sys-color-on-primary);
-  font-size: 0.9375rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s;
-  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
-}
-.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-outlined {
   display: flex; align-items: center; gap: 0.5rem;
   height: 2.75rem; padding: 0 1.25rem; border: none; border-radius: 9999px;

@@ -3,7 +3,7 @@ import type {
   WebuiSettings,
   UpdateSettingsRequest,
   ReplaceSettingsRequest,
-} from '../types/base'
+} from '../types/settings'
 import { API_WEBUI_PREFIX } from '../config'
 
 const BASE = API_WEBUI_PREFIX

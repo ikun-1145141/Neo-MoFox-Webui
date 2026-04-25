@@ -2,7 +2,6 @@
 import { ref, onMounted } from 'vue'
 import AppShell from '../components/common/AppShell.vue'
 import PageHeader from '../components/common/PageHeader.vue'
-import { Icon } from '@iconify/vue'
 import { useRouter } from 'vue-router'
 import { healthCheck } from '../api/modules/settings'
 
@@ -24,7 +23,7 @@ const quickLinks = [
   {
     label: '主题设置',
     desc: '自定义颜色、外观主题',
-    icon: 'material-symbols:palette-outline-rounded',
+    icon: 'material-symbols:format-paint-outline-rounded',
     to: '/settings/theme',
   },
   {
@@ -36,7 +35,7 @@ const quickLinks = [
   {
     label: '数据管理',
     desc: '导出 / 导入配置文件',
-    icon: 'material-symbols:database-outline-rounded',
+    icon: 'material-symbols:storage-rounded',
     to: '/settings/data',
   },
 ]

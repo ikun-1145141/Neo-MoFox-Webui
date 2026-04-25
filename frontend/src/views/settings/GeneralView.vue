@@ -1,14 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { Icon } from '@iconify/vue'
+import { ref, onBeforeUnmount, onMounted, watch } from 'vue'
 import { getSettings, updateSettings, resetSettings } from '../../api/modules/settings'
 import { useToastStore } from '../../utils/toast'
-import type { WebuiSettings } from '../../api/types/base'
+import type { WebuiSettings } from '../../api/types/settings'
 
 const IS_DEV = import.meta.env.DEV
 const toast = useToastStore()
 const loading = ref(true)
 const saving = ref(false)
+const autoSaveEnabled = ref(false)
+const lastSavedSnapshot = ref('')
+
+let autoSaveTimer: number | null = null
+const AUTO_SAVE_DELAY_MS = 600
 
 const fontSizeOptions: { label: string; value: 'small' | 'medium' | 'large'; icon: string }[] = [
   { label: '小', value: 'small', icon: 'material-symbols:format-size-rounded' },
@@ -24,24 +28,32 @@ const DEFAULT_SETTINGS: WebuiSettings = {
 
 const settings = ref<WebuiSettings>(structuredClone(DEFAULT_SETTINGS))
 
-async function fetchSettings() {
-  loading.value = true
-  try {
-    settings.value = await getSettings()
-  } catch {
-    if (IS_DEV) toast.show('[DEV] 后端未启动，使用默认配置', 'info')
-  } finally {
-    loading.value = false
+function getCurrentSnapshot(): string {
+  return JSON.stringify({
+    ui: settings.value.ui,
+    system: settings.value.system,
+  })
+}
+
+function clearAutoSaveTimer() {
+  if (autoSaveTimer !== null) {
+    window.clearTimeout(autoSaveTimer)
+    autoSaveTimer = null
   }
 }
 
-async function handleSave() {
+async function persistChanges() {
+  if (loading.value) return
+
+  const currentSnapshot = getCurrentSnapshot()
+  if (currentSnapshot === lastSavedSnapshot.value) return
+
   saving.value = true
   try {
     const updated = await updateSettings({ ui: settings.value.ui, system: settings.value.system })
     settings.value.ui = updated.ui
     settings.value.system = updated.system
-    toast.show('通用设置已保存', 'success')
+    lastSavedSnapshot.value = JSON.stringify({ ui: updated.ui, system: updated.system })
   } catch {
     if (IS_DEV) toast.show('[DEV] 后端未启动，更改不会持久化', 'info')
   } finally {
@@ -49,8 +61,33 @@ async function handleSave() {
   }
 }
 
+function scheduleAutoSave() {
+  if (!autoSaveEnabled.value) return
+  clearAutoSaveTimer()
+  autoSaveTimer = window.setTimeout(() => {
+    void persistChanges()
+  }, AUTO_SAVE_DELAY_MS)
+}
+
+async function fetchSettings() {
+  loading.value = true
+  autoSaveEnabled.value = false
+  clearAutoSaveTimer()
+  try {
+    settings.value = await getSettings()
+  } catch {
+    if (IS_DEV) toast.show('[DEV] 后端未启动，使用默认配置', 'info')
+  } finally {
+    lastSavedSnapshot.value = getCurrentSnapshot()
+    autoSaveEnabled.value = true
+    loading.value = false
+  }
+}
+
 async function handleReset() {
   saving.value = true
+  autoSaveEnabled.value = false
+  clearAutoSaveTimer()
   try {
     const data = await resetSettings()
     settings.value = data
@@ -58,9 +95,27 @@ async function handleReset() {
   } catch {
     if (IS_DEV) toast.show('[DEV] 后端未启动', 'info')
   } finally {
+    lastSavedSnapshot.value = getCurrentSnapshot()
+    autoSaveEnabled.value = true
     saving.value = false
   }
 }
+
+watch(
+  () => [
+    settings.value.ui.language,
+    settings.value.ui.font_size,
+    settings.value.system.auto_update,
+    settings.value.system.check_update_on_startup,
+  ],
+  () => {
+    scheduleAutoSave()
+  }
+)
+
+onBeforeUnmount(() => {
+  clearAutoSaveTimer()
+})
 
 onMounted(fetchSettings)
 </script>
@@ -70,6 +125,10 @@ onMounted(fetchSettings)
     <div class="view-header">
       <h2 class="view-title">通用设置</h2>
       <p class="view-sub">调整界面语言、字体与系统行为偏好</p>
+      <p class="autosave-hint">
+        <Icon icon="material-symbols:cloud-done-outline-rounded" width="16" height="16" />
+        修改后自动保存
+      </p>
     </div>
 
     <div v-if="loading" class="loading-wrap">
@@ -182,11 +241,6 @@ onMounted(fetchSettings)
           <Icon icon="material-symbols:restart-alt-rounded" width="18" height="18" />
           恢复默认
         </button>
-        <button class="btn-primary" @click="handleSave" :disabled="saving">
-          <Icon v-if="saving" icon="material-symbols:progress-activity" class="spin" width="18" height="18" />
-          <Icon v-else icon="material-symbols:save-outline-rounded" width="18" height="18" />
-          <span>{{ saving ? '保存中…' : '保存设置' }}</span>
-        </button>
       </div>
     </template>
   </div>
@@ -201,6 +255,14 @@ onMounted(fetchSettings)
   color: var(--md-sys-color-on-surface);
 }
 .view-sub { margin: 0; font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant); }
+.autosave-hint {
+  margin: 0.5rem 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--md-sys-color-on-surface-variant);
+}
 .loading-wrap {
   display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 3rem;
   color: var(--md-sys-color-on-surface-variant); font-size: 0.9rem;
@@ -269,15 +331,6 @@ onMounted(fetchSettings)
 .toggle-btn.on .toggle-thumb { left: 26px; background: var(--md-sys-color-on-primary); }
 .toggle-btn:hover .toggle-thumb { width: 26px; }
 .actions-row { display: flex; justify-content: flex-end; gap: 0.75rem; flex-wrap: wrap; }
-.btn-primary {
-  display: flex; align-items: center; gap: 0.5rem;
-  height: 2.75rem; padding: 0 1.5rem; border: none; border-radius: 9999px;
-  background: linear-gradient(135deg, var(--md-sys-color-primary) 0%, #2771df 100%);
-  color: var(--md-sys-color-on-primary);
-  font-size: 0.9375rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s;
-  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
-}
-.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-outlined {
   display: flex; align-items: center; gap: 0.5rem;
   height: 2.75rem; padding: 0 1.25rem; border: none; border-radius: 9999px;
