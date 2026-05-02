@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue'
 import ToastManager from './components/common/ToastManager.vue'
+import DialogManager from './components/common/DialogManager.vue'
 import { applyMd3Theme } from './utils/md3theme'
 import { getSettings } from './api/modules/settings'
 
@@ -50,6 +51,7 @@ onBeforeUnmount(() => {
 <template>
   <RouterView />
   <ToastManager />
+  <DialogManager />
 </template>
 
 <style>
