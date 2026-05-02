@@ -408,10 +408,18 @@ async function handleLogout() {
 .page-slot {
   flex: 1;
   padding: 1.5rem;
-  max-width: 1200px;
+  max-width: 100%;
   width: 100%;
   margin: 0 auto;
+  overflow-x: hidden;
 }
+
+@media (max-width: 640px) {
+  .page-slot {
+    padding: 1rem;
+  }
+}
+
 .page-slot.no-padding {
   padding: 0;
   max-width: none;

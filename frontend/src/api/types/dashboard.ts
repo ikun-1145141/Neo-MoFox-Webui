@@ -61,3 +61,31 @@ export interface DashboardOverview {
   };
   updated_at: string;
 }
+
+export interface DailyMessageStats {
+  total: number;
+  inbound: number;
+  outbound: number;
+}
+
+export interface MessageTrend {
+  date_range: string[];
+  daily_stats: Record<string, DailyMessageStats>;
+  summary: {
+    total_messages: number;
+    avg_per_day: number;
+    growth_rate: number;
+  };
+  platform_distribution: Record<string, number>;
+}
+
+export interface PlatformStatistic {
+  platform: string;
+  count: number;
+  percentage: number;
+}
+
+export interface PlatformStatistics {
+  platforms: PlatformStatistic[];
+  total: number;
+}

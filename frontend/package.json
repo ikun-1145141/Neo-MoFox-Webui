@@ -11,7 +11,9 @@
   "dependencies": {
     "@material/material-color-utilities": "^0.4.0",
     "axios": "^1.15.0",
+    "echarts": "^6.0.0",
     "vue": "^3.5.32",
+    "vue-echarts": "^8.0.1",
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
