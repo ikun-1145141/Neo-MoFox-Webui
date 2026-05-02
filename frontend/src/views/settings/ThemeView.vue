@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { ref, onBeforeUnmount, onMounted, watch } from 'vue'
 import { getSettings, updateSettings, resetSettings } from '../../api/modules/settings'
+import {
+  deleteWallpaper,
+  getWallpaperImageUrl,
+  getWallpaperStatus,
+  uploadWallpaper,
+} from '../../api/modules/wallpaper'
 import { applyMd3Theme } from '../../utils/md3theme'
 import { useToastStore } from '../../utils/toast'
 import type { WebuiSettings } from '../../api/types/settings'
@@ -9,14 +15,23 @@ const IS_DEV = import.meta.env.DEV
 const toast = useToastStore()
 const loading = ref(true)
 const saving = ref(false)
+const uploading = ref(false)
 const autoSaveEnabled = ref(false)
 const lastSavedThemeSnapshot = ref('')
+const wallpaperVersion = ref(Date.now())
+const wallpaperInputRef = ref<HTMLInputElement | null>(null)
 
 let autoSaveTimer: number | null = null
 const AUTO_SAVE_DELAY_MS = 600
 
 const DEFAULT_SETTINGS: WebuiSettings = {
-  theme: { mode: 'auto', primary_color: '#0058bd' },
+  theme: {
+    mode: 'auto',
+    primary_color: '#0058bd',
+    has_wallpaper: false,
+    wallpaper_blur: 0,
+    wallpaper_opacity: 0.5,
+  },
   ui: { language: 'zh-CN', font_size: 'medium' },
   system: { auto_update: false, check_update_on_startup: true },
 }
@@ -46,6 +61,18 @@ function clearAutoSaveTimer() {
   if (autoSaveTimer !== null) {
     window.clearTimeout(autoSaveTimer)
     autoSaveTimer = null
+  }
+}
+
+function getCurrentWallpaperImageUrl(): string {
+  return getWallpaperImageUrl(wallpaperVersion.value)
+}
+
+function emitWallpaperUpdated(payload?: any) {
+  if (payload) {
+    window.dispatchEvent(new CustomEvent('wallpaper-updated', { detail: payload }))
+  } else {
+    window.dispatchEvent(new CustomEvent('wallpaper-updated', { detail: { force: true } }))
   }
 }
 
@@ -81,6 +108,7 @@ async function fetchSettings() {
   clearAutoSaveTimer()
   try {
     settings.value = await getSettings()
+    await refreshWallpaperStatus()
     applyCurrentTheme()
   } catch {
     if (IS_DEV) toast.show('[DEV] 后端未启动，使用默认配置', 'info')
@@ -89,6 +117,18 @@ async function fetchSettings() {
     lastSavedThemeSnapshot.value = getCurrentThemeSnapshot()
     autoSaveEnabled.value = true
     loading.value = false
+  }
+}
+
+async function refreshWallpaperStatus() {
+  try {
+    const status = await getWallpaperStatus()
+    settings.value.theme.has_wallpaper = status.has_wallpaper
+    settings.value.theme.wallpaper_blur = status.wallpaper_blur
+    settings.value.theme.wallpaper_opacity = status.wallpaper_opacity
+    wallpaperVersion.value = Date.now()
+  } catch {
+    settings.value.theme.has_wallpaper = false
   }
 }
 
@@ -109,11 +149,77 @@ function selectColor(hex: string) {
 watch(() => settings.value.theme.mode, applyCurrentTheme)
 
 watch(
-  () => [settings.value.theme.mode, settings.value.theme.primary_color],
-  () => {
+  () => [
+    settings.value.theme.mode,
+    settings.value.theme.primary_color,
+    settings.value.theme.wallpaper_blur,
+    settings.value.theme.wallpaper_opacity,
+  ],
+  (newValues, oldValues) => {
     scheduleAutoSave()
+    
+    // 即时预览壁纸效果
+    if (
+      newValues[2] !== oldValues?.[2] ||
+      newValues[3] !== oldValues?.[3]
+    ) {
+      emitWallpaperUpdated({
+        wallpaper_blur: newValues[2],
+        wallpaper_opacity: newValues[3],
+      })
+    }
   }
 )
+
+async function handleWallpaperFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+  if (!allowedTypes.includes(file.type)) {
+    toast.show('仅支持 JPG、PNG、WEBP 格式', 'error')
+    input.value = ''
+    return
+  }
+
+  if (file.size > 10 * 1024 * 1024) {
+    toast.show('壁纸文件不能超过 10MB', 'error')
+    input.value = ''
+    return
+  }
+
+  uploading.value = true
+  try {
+    const status = await uploadWallpaper(file)
+    settings.value.theme.has_wallpaper = status.has_wallpaper
+    settings.value.theme.wallpaper_blur = status.wallpaper_blur
+    settings.value.theme.wallpaper_opacity = status.wallpaper_opacity
+    wallpaperVersion.value = Date.now()
+    emitWallpaperUpdated()
+    toast.show('壁纸上传成功', 'success')
+  } catch {
+    // 错误提示由全局拦截器处理
+  } finally {
+    uploading.value = false
+    input.value = ''
+  }
+}
+
+async function handleDeleteWallpaper() {
+  uploading.value = true
+  try {
+    await deleteWallpaper()
+    settings.value.theme.has_wallpaper = false
+    wallpaperVersion.value = Date.now()
+    emitWallpaperUpdated()
+    toast.show('壁纸已删除', 'success')
+  } catch {
+    // 错误提示由全局拦截器处理
+  } finally {
+    uploading.value = false
+  }
+}
 
 async function handleReset() {
   saving.value = true
@@ -228,6 +334,78 @@ onMounted(fetchSettings)
         </div>
       </section>
 
+      <section class="setting-section">
+        <div class="section-text">
+          <h3 class="section-heading">壁纸背景</h3>
+          <p class="section-desc">仅支持单张壁纸，上传新壁纸会自动覆盖旧壁纸</p>
+        </div>
+
+        <div class="wallpaper-preview" :class="{ empty: !settings.theme.has_wallpaper }">
+          <img
+            v-if="settings.theme.has_wallpaper"
+            :src="getCurrentWallpaperImageUrl()"
+            alt="当前壁纸"
+            class="wallpaper-preview-img"
+          />
+          <div v-else class="wallpaper-empty">当前未设置壁纸</div>
+        </div>
+
+        <input
+          ref="wallpaperInputRef"
+          type="file"
+          class="wallpaper-file-input"
+          accept="image/jpeg,image/png,image/webp"
+          @change="handleWallpaperFileChange"
+        />
+
+        <div class="wallpaper-actions">
+          <button
+            class="btn-outlined"
+            :disabled="uploading"
+            @click="wallpaperInputRef?.click()"
+          >
+            <Icon icon="material-symbols:upload-rounded" width="18" height="18" />
+            {{ settings.theme.has_wallpaper ? '更换壁纸' : '上传壁纸' }}
+          </button>
+          <button
+            class="btn-outlined btn-danger"
+            :disabled="uploading || !settings.theme.has_wallpaper"
+            @click="handleDeleteWallpaper"
+          >
+            <Icon icon="material-symbols:delete-outline-rounded" width="18" height="18" />
+            删除壁纸
+          </button>
+        </div>
+
+        <div class="slider-grid">
+          <label class="slider-row">
+            <span class="slider-label">模糊强度</span>
+            <input
+              v-model.number="settings.theme.wallpaper_blur"
+              type="range"
+              min="0"
+              max="20"
+              step="1"
+              :disabled="!settings.theme.has_wallpaper"
+            />
+            <span class="slider-val">{{ settings.theme.wallpaper_blur }}px</span>
+          </label>
+
+          <label class="slider-row">
+            <span class="slider-label">遮罩透明度</span>
+            <input
+              v-model.number="settings.theme.wallpaper_opacity"
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              :disabled="!settings.theme.has_wallpaper"
+            />
+            <span class="slider-val">{{ Math.round(settings.theme.wallpaper_opacity * 100) }}%</span>
+          </label>
+        </div>
+      </section>
+
       <div class="actions-row">
         <button class="btn-outlined" @click="fetchSettings" :disabled="saving">
           <Icon icon="material-symbols:refresh-rounded" width="18" height="18" />
@@ -322,6 +500,53 @@ onMounted(fetchSettings)
 .primary-chip { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
 .secondary-chip { background: var(--md-sys-color-secondary); color: var(--md-sys-color-on-secondary); }
 .tertiary-chip { background: var(--md-sys-color-tertiary); color: var(--md-sys-color-on-tertiary); }
+.wallpaper-file-input { display: none; }
+.wallpaper-preview {
+  border-radius: 1rem;
+  overflow: hidden;
+  min-height: 140px;
+  background: var(--md-sys-color-surface-container);
+  border: 1px solid var(--md-sys-color-outline-variant);
+}
+.wallpaper-preview.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wallpaper-preview-img {
+  width: 100%;
+  height: 180px;
+  display: block;
+  object-fit: cover;
+}
+.wallpaper-empty {
+  font-size: 0.875rem;
+  color: var(--md-sys-color-on-surface-variant);
+}
+.wallpaper-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.slider-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+.slider-row {
+  display: grid;
+  grid-template-columns: 120px 1fr 56px;
+  align-items: center;
+  gap: 0.75rem;
+}
+.slider-label {
+  font-size: 0.875rem;
+  color: var(--md-sys-color-on-surface);
+}
+.slider-val {
+  text-align: right;
+  font-size: 0.8125rem;
+  color: var(--md-sys-color-on-surface-variant);
+}
 .actions-row { display: flex; justify-content: flex-end; gap: 0.75rem; flex-wrap: wrap; }
 .btn-outlined {
   display: flex; align-items: center; gap: 0.5rem;

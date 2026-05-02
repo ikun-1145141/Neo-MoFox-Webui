@@ -123,13 +123,14 @@ const quickLinks = [
   margin-bottom: 2.5rem;
 }
 .stat-card {
-  background: var(--md-sys-color-surface-container-low);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-low) 86%, transparent);
   border-radius: 1.25rem;
   padding: 1.25rem;
   display: flex;
   align-items: center;
   gap: 1rem;
   box-shadow: 0px 4px 16px rgba(24, 28, 32, 0.04);
+  backdrop-filter: blur(8px);
 }
 .stat-icon { flex-shrink: 0; }
 .stat-icon.success { color: var(--md-sys-color-tertiary, #4caf82); }
@@ -168,7 +169,7 @@ const quickLinks = [
   align-items: center;
   gap: 1rem;
   padding: 1rem 1.25rem;
-  background: var(--md-sys-color-surface-container-low);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-low) 86%, transparent);
   border-radius: 1rem;
   border: none;
   cursor: pointer;
@@ -176,9 +177,10 @@ const quickLinks = [
   width: 100%;
   transition: background 0.15s;
   box-shadow: 0px 4px 16px rgba(24, 28, 32, 0.03);
+  backdrop-filter: blur(8px);
 }
 .quick-card:hover {
-  background: var(--md-sys-color-surface-container-highest);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-highest) 92%, transparent);
 }
 .quick-icon {
   width: 44px;

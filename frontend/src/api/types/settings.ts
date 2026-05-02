@@ -1,6 +1,9 @@
 export interface ThemeSettings {
   mode: 'light' | 'dark' | 'auto'
   primary_color: string
+  has_wallpaper: boolean
+  wallpaper_blur: number
+  wallpaper_opacity: number
 }
 
 export interface UISettings {

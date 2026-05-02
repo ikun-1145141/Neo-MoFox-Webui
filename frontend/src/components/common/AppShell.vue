@@ -3,6 +3,10 @@ import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { logout } from '../../api/modules/auth'
 
+const props = defineProps<{
+  noPadding?: boolean
+}>()
+
 const router = useRouter()
 const route = useRoute()
 
@@ -103,7 +107,7 @@ async function handleLogout() {
       </header>
 
       <!-- 页面内容插槽 -->
-      <div class="page-slot">
+      <div class="page-slot" :class="{ 'no-padding': noPadding }">
         <slot />
       </div>
     </main>
@@ -115,7 +119,6 @@ async function handleLogout() {
 .layout {
   display: flex;
   min-height: 100dvh;
-  background: var(--md-sys-color-surface);
 }
 
 /* ====== M3 Navigation Rail (仿 Material Design 3 官网) ====== */
@@ -335,6 +338,8 @@ async function handleLogout() {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  background: color-mix(in srgb, var(--md-sys-color-surface) calc(var(--wallpaper-mask-opacity, 0.88) * 100%), transparent);
+  backdrop-filter: blur(6px);
 }
 
 .top-bar {
@@ -342,10 +347,11 @@ async function handleLogout() {
   align-items: center;
   gap: 1rem;
   padding: 1rem 1.5rem;
-  background: var(--md-sys-color-surface);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 85%, transparent);
   position: sticky;
   top: 0;
   z-index: 10;
+  backdrop-filter: blur(8px);
 }
 
 .menu-btn {
@@ -405,5 +411,12 @@ async function handleLogout() {
   max-width: 1200px;
   width: 100%;
   margin: 0 auto;
+}
+.page-slot.no-padding {
+  padding: 0;
+  max-width: none;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
 }
 </style>

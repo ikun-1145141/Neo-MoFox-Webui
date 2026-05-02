@@ -10,6 +10,7 @@ from src.core.components.loader import register_plugin
 from src.app.plugin_system.api.log_api import get_logger
 
 from .components.router.auth_router import AuthRouter
+from .components.router.wallpaper_router import WallpaperRouter
 from .components.router.webui_router import WebuiSettingsRouter
 
 logger = get_logger("webui_plugin")
@@ -41,6 +42,7 @@ class WebuiPlugin(BasePlugin):
         components: list[type] = [
             AuthRouter,
             WebuiSettingsRouter,
+            WallpaperRouter,
         ]
         return components
 

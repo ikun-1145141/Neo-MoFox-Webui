@@ -1,15 +1,35 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
 import ToastManager from './components/common/ToastManager.vue'
 import DialogManager from './components/common/DialogManager.vue'
 import { applyMd3Theme } from './utils/md3theme'
 import { getSettings } from './api/modules/settings'
+import { getWallpaperStatus, getWallpaperImageUrl } from './api/modules/wallpaper'
 
 type ThemeMode = 'auto' | 'light' | 'dark'
 
 let mediaQuery: MediaQueryList | null = null
 let currentThemeMode: ThemeMode = 'auto'
 let currentPrimaryColor = '#0058bd'
+const hasWallpaper = ref(false)
+const wallpaperBlur = ref(0)
+const wallpaperOpacity = ref(0.5)
+const wallpaperVersion = ref(Date.now())
+
+const wallpaperImageStyle = computed(() => {
+  if (!hasWallpaper.value) {
+    return {}
+  }
+
+  return {
+    backgroundImage: `url('${getWallpaperImageUrl(wallpaperVersion.value)}')`,
+    filter: `blur(${wallpaperBlur.value}px)`,
+  }
+})
+
+watchEffect(() => {
+  document.documentElement.style.setProperty('--wallpaper-mask-opacity', String(wallpaperOpacity.value))
+})
 
 function handleSystemThemeChange() {
   applyThemeFromState()
@@ -34,24 +54,56 @@ async function syncSettingsAndApplyTheme() {
   }
 }
 
+async function syncWallpaperStatus(forceImageUpdate = false) {
+  try {
+    const status = await getWallpaperStatus()
+    hasWallpaper.value = status.has_wallpaper
+    wallpaperBlur.value = status.wallpaper_blur
+    wallpaperOpacity.value = status.wallpaper_opacity
+    if (forceImageUpdate) wallpaperVersion.value = Date.now()
+  } catch {
+    hasWallpaper.value = false
+  }
+}
+
+function handleWallpaperUpdated(e: Event) {
+  if (e instanceof CustomEvent && e.detail) {
+    if (e.detail.has_wallpaper !== undefined) hasWallpaper.value = e.detail.has_wallpaper
+    if (e.detail.wallpaper_blur !== undefined) wallpaperBlur.value = e.detail.wallpaper_blur
+    if (e.detail.wallpaper_opacity !== undefined) wallpaperOpacity.value = e.detail.wallpaper_opacity
+    if (e.detail.force) wallpaperVersion.value = Date.now()
+  } else {
+    void syncWallpaperStatus(true)
+  }
+}
+
 // 应用启动时同步设置并应用主题
 onMounted(() => {
   mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
   void syncSettingsAndApplyTheme()
+  void syncWallpaperStatus(true)
 
   mediaQuery.addEventListener('change', handleSystemThemeChange)
+  window.addEventListener('wallpaper-updated', handleWallpaperUpdated as EventListener)
 })
 
 onBeforeUnmount(() => {
   if (!mediaQuery) return
   mediaQuery.removeEventListener('change', handleSystemThemeChange)
+  window.removeEventListener('wallpaper-updated', handleWallpaperUpdated as EventListener)
 })
 </script>
 
 <template>
-  <RouterView />
-  <ToastManager />
-  <DialogManager />
+  <div v-if="hasWallpaper" class="wallpaper-layer" aria-hidden="true">
+    <div class="wallpaper-image" :style="wallpaperImageStyle" />
+  </div>
+
+  <div class="app-content-layer">
+    <RouterView />
+    <ToastManager />
+    <DialogManager />
+  </div>
 </template>
 
 <style>
@@ -69,8 +121,33 @@ html, body {
 }
 
 html {
-  background: var(--md-sys-color-surface, #f7f9ff);
+  background: transparent;
   color: var(--md-sys-color-on-surface, #1b1b1f);
+}
+
+#app {
+  min-height: 100dvh;
+}
+
+.wallpaper-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.wallpaper-image {
+  position: absolute;
+  inset: -24px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  transform: scale(1.04);
+}
+
+.app-content-layer {
+  position: relative;
+  z-index: 1;
 }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }

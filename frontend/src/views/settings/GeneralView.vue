@@ -21,7 +21,13 @@ const fontSizeOptions: { label: string; value: 'small' | 'medium' | 'large'; ico
 ]
 
 const DEFAULT_SETTINGS: WebuiSettings = {
-  theme: { mode: 'auto', primary_color: '#0058bd' },
+  theme: {
+    mode: 'auto',
+    primary_color: '#0058bd',
+    has_wallpaper: false,
+    wallpaper_blur: 0,
+    wallpaper_opacity: 0.5,
+  },
   ui: { language: 'zh-CN', font_size: 'medium' },
   system: { auto_update: false, check_update_on_startup: true },
 }

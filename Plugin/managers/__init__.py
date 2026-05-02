@@ -4,5 +4,6 @@
 """
 
 from .config_manager import ConfigManager
+from .wallpaper_manager import WallpaperManager
 
-__all__ = ["ConfigManager"]
+__all__ = ["ConfigManager", "WallpaperManager"]

@@ -17,10 +17,16 @@ class ThemeSettings(BaseModel):
     Attributes:
         mode: 主题模式，可选 "light"、"dark"、"auto"
         primary_color: 主色调，HEX 颜色值
+        has_wallpaper: 是否存在壁纸
+        wallpaper_blur: 壁纸模糊强度，范围 0-20
+        wallpaper_opacity: 壁纸遮罩透明度，范围 0-1
     """
 
     mode: str = Field(default="auto", description="主题模式")
     primary_color: str = Field(default="#0058bd", description="主色调")
+    has_wallpaper: bool = Field(default=False, description="是否存在壁纸")
+    wallpaper_blur: float = Field(default=0.0, ge=0.0, le=20.0, description="壁纸模糊强度")
+    wallpaper_opacity: float = Field(default=0.5, ge=0.0, le=1.0, description="壁纸遮罩透明度")
 
 
 class UISettings(BaseModel):
