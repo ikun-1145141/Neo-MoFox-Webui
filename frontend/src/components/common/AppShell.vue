@@ -411,7 +411,7 @@ async function handleLogout() {
   max-width: 100%;
   width: 100%;
   margin: 0 auto;
-  overflow-x: hidden;
+  /* overflow-x: hidden; removed to let sticky to work */
 }
 
 @media (max-width: 640px) {

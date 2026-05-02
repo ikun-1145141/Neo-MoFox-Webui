@@ -534,9 +534,19 @@ onMounted(fetchSettings)
 }
 .slider-row {
   display: grid;
-  grid-template-columns: 120px 1fr 56px;
+  grid-template-columns: minmax(70px, max-content) 1fr 46px;
   align-items: center;
   gap: 0.75rem;
+}
+@media (max-width: 500px) {
+  .slider-row {
+    grid-template-columns: 1fr 46px;
+    gap: 0.5rem;
+  }
+  .slider-label {
+    grid-column: 1 / -1;
+    margin-bottom: -0.25rem;
+  }
 }
 .slider-label {
   font-size: 0.875rem;
