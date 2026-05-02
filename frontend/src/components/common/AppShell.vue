@@ -148,7 +148,7 @@ async function handleLogout() {
     transform: none;
     box-shadow: none;
   }
-  .menu-btn { display: none; }
+  .menu-btn { display: none !important; }
   .rail-close-mobile { display: none !important; }
 }
 
@@ -347,11 +347,11 @@ async function handleLogout() {
   align-items: center;
   gap: 1rem;
   padding: 1rem 1.5rem;
-  background: color-mix(in srgb, var(--md-sys-color-surface) 85%, transparent);
+  background: var(--md-sys-color-surface);
   position: sticky;
   top: 0;
   z-index: 10;
-  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 .menu-btn {

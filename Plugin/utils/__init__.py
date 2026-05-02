@@ -4,5 +4,6 @@
 """
 
 from .response import BaseResponse
+from .llm_metrics import LLMMetricsHelper, get_llm_metrics_helper
 
-__all__ = ["BaseResponse"]
+__all__ = ["BaseResponse", "LLMMetricsHelper", "get_llm_metrics_helper"]

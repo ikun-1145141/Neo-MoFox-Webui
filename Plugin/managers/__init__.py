@@ -5,5 +5,11 @@
 
 from .config_manager import ConfigManager
 from .wallpaper_manager import WallpaperManager
+from .dashboard_manager import DashboardManager, get_dashboard_manager
 
-__all__ = ["ConfigManager", "WallpaperManager"]
+__all__ = [
+	"ConfigManager",
+	"WallpaperManager",
+	"DashboardManager",
+	"get_dashboard_manager",
+]
