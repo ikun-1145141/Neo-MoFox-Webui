@@ -56,12 +56,15 @@
             </div>
 
             <div class="form-field">
-              <label for="provider-client-type">客户端类型 *</label>
-              <select id="provider-client-type" v-model="formData.client_type" required>
-                <option value="openai">OpenAI</option>
-                <option value="gemini">Gemini</option>
-                <option value="bedrock">Bedrock</option>
-              </select>
+              <MdSelect
+                v-model="formData.client_type"
+                label="客户端类型"
+                :options="[
+                  { label: 'OpenAI', value: 'openai' },
+                  { label: 'Gemini', value: 'gemini' },
+                  { label: 'Bedrock', value: 'bedrock' },
+                ]"
+              />
             </div>
 
             <div class="form-row">
@@ -125,10 +128,12 @@
             </div>
 
             <div class="form-field">
-              <label for="model-provider">所属提供商 *</label>
-              <select id="model-provider" v-model="formData.api_provider" required>
-                <option v-for="p in providers" :key="p" :value="p">{{ p }}</option>
-              </select>
+              <MdSelect
+                v-model="formData.api_provider"
+                label="所属提供商"
+                :options="providers"
+                :error="!formData.api_provider ? '请选择一个提供商' : ''"
+              />
             </div>
 
             <div class="form-row">
@@ -282,6 +287,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import Icon from '../common/Icon.vue'
+import MdSelect from '../common/MdSelect.vue'
 
 // Props
 interface Props {
