@@ -109,7 +109,7 @@ class WallpaperRouter(BaseRouter):
                 logger.error(f"删除壁纸失败: {e}")
                 raise HTTPException(status_code=500, detail=f"删除壁纸失败: {str(e)}")
 
-        @self.app.get("/status", response_model=BaseResponse[WallpaperStatus], dependencies=[VerifiedDep])
+        @self.app.get("/status", response_model=BaseResponse[WallpaperStatus])
         async def get_wallpaper_status() -> BaseResponse[WallpaperStatus]:
             """获取当前壁纸状态。"""
             try:

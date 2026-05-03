@@ -324,15 +324,15 @@ watch(codeContent, (newCode) => {
   border-radius: 0;
   flex: 1;
   height: 100%;
+  min-height: 0;
 }
 
 /* 固定的头部 */
 .editor-header {
-  position: sticky;
-  top: 64px;
-  z-index: 4;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
+  z-index: 2;
 }
 
 /* 工具栏 */
@@ -489,7 +489,8 @@ watch(codeContent, (newCode) => {
 /* 编辑器内容区 */
 .editor-content {
   flex: 1;
-  overflow: auto;
+  overflow-y: auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }

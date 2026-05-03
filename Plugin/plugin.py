@@ -13,6 +13,7 @@ from .components.router.auth_router import AuthRouter
 from .components.router.dashboard_router import DashboardRouter
 from .components.router.wallpaper_router import WallpaperRouter
 from .components.router.webui_router import WebuiSettingsRouter
+from .components.router.system_router import SystemRouter
 from .components.router.config import (
     MainConfigRouter,
     BotConfigRouter,
@@ -51,6 +52,7 @@ class WebuiPlugin(BasePlugin):
             DashboardRouter,
             WebuiSettingsRouter,
             WallpaperRouter,
+            SystemRouter,
             # 配置管理路由
             MainConfigRouter,
             BotConfigRouter,
