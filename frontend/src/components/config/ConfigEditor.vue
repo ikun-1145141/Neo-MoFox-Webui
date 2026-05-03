@@ -324,16 +324,15 @@ watch(codeContent, (newCode) => {
   border-radius: 0;
   flex: 1;
   height: 100%;
-  overflow-y: auto; /* 允许滚动 */
+  min-height: 0;
 }
 
 /* 固定的头部 */
 .editor-header {
-  position: sticky;
-  top: 0;
-  z-index: 10; /* 调高 z-index 确保覆盖下方内容 */
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
+  z-index: 2;
 }
 
 /* 工具栏 */
@@ -490,7 +489,8 @@ watch(codeContent, (newCode) => {
 /* 编辑器内容区 */
 .editor-content {
   flex: 1;
-  /* 移除这里的 overflow: auto，让配置编辑器本身发生滚动 */
+  overflow-y: auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }

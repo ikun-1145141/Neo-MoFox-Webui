@@ -175,7 +175,9 @@ onMounted(() => {
 
 <style scoped>
 .config-view {
-  height: 100%;
+  height: calc(100dvh - 64px);
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background: transparent;
@@ -190,8 +192,6 @@ onMounted(() => {
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
   flex-shrink: 0;
-  position: sticky;
-  top: 64px;
   z-index: 10;
 }
 
@@ -277,7 +277,9 @@ onMounted(() => {
 /* 配置内容区 */
 .config-content {
   flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
-  /* 移除 padding，让 ModelConfigEditor 自己管理布局 */
 }
 </style>

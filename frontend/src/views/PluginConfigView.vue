@@ -227,7 +227,8 @@ onMounted(() => {
 .plugin-config-view {
   display: flex;
   align-items: stretch;
-  height: calc(100vh - 64px);
+  height: calc(100dvh - 64px);
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -241,6 +242,7 @@ onMounted(() => {
   backdrop-filter: blur(12px);
   border-right: 1px solid var(--md-sys-color-outline-variant);
   height: 100%;
+  min-height: 0;
   z-index: 5;
 }
 
@@ -378,6 +380,8 @@ onMounted(() => {
 .plugin-editor {
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background: transparent;
