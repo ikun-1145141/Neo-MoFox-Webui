@@ -61,7 +61,6 @@ class WebuiPlugin(BasePlugin):
         ]
         return components
 
-        logger.info("配置管理路径: /api/config, /api/config-bot, /api/config-model, /api/config-plugin")
     async def on_plugin_loaded(self) -> None:
         """插件加载钩子。"""
         logger.info(f"WebUI 插件 v{self.plugin_version} 已加载")

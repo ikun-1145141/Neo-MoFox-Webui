@@ -1,267 +1,516 @@
-# Neo-MoFox-Webui 后端安装与使用指南
+# Neo-MoFox-WebUI 安装文档
 
-## 快速开始
+> 本文档将指导您完成 Neo-MoFox-WebUI 的完整安装流程，包括环境准备、前后端配置和服务启动。
 
-### 1. 安装插件到 Neo-MoFox
+---
 
-有两种方式将后端插件安装到 Neo-MoFox：
+## 目录
 
-#### 方式一：复制目录（推荐开发环境）
+- [环境要求](#环境要求)
+- [安装 Node.js 和 npm](#安装-nodejs-和-npm)
+- [获取项目](#获取项目)
+- [安装前端依赖](#安装前端依赖)
+- [配置后端插件](#配置后端插件)
+- [配置 Neo-MoFox](#配置-neo-mofox)
+- [启动服务](#启动服务)
+- [访问 WebUI](#访问-webui)
+- [常见问题](#常见问题)
+
+---
+
+## 环境要求
+
+在开始安装之前，请确保您的系统满足以下要求：
+
+- **操作系统**：Linux / Windows / macOS
+- **Node.js**：v18.0.0 或更高版本
+- **npm**：v9.0.0 或更高版本（通常随 Node.js 一起安装）
+- **Neo-MoFox**：已安装并配置完成
+- **Python**：3.10 或更高版本（Neo-MoFox 运行环境）
+
+---
+
+## 安装 Node.js 和 npm
+
+### Linux
+
+#### 使用包管理器安装（推荐）
+
+**Ubuntu/Debian：**
 
 ```bash
-# 进入 Neo-MoFox 项目根目录
-cd /path/to/Neo-MoFox
+# 安装 NodeSource 仓库（Node.js 20.x LTS）
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 
-# 复制插件目录
-cp -r /path/to/Neo-MoFox-Webui/Plugin plugins/webui
+# 安装 Node.js 和 npm
+sudo apt-get install -y nodejs
+
+# 验证安装
+node --version
+npm --version
 ```
 
-#### 方式二：创建符号链接（推荐生产环境）
+**Fedora/CentOS/RHEL：**
 
-**Windows（需要管理员权限）：**
+```bash
+# 安装 NodeSource 仓库（Node.js 20.x LTS）
+curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+
+# 安装 Node.js 和 npm
+sudo dnf install -y nodejs
+
+# 验证安装
+node --version
+npm --version
+```
+
+**Arch Linux：**
+
+```bash
+# 使用 pacman 安装
+sudo pacman -S nodejs npm
+
+# 验证安装
+node --version
+npm --version
+```
+
+#### 使用 nvm 安装（推荐用于开发环境）
+
+```bash
+# 安装 nvm
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+
+# 重新加载 shell 配置
+source ~/.bashrc  # 或 ~/.zshrc
+
+# 安装 Node.js LTS 版本
+nvm install --lts
+
+# 设置默认版本
+nvm use --lts
+nvm alias default node
+
+# 验证安装
+node --version
+npm --version
+```
+
+### Windows
+
+#### 方式一：官方安装包（推荐）
+
+1. 访问 [Node.js 官网](https://nodejs.org/)
+2. 下载 LTS（长期支持）版本的 Windows 安装包（`.msi`）
+3. 运行安装包，按照安装向导完成安装
+4. 打开命令提示符或 PowerShell，验证安装：
+
 ```powershell
-# 进入 Neo-MoFox 项目根目录
-cd E:\delveoper\mmc010\Neo-MoFox
-
-# 创建符号链接
-mklink /D plugins\webui E:\delveoper\mmc010\Neo-MoFox-Webui\Plugin
+node --version
+npm --version
 ```
 
-**Linux/macOS：**
+#### 方式二：使用 Chocolatey
+
+```powershell
+# 以管理员权限运行 PowerShell
+choco install nodejs-lts -y
+
+# 验证安装
+node --version
+npm --version
+```
+
+#### 方式三：使用 Scoop
+
+```powershell
+# 安装 Scoop（如果尚未安装）
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+irm get.scoop.sh | iex
+
+# 安装 Node.js
+scoop install nodejs-lts
+
+# 验证安装
+node --version
+npm --version
+```
+
+### macOS
+
+#### 方式一：使用 Homebrew（推荐）
+
 ```bash
-# 进入 Neo-MoFox 项目根目录
-cd /path/to/Neo-MoFox
+# 安装 Homebrew（如果尚未安装）
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-# 创建符号链接
-ln -s /path/to/Neo-MoFox-Webui/Plugin plugins/webui
+# 安装 Node.js
+brew install node
+
+# 验证安装
+node --version
+npm --version
 ```
 
-### 2. 启动 Neo-MoFox
+#### 方式二：官方安装包
+
+1. 访问 [Node.js 官网](https://nodejs.org/)
+2. 下载 LTS 版本的 macOS 安装包（`.pkg`）
+3. 运行安装包，按照安装向导完成安装
+4. 打开终端，验证安装：
 
 ```bash
-cd /path/to/Neo-MoFox
-uv run main.py
+node --version
+npm --version
 ```
 
-插件会自动加载，你应该能看到类似以下的日志：
-
-```
-[INFO] WebUI 插件 v1.0.0 已加载
-[INFO] API 路径: /api/webui
-[INFO] WebUI Router 已启动
-```
-
-### 3. 测试 API
-
-打开浏览器或使用 curl 测试：
+#### 方式三：使用 nvm
 
 ```bash
-# 健康检查
-curl http://localhost:8000/api/webui/health
+# 安装 nvm
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
 
-# 获取设置
-curl http://localhost:8000/api/webui/settings
+# 重新加载 shell 配置
+source ~/.zshrc  # 或 ~/.bash_profile
 
-# 更新设置
-curl -X POST http://localhost:8000/api/webui/settings \
-  -H "Content-Type: application/json" \
-  -d '{"updates": {"theme": {"mode": "dark"}}}'
+# 安装 Node.js LTS 版本
+nvm install --lts
+nvm use --lts
+nvm alias default node
+
+# 验证安装
+node --version
+npm --version
 ```
 
-## API 文档
+---
 
-### 基础路径
+## 获取项目
 
-所有 API 的基础路径为：`/api/webui`
+### 克隆项目（推荐）
 
-### 响应格式
-
-所有接口返回统一的 JSON 格式：
-
-```json
-{
-  "code": 200,
-  "data": {},
-  "message": "success"
-}
+```bash
+# 克隆项目到本地
+git clone https://github.com/your-org/Neo-MoFox-Webui.git
+cd Neo-MoFox-Webui
 ```
 
-- `code`: 业务状态码，200 表示成功
-- `data`: 实际返回的数据
-- `message`: 状态描述
+### 下载压缩包
 
-### 接口列表
+1. 访问项目的 GitHub Release 页面
+2. 下载最新版本的源码压缩包（`.zip` 或 `.tar.gz`）
+3. 解压到您希望安装的目录
 
-#### 1. 健康检查
+---
 
-```
-GET /api/webui/health
-```
+## 安装前端依赖
 
-**响应示例：**
-```json
-{
-  "code": 200,
-  "data": {
-    "status": "healthy"
-  },
-  "message": "WebUI 后端运行正常"
-}
+进入前端目录并安装依赖：
+
+```bash
+# 进入前端目录
+cd frontend
+
+# 安装依赖（推荐使用 pnpm 以提升安装速度和节省磁盘空间）
+# 方式一：使用 npm
+npm install
 ```
 
-#### 2. 获取设置
+安装完成后，前端依赖将被下载到 `frontend/node_modules` 目录。
 
-```
-GET /api/webui/settings
-```
+---
 
-**响应示例：**
-```json
-{
-  "code": 200,
-  "data": {
-    "theme": {
-      "mode": "auto",
-      "primary_color": "#0058bd"
-    },
-    "ui": {
-      "language": "zh-CN",
-      "font_size": "medium"
-    },
-    "system": {
-      "auto_update": false,
-      "check_update_on_startup": true
-    }
-  },
-  "message": "获取设置成功"
-}
+## 配置后端插件
+
+Neo-MoFox-WebUI 的后端以插件形式集成到 Neo-MoFox 框架中。
+
+### 复制插件到 Neo-MoFox
+
+**Linux / macOS：**
+
+```bash
+# 方式一：复制文件（推荐用于生产环境）
+cp -r Plugin /path/to/Neo-MoFox/plugins/webui
 ```
 
-#### 3. 更新设置（部分更新）
+**Windows（命令提示符，需管理员权限）：**
 
-```
-POST /api/webui/settings
-```
-
-**请求体：**
-```json
-{
-  "updates": {
-    "theme": {
-      "mode": "dark"
-    }
-  }
-}
+```cmd
+REM 方式一：复制文件
+xcopy /E /I Plugin C:\path\to\Neo-MoFox\plugins\webui
 ```
 
-**响应：** 返回更新后的完整设置对象
+**Windows（PowerShell，需管理员权限）：**
 
-#### 4. 替换设置（完全替换）
-
-```
-PUT /api/webui/settings
-```
-
-**请求体：**
-```json
-{
-  "settings": {
-    "theme": {
-      "mode": "dark",
-      "primary_color": "#0058bd"
-    },
-    "ui": {
-      "language": "zh-CN",
-      "font_size": "medium"
-    },
-    "system": {
-      "auto_update": false,
-      "check_update_on_startup": true
-    }
-  }
-}
+```powershell
+# 方式一：复制文件
+Copy-Item -Path .\Plugin -Destination C:\path\to\Neo-MoFox\plugins\webui -Recurse
 ```
 
-**响应：** 返回保存后的设置对象
+### 验证插件文件结构
 
-#### 5. 重置设置
-
-```
-POST /api/webui/settings/reset
-```
-
-**响应：** 返回重置后的默认设置对象
-
-## 配置说明
-
-### 主题设置 (theme)
-
-- `mode`: 主题模式
-  - `"light"`: 浅色模式
-  - `"dark"`: 深色模式
-  - `"auto"`: 自动跟随系统
-- `primary_color`: 主色调，HEX 颜色值（如 `"#0058bd"`）
-
-### 界面设置 (ui)
-
-- `language`: 界面语言
-  - `"zh-CN"`: 简体中文
-  - `"en-US"`: 英语
-- `font_size`: 字体大小
-  - `"small"`: 小
-  - `"medium"`: 中等
-  - `"large"`: 大
-
-### 系统设置 (system)
-
-- `auto_update`: 是否自动更新（布尔值）
-- `check_update_on_startup`: 启动时检查更新（布尔值）
-
-## 数据存储
-
-所有数据存储在以下路径：
+确保插件目录结构如下：
 
 ```
 Neo-MoFox/
-└── data/
-    └── json_storage/
-        └── WebUI_data/
-            └── settings.json  # 设置文件
+└── plugins/
+    └── webui/
+        ├── manifest.json
+        ├── plugin.py
+        ├── components/
+        ├── managers/
+        ├── storage/
+        └── utils/
 ```
 
-## 故障排查
+---
 
-### 插件未加载
+## 配置 Neo-MoFox
 
-1. 检查插件目录是否正确：`plugins/webui/`
-2. 检查 `manifest.json` 是否存在
-3. 查看 Neo-MoFox 启动日志是否有错误信息
+### 编辑配置文件
 
-### API 访问失败
+打开 Neo-MoFox 的配置文件：`config/core.toml`
 
-1. 确认 Neo-MoFox 已启动
-2. 检查端口是否正确（默认 8000）
-3. 检查 CORS 设置（开发环境允许所有来源）
+### 配置 HTTP 路由端口
 
-### 设置保存失败
+找到 `[http_router]` 配置节，确认或修改以下配置：
 
-1. 检查 `data/json_storage/WebUI_data/` 目录是否有写权限
-2. 查看日志文件获取详细错误信息
+```toml
+[http_router]
+# 是否启用 HTTP 路由
+enable_http_router = true
 
-## 开发
+# HTTP 路由监听地址（127.0.0.1 表示仅本地访问，0.0.0.0 表示允许外部访问）
+http_router_host = "127.0.0.1"
 
-### 添加新的设置项
+# HTTP 路由监听端口（与前端 vite.config.ts 中的代理目标端口(8005)一致）
+http_router_port = 8005
+```
 
-1. 修改 `Plugin/storage/settings.py` 中的 Pydantic 模型
-2. 更新默认值
-3. 前端对应更新 TypeScript 类型定义
+> **安全提示**：
+> - 如果仅在本地使用，请保持 `http_router_host = "127.0.0.1"`
+> - 如果需要远程访问，可改为 `http_router_host = "0.0.0.0"`，但请务必配置防火墙和认证
 
-### 添加新的 API 接口
+### 配置 API 密钥
 
-1. 在 `Plugin/components/router/webui_router.py` 的 `register_endpoints()` 方法中添加新端点
-2. 如需新的业务逻辑，在 `Plugin/managers/` 中创建对应的 Manager
-3. 如需新的数据存储，在 `Plugin/storage/` 中创建对应的 Storage 类
+在同一配置节中，设置 `api_keys`：
 
-## 许可证
+```toml
+# WebUI API 访问密钥列表，留空则禁用认证（不推荐）
+api_keys = ["your-secret-api-key-here"]
+```
 
-与 Neo-MoFox 主项目相同
+> **重要**：
+> - `api_keys` 是一个字符串数组，可以配置多个密钥
+> - 请务必修改默认密钥为强密码（建议使用随机生成的长字符串）
+> - 示例：`api_keys = ["a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"]`
+> - 前端登录时需要使用此密钥进行认证
+
+### 完整配置示例
+
+```toml
+[http_router]
+enable_http_router = true
+http_router_host = "127.0.0.1"
+http_router_port = 8005
+api_keys = ["your-secure-api-key-replace-this"]
+```
+
+### 保存配置
+
+保存 `core.toml` 文件后，配置即生效。
+
+---
+
+## 启动服务
+
+### 启动后端（Neo-MoFox）
+
+进入 Neo-MoFox 目录并启动：
+
+**Linux / macOS：**
+
+```bash
+# 进入 Neo-MoFox 目录
+cd /path/to/Neo-MoFox
+
+# 启动 Neo-MoFox
+uv run main.py
+```
+
+**Windows：**
+
+```cmd
+REM 进入 Neo-MoFox 目录
+cd C:\path\to\Neo-MoFox
+
+REM 启动 Neo-MoFox
+uv run main.py
+```
+
+**验证后端启动成功：**
+
+在终端输出中查看类似以下的日志：
+
+```
+WebUI 插件 vXXX 已加载"
+```
+
+### 启动前端开发服务器
+
+打开新的终端窗口，进入前端目录并启动：
+
+**Linux / macOS / Windows：**
+
+```bash
+# 进入前端目录
+cd /path/to/Neo-MoFox-Webui/frontend
+
+# 启动开发服务器
+npm run dev
+```
+
+**验证前端启动成功：**
+
+终端将显示类似以下输出：
+
+```
+VITE v5.x.x  ready in xxx ms
+
+➜  Local:   http://localhost:9178/
+➜  Network: http://192.168.x.x:9178/
+➜  press h + enter to show help
+```
+
+---
+
+## 访问 WebUI
+
+### 本地访问
+
+在浏览器中打开：
+
+```
+http://localhost:9178
+```
+
+### 首次登录
+
+1. 在登录页面输入您在 `core.toml` 中配置的 `api_keys` 中的任意一个密钥
+2. 点击「登录」按钮
+3. 登录成功后将进入 WebUI 主界面
+
+---
+
+## 常见问题
+
+### 前端无法连接后端
+
+**问题表现：**
+- 前端页面显示网络错误或连接超时
+- 浏览器控制台显示 `Failed to fetch` 或 `ERR_CONNECTION_REFUSED`
+
+**解决方案：**
+
+1. **确认后端已启动：**
+   - 检查 Neo-MoFox 是否正在运行
+   - 确认终端输出显示 HTTP Router 已启动
+
+2. **检查端口配置：**
+   - 确认 `core.toml` 中的 `http_router_port` 为 `8005`
+   - 确认 `vite.config.ts` 中的代理目标为 `http://localhost:8005`
+
+3. **检查防火墙：**
+   - 确保防火墙未阻止 8005 和 9178 端口
+
+4. **检查端口占用：**
+   ```bash
+   # Linux/macOS
+   lsof -i :8005
+   lsof -i :9178
+   
+   # Windows
+   netstat -ano | findstr :8005
+   netstat -ano | findstr :9178
+   ```
+
+### 登录失败提示 401 错误
+
+**问题表现：**
+- 输入密钥后提示「登录失败」或「Unauthorized」
+
+**解决方案：**
+
+1. **确认密钥正确：**
+   - 检查输入的密钥与 `core.toml` 中的 `api_keys` 完全一致
+   - 注意密钥区分大小写，不要有多余的空格
+
+2. **重启后端：**
+   - 修改 `core.toml` 后需要重启 Neo-MoFox 才能生效
+
+### 前端依赖安装失败
+
+**问题表现：**
+- `npm install` 卡住或报错
+- 网络连接超时
+
+**解决方案：**
+
+1. **配置国内镜像源（中国大陆用户）：**
+   ```bash
+   # 使用淘宝镜像
+   npm config set registry https://registry.npmmirror.com
+   
+   # 或使用腾讯镜像
+   npm config set registry https://mirrors.cloud.tencent.com/npm/
+   
+   # 重新安装
+   npm install
+   ```
+
+2. **清除缓存后重试：**
+   ```bash
+   npm cache clean --force
+   npm install
+   ```
+
+3. **使用代理：**
+   ```bash
+   npm config set proxy http://127.0.0.1:7890
+   npm config set https-proxy http://127.0.0.1:7890
+   ```
+
+### 后端插件未加载
+
+**问题表现：**
+- Neo-MoFox 启动日志中未显示 WebUI Plugin 加载信息
+- 访问 API 接口返回 404
+
+**解决方案：**
+
+1. **检查插件目录：**
+   - 确认插件已正确复制/链接到 `Neo-MoFox/plugins/webui`
+   - 检查目录结构是否完整（包含 `manifest.json` 和 `plugin.py`）
+
+2. **检查插件配置：**
+   - 确认 `manifest.json` 格式正确
+   - 检查是否有 Python 语法错误
+
+3. **查看错误日志：**
+   - 查看 Neo-MoFox 的日志文件（通常在 `logs/` 目录下）
+   - 寻找与 WebUI Plugin 相关的错误信息
+
+---
+
+## 获取帮助
+
+如果遇到问题，请：
+
+1. 查看本文档的「常见问题」章节
+2. 查看项目的 [GitHub Issues](https://github.com/your-org/Neo-MoFox-Webui/issues)
+3. 加入社区讨论群获取支持
+
+---
+
+**安装文档版本：** v1.0.0  
+**最后更新：** 2026年5月4日
