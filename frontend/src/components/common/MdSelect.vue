@@ -62,15 +62,17 @@
     </div>
 
     <!-- 下拉选项面板 -->
-    <Transition name="dropdown">
-      <div
-        v-show="isOpen"
-        class="md-select__dropdown"
-        :style="dropdownStyle"
-        role="listbox"
-        @mousedown.prevent
-      >
+    <Teleport to="body">
+      <Transition name="dropdown">
         <div
+          v-show="isOpen"
+          ref="dropdownRef"
+          class="md-select__dropdown"
+          :style="dropdownStyle"
+          role="listbox"
+          @mousedown.prevent
+        >
+          <div
           v-for="(option, index) in options"
           :key="`${getOptionValue(option)}-${index}`"
           class="md-select__option"
@@ -103,6 +105,7 @@
         </div>
       </div>
     </Transition>
+    </Teleport>
 
     <!-- 辅助文本 / 错误提示 -->
     <div v-if="helperText || error" class="md-select__helper-text" :class="{ 'md-select__helper-text--error': error }">
@@ -143,6 +146,7 @@ const emit = defineEmits<{
 
 // State
 const selectRef = ref<HTMLDivElement>()
+const dropdownRef = ref<HTMLDivElement>()
 const isOpen = ref(false)
 const isFocused = ref(false)
 const highlightedIndex = ref(-1)
@@ -229,15 +233,23 @@ function updateDropdownPosition() {
   // 判断是向上还是向下展开
   const openUpward = spaceBelow < dropdownHeight && spaceAbove > spaceBelow
 
+  const commonStyle = {
+    position: 'fixed',
+    left: `${rect.left}px`,
+    width: `${rect.width}px`,
+  }
+
   if (openUpward) {
     dropdownStyle.value = {
-      bottom: '100%',
+      ...commonStyle,
+      bottom: `${window.innerHeight - rect.top}px`,
       marginBottom: '4px',
       maxHeight: `${Math.min(dropdownHeight, spaceAbove - 8)}px`,
     }
   } else {
     dropdownStyle.value = {
-      top: '100%',
+      ...commonStyle,
+      top: `${rect.bottom}px`,
       marginTop: '4px',
       maxHeight: `${Math.min(dropdownHeight, spaceBelow - 8)}px`,
     }
@@ -245,7 +257,7 @@ function updateDropdownPosition() {
 }
 
 function scrollToHighlighted() {
-  const dropdown = selectRef.value?.querySelector('.md-select__dropdown')
+  const dropdown = dropdownRef.value
   const highlighted = dropdown?.querySelector('.md-select__option--highlighted')
   if (dropdown && highlighted) {
     highlighted.scrollIntoView({ block: 'nearest' })
@@ -254,7 +266,9 @@ function scrollToHighlighted() {
 
 // 点击外部关闭
 function handleClickOutside(event: MouseEvent) {
-  if (selectRef.value && !selectRef.value.contains(event.target as Node)) {
+  const isOutsideSelect = selectRef.value && !selectRef.value.contains(event.target as Node)
+  const isOutsideDropdown = dropdownRef.value && !dropdownRef.value.contains(event.target as Node)
+  if (isOutsideSelect && isOutsideDropdown) {
     closeDropdown()
   }
 }
@@ -295,17 +309,25 @@ watch(() => props.options, () => {
   }
 })
 
+function handleScroll() {
+  if (isOpen.value) {
+    updateDropdownPosition()
+  }
+}
+
 // 生命周期
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
   document.addEventListener('keydown', handleKeyDown)
   window.addEventListener('resize', updateDropdownPosition)
+  window.addEventListener('scroll', handleScroll, true)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('resize', updateDropdownPosition)
+  window.removeEventListener('scroll', handleScroll, true)
 })
 </script>
 
@@ -397,10 +419,7 @@ onBeforeUnmount(() => {
 
 /* ===== 下拉面板 ===== */
 .md-select__dropdown {
-  position: absolute;
-  left: 0;
-  right: 0;
-  z-index: 1000;
+  z-index: 9999;
   background: var(--md-sys-color-surface-container);
   border-radius: 4px;
   box-shadow:

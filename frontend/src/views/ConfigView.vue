@@ -141,14 +141,17 @@ async function loadConfig() {
 
 // 保存配置
 async function handleSave(configType: 'bot' | 'model', data: Record<string, any>) {
+  console.log(`[ConfigView] handleSave 被调用:`, { configType, dataKeys: Object.keys(data) })
   try {
     const response = await fullWriteConfig(configType, data)
 
-    // 更新本地数据
+    // 更新本地数据（会触发子组件的 watch，更新 originalData）
     if (configType === 'bot') {
       botConfig.value = response
+      console.log('[ConfigView] Bot 配置保存成功，已更新 botConfig')
     } else {
       modelConfig.value = response
+      console.log('[ConfigView] Model 配置保存成功，已更新 modelConfig')
     }
 
     // 显示成功提示（可以集成 Toast 组件）

@@ -376,7 +376,17 @@ const testResults = ref<{
 
 // 是否有变更
 const hasChanges = computed(() => {
-  return JSON.stringify(localData.value) !== JSON.stringify(originalData.value)
+  const currentJson = JSON.stringify(localData.value)
+  const originalJson = JSON.stringify(originalData.value)
+  const changed = currentJson !== originalJson
+  console.log('[ModelConfigEditor] hasChanges 检测:', {
+    changed,
+    currentDataKeys: Object.keys(localData.value),
+    originalDataKeys: Object.keys(originalData.value),
+    currentProvidersCount: localData.value.api_providers?.length,
+    originalProvidersCount: originalData.value.api_providers?.length,
+  })
+  return changed
 })
 
 // 提供商名称列表
@@ -402,11 +412,13 @@ const dialog = ref<{
 
 // 初始化时加载原始 TOML
 onMounted(async () => {
+  console.log('[ModelConfigEditor] 组件挂载，开始加载原始 TOML')
   try {
     const rawToml = await getRawConfig('model')
     codeContent.value = rawToml
+    console.log('[ModelConfigEditor] 原始 TOML 加载成功，长度:', rawToml.length)
   } catch (error: any) {
-    console.warn('加载原始 TOML 失败:', error)
+    console.error('[ModelConfigEditor] 加载原始 TOML 失败:', error)
     errorMessage.value = error.message
   }
 })
@@ -414,13 +426,22 @@ onMounted(async () => {
 watch(
   () => props.modelValue,
   (newValue) => {
-    localData.value = {
+    console.log('[ModelConfigEditor] props.modelValue 变化:', {
+      newValueKeys: Object.keys(newValue),
+      providersCount: newValue.api_providers?.length,
+      modelsCount: newValue.models?.length,
+    })
+    
+    // 深拷贝以避免共享引用
+    localData.value = JSON.parse(JSON.stringify({
       api_providers: [],
       models: [],
       model_tasks: {},
       ...newValue,
-    }
+    }))
     originalData.value = JSON.parse(JSON.stringify(localData.value))
+    
+    console.log('[ModelConfigEditor] 已更新 localData 和 originalData（深拷贝）')
   },
   { immediate: true, deep: true }
 )
@@ -460,7 +481,18 @@ async function toggleEditMode() {
 // ===== 保存 =====
 
 async function handleSave() {
-  if (isSaving.value || !hasChanges.value) return
+  console.log('[ModelConfigEditor] handleSave 被调用', {
+    isSaving: isSaving.value,
+    hasChanges: hasChanges.value,
+    isCodeMode: isCodeMode.value,
+  })
+
+  if (isSaving.value || !hasChanges.value) {
+    console.log('[ModelConfigEditor] 保存被阻止:', {
+      reason: isSaving.value ? '正在保存中' : '没有变更',
+    })
+    return
+  }
 
   try {
     isSaving.value = true
@@ -471,18 +503,32 @@ async function handleSave() {
     if (isCodeMode.value) {
       try {
         dataToSave = parseToml(codeContent.value)
+        console.log('[ModelConfigEditor] 代码模式: TOML 解析成功')
       } catch (error: any) {
+        console.error('[ModelConfigEditor] TOML 解析失败:', error)
         errorMessage.value = `TOML 格式错误: ${error.message}`
         return
       }
     } else {
       dataToSave = localData.value
+      console.log('[ModelConfigEditor] 表单模式: 使用 localData', {
+        providersCount: dataToSave.api_providers?.length,
+        modelsCount: dataToSave.models?.length,
+        tasksCount: Object.keys(dataToSave.model_tasks || {}).length,
+      })
     }
 
+    console.log('[ModelConfigEditor] 准备发出 save 事件:', {
+      dataKeys: Object.keys(dataToSave),
+    })
+
+    // 只发出 save 事件，不发出 update:modelValue
+    // 父组件保存成功后会更新 props.modelValue，触发 watch，更新 originalData
     emit('save', dataToSave)
-    emit('update:modelValue', dataToSave)
-    originalData.value = JSON.parse(JSON.stringify(dataToSave))
+    
+    console.log('[ModelConfigEditor] save 事件已发出')
   } catch (error: any) {
+    console.error('[ModelConfigEditor] 保存过程出错:', error)
     errorMessage.value = `保存失败: ${error.message}`
   } finally {
     isSaving.value = false
@@ -652,19 +698,29 @@ function closeDialog() {
 }
 
 function handleDialogSubmit(data: Record<string, any>) {
+  console.log('[ModelConfigEditor] handleDialogSubmit 被调用:', {
+    type: dialog.value.type,
+    mode: dialog.value.mode,
+    data,
+  })
+
   if (dialog.value.type === 'provider') {
     if (dialog.value.mode === 'add') {
       localData.value.api_providers.push(data)
+      console.log('[ModelConfigEditor] 添加供应商成功')
     } else {
       const idx = dialog.value.editIndex as number
       localData.value.api_providers[idx] = data
+      console.log('[ModelConfigEditor] 编辑供应商成功, index:', idx)
     }
   } else if (dialog.value.type === 'model') {
     if (dialog.value.mode === 'add') {
       localData.value.models.push(data)
+      console.log('[ModelConfigEditor] 添加模型成功')
     } else {
       const idx = dialog.value.editIndex as number
       localData.value.models[idx] = data
+      console.log('[ModelConfigEditor] 编辑模型成功, index:', idx)
     }
   } else if (dialog.value.type === 'task') {
     const taskName = data.name
@@ -673,18 +729,28 @@ function handleDialogSubmit(data: Record<string, any>) {
     if (dialog.value.mode === 'add') {
       if (localData.value.model_tasks[taskName]) {
         alert('任务名称已存在')
+        console.warn('[ModelConfigEditor] 任务名称已存在:', taskName)
         return
       }
       localData.value.model_tasks[taskName] = taskData
+      console.log('[ModelConfigEditor] 添加任务成功:', taskName)
     } else {
       const oldName = dialog.value.editIndex as string
       if (oldName !== taskName) {
         // 任务名称不应该改变，但如果改了就删除旧的
         delete localData.value.model_tasks[oldName]
+        console.log('[ModelConfigEditor] 删除旧任务名:', oldName)
       }
       localData.value.model_tasks[taskName] = taskData
+      console.log('[ModelConfigEditor] 编辑任务成功:', taskName)
     }
   }
+  
+  console.log('[ModelConfigEditor] 对话框提交后 localData 状态:', {
+    providersCount: localData.value.api_providers?.length,
+    modelsCount: localData.value.models?.length,
+    tasksCount: Object.keys(localData.value.model_tasks || {}).length,
+  })
   
   closeDialog()
 }
@@ -727,7 +793,6 @@ function handleDialogSubmit(data: Record<string, any>) {
   padding: 4px 8px;
   background: var(--md-sys-color-surface-container);
   border-radius: 4px;
-  font-family: monospace;
 }
 
 .toolbar-right {
@@ -975,7 +1040,6 @@ function handleDialogSubmit(data: Record<string, any>) {
 .info-item .value {
   font-size: 14px;
   color: var(--md-sys-color-on-surface);
-  font-family: monospace;
   word-break: break-all;
 }
 
