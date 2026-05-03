@@ -178,7 +178,7 @@ onMounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--md-sys-color-background);
+  background: transparent;
 }
 
 /* Tab 栏 */
@@ -186,9 +186,13 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   padding: 16px 20px;
-  background: var(--md-sys-color-surface);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-low) 70%, transparent);
+  backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
   flex-shrink: 0;
+  position: sticky;
+  top: 64px;
+  z-index: 10;
 }
 
 .tab-btn {

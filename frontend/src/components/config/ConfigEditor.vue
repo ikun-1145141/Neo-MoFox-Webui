@@ -329,7 +329,6 @@ watch(codeContent, (newCode) => {
 /* 固定的头部 */
 .editor-header {
   position: sticky;
-  top: 64px;
   z-index: 4;
   display: flex;
   flex-direction: column;
