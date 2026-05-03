@@ -227,7 +227,8 @@ onMounted(() => {
 .plugin-config-view {
   display: flex;
   align-items: stretch;
-  min-height: calc(100dvh - 64px);
+  height: calc(100vh - 64px);
+  overflow: hidden;
 }
 
 /* 左侧插件列表 */
@@ -239,9 +240,7 @@ onMounted(() => {
   background: color-mix(in srgb, var(--md-sys-color-surface-container-low) 70%, transparent);
   backdrop-filter: blur(12px);
   border-right: 1px solid var(--md-sys-color-outline-variant);
-  position: sticky;
-  top: 64px;
-  height: calc(100dvh - 64px);
+  height: 100%;
   z-index: 5;
 }
 
