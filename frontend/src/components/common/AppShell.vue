@@ -12,6 +12,8 @@ const route = useRoute()
 
 const navItems = [
   { label: '主页', icon: 'material-symbols:home-outline-rounded', name: 'home', path: '/' },
+  { label: '配置', icon: 'material-symbols:tune-rounded', name: 'config', path: '/config' },
+  { label: '插件', icon: 'material-symbols:extension-outline-rounded', name: 'config-plugins', path: '/config/plugins' },
   { label: '设置', icon: 'material-symbols:setting-outline-rounded', name: 'settings-theme', path: '/settings' },
 ]
 

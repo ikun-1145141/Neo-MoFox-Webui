@@ -123,14 +123,18 @@ class EnhancedConfigResponse(BaseModel):
 
     Attributes:
         config_type: 配置类型（"bot"、"model"、"plugin"）
+        config_name: 配置名称（用于显示，如 "机器人配置"、"模型配置"）
+        config_path: 配置文件路径（相对路径，如 "config/core.toml"）
         plugin_name: 插件名（仅 plugin 类型时有值）
-        sections: 有序的配置节列表（含 Schema）
+        schema: 有序的配置节列表（含 Schema）
         data: 当前配置值（与 TOML 文件内容一致的字典）
     """
 
     config_type: Literal["bot", "model", "plugin"] = Field(..., description="配置类型")
+    config_name: str = Field(..., description="配置名称")
+    config_path: str = Field(..., description="配置文件路径")
     plugin_name: str | None = Field(default=None, description="插件名")
-    sections: list[SectionSchema] = Field(default_factory=list, description="配置节列表")
+    schema: list[SectionSchema] = Field(default_factory=list, description="配置节列表")
     data: dict[str, Any] = Field(default_factory=dict, description="配置数据")
 
 

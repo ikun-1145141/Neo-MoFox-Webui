@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.app.plugin_system.api.config_api import get_all_configs
+from src.app.plugin_system.api.config_api import get_loaded_plugins, get_config
 from src.app.plugin_system.api.log_api import get_logger
 
 from ...utils.config_parser import ConfigParser
@@ -33,12 +33,18 @@ class PluginConfigManager:
             RuntimeError: 获取插件列表失败
         """
         try:
-            # 从 config_api 获取已加载的配置
-            loaded_configs = get_all_configs()
+            # 从 config_api 获取已加载的插件名称列表
+            plugin_names = get_loaded_plugins()
 
             entries: list[PluginConfigEntry] = []
 
-            for plugin_name, config_instance in loaded_configs.items():
+            for plugin_name in plugin_names:
+                # 获取配置实例
+                config_instance = get_config(plugin_name)
+                if config_instance is None:
+                    logger.warning(f"插件 '{plugin_name}' 配置为空，跳过")
+                    continue
+
                 config_class = type(config_instance)
 
                 # 获取配置描述
@@ -81,12 +87,11 @@ class PluginConfigManager:
             ValueError: 插件配置未找到
         """
         try:
-            # 获取配置类
-            loaded_configs = get_all_configs()
-            if plugin_name not in loaded_configs:
+            # 获取配置实例
+            config_instance = get_config(plugin_name)
+            if config_instance is None:
                 raise ValueError(f"插件配置未找到: {plugin_name}")
 
-            config_instance = loaded_configs[plugin_name]
             config_class = type(config_instance)
 
             # 提取 Schema
@@ -105,7 +110,8 @@ _plugin_config_manager: PluginConfigManager | None = None
 
 
 def get_plugin_config_manager() -> PluginConfigManager:
-    """获取插件配置管理器单例。
+    """
+    获取插件配置管理器单例。
 
     Returns:
         插件配置管理器实例

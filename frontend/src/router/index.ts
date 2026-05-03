@@ -16,6 +16,18 @@ const router = createRouter({
       meta: { requiresAuth: true, title: '主页', icon: 'material-symbols:home-outline-rounded' },
     },
     {
+      path: '/config',
+      name: 'config',
+      component: () => import('../views/ConfigView.vue'),
+      meta: { requiresAuth: true, title: '配置管理', icon: 'material-symbols:settings-outline-rounded' },
+    },
+    {
+      path: '/config/plugins',
+      name: 'config-plugins',
+      component: () => import('../views/PluginConfigView.vue'),
+      meta: { requiresAuth: true, title: '插件配置', icon: 'material-symbols:extension-outline-rounded' },
+    },
+    {
       path: '/settings',
       component: () => import('../views/SettingsView.vue'),
       meta: { requiresAuth: true, title: '设置', icon: 'material-symbols:settings-outline-rounded' },

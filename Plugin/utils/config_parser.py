@@ -9,10 +9,10 @@ import tomllib
 from pathlib import Path
 from typing import Any, get_args, get_origin
 
-import toml
 from pydantic_core import PydanticUndefined
 
 from src.kernel.config import ConfigBase, SectionBase
+from src.kernel.config.core import _render_toml_with_signature
 from src.app.plugin_system.api.log_api import get_logger
 
 from .config_types import (
@@ -79,15 +79,13 @@ class ConfigParser:
         except Exception as e:
             raise ValueError(f"配置数据验证失败: {e}")
 
-        # 写入文件（简单格式）
-        with path.open("w", encoding="utf-8") as f:
-            toml.dump(data, f)
-
-        # 使用 auto_update 触发签名回写以保留注释
+        # 使用 Neo-MoFox 内置的 TOML 渲染函数生成带注释的配置文件
         try:
-            config_class.load(path, auto_update=True)
+            toml_content = _render_toml_with_signature(config_class, data)
+            path.write_text(toml_content, encoding="utf-8")
+            logger.info(f"配置文件已写入: {path}")
         except Exception as e:
-            logger.warning(f"签名回写失败，配置已保存但可能缺少注释: {e}")
+            raise OSError(f"写入配置文件失败: {e}")
 
     @staticmethod
     def extract_schema(config_class: type[ConfigBase]) -> list[SectionSchema]:
@@ -190,7 +188,7 @@ class ConfigParser:
         elif model_field.default_factory:
             try:
                 default_value = model_field.default_factory()
-            except:
+            except Exception:
                 pass
 
         # 获取 json_schema_extra 中的 UI 属性
@@ -261,6 +259,8 @@ class ConfigParser:
         config_type: str,
         config_class: type[ConfigBase],
         data: dict[str, Any],
+        config_path: str,
+        config_name: str | None = None,
         plugin_name: str | None = None,
     ) -> EnhancedConfigResponse:
         """构建增强配置响应。
@@ -269,6 +269,8 @@ class ConfigParser:
             config_type: 配置类型（"bot", "model", "plugin"）
             config_class: 配置类
             data: 配置数据
+            config_path: 配置文件路径
+            config_name: 配置名称（不填则使用 config_type 生成）
             plugin_name: 插件名（仅 plugin 类型）
 
         Returns:
@@ -276,10 +278,17 @@ class ConfigParser:
         """
         sections = ConfigParser.extract_schema(config_class)
 
+        # 生成默认 config_name
+        if not config_name:
+            name_map = {"bot": "机器人配置", "model": "模型配置", "plugin": "插件配置"}
+            config_name = name_map.get(config_type, config_type)
+
         return EnhancedConfigResponse(
             config_type=config_type,  # type: ignore
+            config_name=config_name,
+            config_path=config_path,
             plugin_name=plugin_name,
-            sections=sections,
+            schema=sections,
             data=data,
         )
 

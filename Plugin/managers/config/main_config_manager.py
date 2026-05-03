@@ -129,6 +129,7 @@ class MainConfigManager:
             config_type="bot",
             config_class=CoreConfig,
             data=data,
+            config_path=str(self.bot_config_path),
         )
 
     async def _write_bot_config(self, data: dict[str, Any]) -> EnhancedConfigResponse:
@@ -147,14 +148,12 @@ class MainConfigManager:
         # 读取原始数据
         data = ConfigParser.read_toml(self.model_config_path)
         
-        # 提取 Schema（仅针对 model_tasks 节）
-        sections = ConfigParser.extract_schema(ModelConfig)
-        
-        return EnhancedConfigResponse(
+        # 构建响应
+        return ConfigParser.build_enhanced_response(
             config_type="model",
-            plugin_name=None,
-            sections=sections,
+            config_class=ModelConfig,
             data=data,
+            config_path=str(self.model_config_path),
         )
 
     async def _write_model_config(self, data: dict[str, Any]) -> EnhancedConfigResponse:
@@ -191,6 +190,7 @@ class MainConfigManager:
                 config_type="plugin",
                 config_class=config_class,
                 data=data,
+                config_path=str(config_path),
                 plugin_name=plugin_name,
             )
         except Exception as e:
