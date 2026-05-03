@@ -13,6 +13,12 @@ from .components.router.auth_router import AuthRouter
 from .components.router.dashboard_router import DashboardRouter
 from .components.router.wallpaper_router import WallpaperRouter
 from .components.router.webui_router import WebuiSettingsRouter
+from .components.router.config import (
+    MainConfigRouter,
+    BotConfigRouter,
+    ModelConfigRouter,
+    PluginConfigRouter,
+)
 
 logger = get_logger("webui_plugin")
 
@@ -45,9 +51,15 @@ class WebuiPlugin(BasePlugin):
             DashboardRouter,
             WebuiSettingsRouter,
             WallpaperRouter,
+            # 配置管理路由
+            MainConfigRouter,
+            BotConfigRouter,
+            ModelConfigRouter,
+            PluginConfigRouter,
         ]
         return components
 
+        logger.info("配置管理路径: /api/config, /api/config-bot, /api/config-model, /api/config-plugin")
     async def on_plugin_loaded(self) -> None:
         """插件加载钩子。"""
         logger.info(f"WebUI 插件 v{self.plugin_version} 已加载")
