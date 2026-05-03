@@ -162,7 +162,7 @@ function createM3Theme() {
     {
       '&': {
         height: '100%',
-        backgroundColor: 'var(--md-sys-color-surface)',
+        backgroundColor: 'transparent',
         color: 'var(--md-sys-color-on-surface)',
         fontSize: '14px',
         fontFamily: 'Consolas, Monaco, "Courier New", monospace',
@@ -186,14 +186,14 @@ function createM3Theme() {
       },
       '.cm-activeLine': {
         backgroundColor: isDark
-          ? 'rgba(255, 255, 255, 0.03)'
+          ? 'rgba(255, 255, 255, 0.05)'
           : 'rgba(0, 0, 0, 0.03)',
       },
       '.cm-activeLineGutter': {
         backgroundColor: 'transparent',
       },
       '.cm-gutters': {
-        backgroundColor: 'var(--md-sys-color-surface-container-low)',
+        backgroundColor: 'transparent',
         color: 'var(--md-sys-color-on-surface-variant)',
         border: 'none',
         borderRight: '1px solid var(--md-sys-color-outline-variant)',
@@ -336,9 +336,8 @@ watch(
 .editor-container {
   flex: 1;
   overflow: auto;
-  border-radius: 12px;
-  border: 1px solid var(--md-sys-color-outline-variant);
-  background: var(--md-sys-color-surface);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 60%, transparent);
+  backdrop-filter: blur(8px);
 }
 
 /* CodeMirror 样式覆盖 */

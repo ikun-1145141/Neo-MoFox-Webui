@@ -1113,4 +1113,78 @@ function handleDialogSubmit(data: Record<string, any>) {
     transform: rotate(360deg);
   }
 }
+
+/* ===== 移动端适配 ===== */
+@media screen and (max-width: 768px) {
+  .editor-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  .toolbar-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .mode-toggle-btn,
+  .save-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .tab-bar {
+    padding: 0;
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: none;
+  }
+
+  .tab-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab-button {
+    padding: 12px 16px;
+    flex-shrink: 0;
+  }
+
+  .tab-content {
+    padding: 16px;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .add-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .card-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .test-result {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
 </style>

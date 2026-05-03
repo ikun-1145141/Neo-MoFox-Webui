@@ -336,8 +336,6 @@ function getFieldComponent(inputType: string, fieldType?: string) {
 
 <style scoped>
 .form-editor {
-  height: 100%;
-  overflow-y: auto;
   padding: 16px;
 }
 
@@ -541,6 +539,17 @@ function getFieldComponent(inputType: string, fieldType?: string) {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  background: var(--md-sys-color-surface);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.list-item-card .form-field {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
 }
 
 .field-label {
@@ -565,8 +574,8 @@ function getFieldComponent(inputType: string, fieldType?: string) {
 
 /* 对象节样式 */
 .object-section {
-  background: var(--md-sys-color-surface);
+  background: transparent;
   border-radius: 12px;
-  padding: 16px;
+  padding: 8px 0;
 }
 </style>

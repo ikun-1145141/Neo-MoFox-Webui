@@ -9,12 +9,16 @@
 -->
 <template>
   <AppShell no-padding>
-    <template #title>
-      <Icon icon="material-symbols:extension-outline-rounded" :size="24" />
-      <span>插件配置</span>
-    </template>
-
     <div class="plugin-config-view">
+      <!-- 移动端顶部插件选择器 -->
+      <div class="mobile-top-selector">
+        <MdSelect
+          v-model="selectedPluginName"
+          :options="pluginOptions"
+          placeholder="选择要配置的插件..."
+        />
+      </div>
+
       <!-- 左侧插件列表 -->
       <div class="plugin-list">
         <!-- 搜索框 -->
@@ -68,7 +72,8 @@
         <!-- 未选择插件 -->
         <div v-if="!selectedPlugin" class="editor-empty">
           <Icon icon="material-symbols:settings-outline-rounded" :size="64" />
-          <p>请从左侧选择一个插件以编辑配置</p>
+          <p class="empty-text-desktop">请从左侧选择一个插件以编辑配置</p>
+          <p class="empty-text-mobile">请从上方选择一个插件以编辑配置</p>
         </div>
 
         <!-- 加载配置 -->
@@ -107,6 +112,7 @@
 import { ref, computed, onMounted } from 'vue'
 import AppShell from '@/components/common/AppShell.vue'
 import Icon from '@/components/common/Icon.vue'
+import MdSelect from '@/components/common/MdSelect.vue'
 import ConfigEditor from '@/components/config/ConfigEditor.vue'
 import {
   listPluginConfigs,
@@ -159,6 +165,24 @@ function selectPlugin(plugin: PluginConfigEntry) {
   loadPluginConfig(plugin)
 }
 
+// 移动端顶栏选择器的双向绑定与选项
+const pluginOptions = computed(() => {
+  return plugins.value.map(p => ({
+    label: p.config_name,
+    value: p.plugin_name
+  }))
+})
+
+const selectedPluginName = computed({
+  get: () => selectedPlugin.value?.plugin_name || null,
+  set: (val) => {
+    if (val) {
+      const plugin = plugins.value.find((p) => p.plugin_name === val)
+      if (plugin) selectPlugin(plugin)
+    }
+  }
+})
+
 // 加载插件配置
 async function loadPluginConfig(plugin: PluginConfigEntry) {
   try {
@@ -201,9 +225,9 @@ onMounted(() => {
 
 <style scoped>
 .plugin-config-view {
-  height: 100%;
   display: flex;
-  overflow: hidden;
+  align-items: stretch;
+  min-height: calc(100dvh - 64px);
 }
 
 /* 左侧插件列表 */
@@ -212,8 +236,13 @@ onMounted(() => {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: var(--md-sys-color-surface);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-low) 70%, transparent);
+  backdrop-filter: blur(12px);
   border-right: 1px solid var(--md-sys-color-outline-variant);
+  position: sticky;
+  top: 64px;
+  height: calc(100dvh - 64px);
+  z-index: 5;
 }
 
 .search-box {
@@ -222,7 +251,7 @@ onMounted(() => {
   gap: 12px;
   padding: 16px 20px;
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
-  background: var(--md-sys-color-surface-container-low);
+  background: transparent;
 }
 
 .search-input {
@@ -349,10 +378,10 @@ onMounted(() => {
 /* 右侧编辑器区域 */
 .plugin-editor {
   flex: 1;
-  overflow: hidden;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  background: var(--md-sys-color-background);
+  background: transparent;
 }
 
 .editor-empty,
@@ -376,6 +405,10 @@ onMounted(() => {
   margin: 0;
 }
 
+.empty-text-mobile {
+  display: none;
+}
+
 .retry-btn {
   display: flex;
   align-items: center;
@@ -397,11 +430,39 @@ onMounted(() => {
   transform: translateY(-1px);
 }
 
+/* 移动端顶部选择器 */
+.mobile-top-selector {
+  display: none;
+  padding: 16px;
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-low) 70%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
 /* 响应式布局 */
 @media (max-width: 768px) {
+  .plugin-config-view {
+    flex-direction: column;
+  }
+  
+  .mobile-top-selector {
+    display: block;
+  }
+
   .plugin-list {
-    width: 100%;
-    max-width: 280px;
+    display: none;
+  }
+  
+  .plugin-editor {
+    min-height: calc(100dvh - 180px);
+  }
+
+  .empty-text-desktop {
+    display: none;
+  }
+
+  .empty-text-mobile {
+    display: block;
   }
 }
 </style>

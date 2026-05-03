@@ -11,16 +11,18 @@
 -->
 <template>
   <div class="config-editor">
-    <!-- 工具栏 -->
-    <div class="editor-toolbar">
-      <div class="toolbar-left">
-        <h2 class="config-title">{{ title }}</h2>
-        <span v-if="configPath" class="config-path">{{ configPath }}</span>
-      </div>
+    <!-- 固定的头部 -->
+    <div class="editor-header">
+      <!-- 工具栏 -->
+      <div class="editor-toolbar">
+        <div class="toolbar-left">
+          <h2 class="config-title">{{ title }}</h2>
+          <span v-if="configPath" class="config-path">{{ configPath }}</span>
+        </div>
 
-      <div class="toolbar-right">
-        <!-- 模式切换按钮 -->
-        <button
+        <div class="toolbar-right">
+          <!-- 模式切换按钮 -->
+          <button
           type="button"
           class="mode-toggle-btn"
           @click="toggleMode"
@@ -70,6 +72,7 @@
       >
         {{ section.title || section.name }}
       </button>
+    </div>
     </div>
 
     <!-- 编辑器内容区 -->
@@ -315,12 +318,21 @@ watch(codeContent, (newCode) => {
 
 <style scoped>
 .config-editor {
-  height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--md-sys-color-surface-container-low);
-  border-radius: 12px;
-  overflow: hidden;
+  background: transparent;
+  border-radius: 0;
+  flex: 1;
+  height: 100%;
+}
+
+/* 固定的头部 */
+.editor-header {
+  position: sticky;
+  top: 64px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 工具栏 */
@@ -329,7 +341,8 @@ watch(codeContent, (newCode) => {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  background: var(--md-sys-color-surface);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 70%, transparent);
+  backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
   flex-shrink: 0;
 }
@@ -339,7 +352,8 @@ watch(codeContent, (newCode) => {
   display: flex;
   gap: 4px;
   padding: 8px 16px;
-  background: var(--md-sys-color-surface-container-low);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-low) 70%, transparent);
+  backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
   flex-shrink: 0;
   overflow-x: auto;
@@ -475,8 +489,9 @@ watch(codeContent, (newCode) => {
 /* 编辑器内容区 */
 .editor-content {
   flex: 1;
-  overflow: hidden;
-  padding: 16px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 错误提示 */
@@ -507,5 +522,49 @@ watch(codeContent, (newCode) => {
 
 .error-banner .close-btn:hover {
   background: rgba(0, 0, 0, 0.1);
+}
+
+/* ===== 移动端适配 ===== */
+@media screen and (max-width: 768px) {
+  .editor-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  .toolbar-left {
+    width: 100%;
+  }
+
+  .toolbar-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .mode-toggle-btn,
+  .save-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .section-tabs {
+    padding: 8px 12px;
+    scrollbar-width: none;
+  }
+  .section-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .section-tab {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+
+  .editor-content {
+    padding: 0;
+    background: color-mix(in srgb, var(--md-sys-color-surface) 80%, transparent);
+    backdrop-filter: blur(12px);
+  }
 }
 </style>
