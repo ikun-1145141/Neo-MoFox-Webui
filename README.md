@@ -135,7 +135,7 @@ Neo-MoFox-Webui/
 ### 前置要求
 
 - Python 3.10+
-- Node.js 18+ / pnpm 8+
+- Node.js 18+ / npm 9+
 - Neo-MoFox 核心框架
 
 ### 后端部署

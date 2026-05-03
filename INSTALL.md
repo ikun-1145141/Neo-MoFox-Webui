@@ -191,7 +191,7 @@ npm --version
 
 ```bash
 # 克隆项目到本地
-git clone https://github.com/your-org/Neo-MoFox-Webui.git
+git clone https://github.com/ikun-1145141/Neo-MoFox-Webui
 cd Neo-MoFox-Webui
 ```
 
