@@ -3,6 +3,7 @@ import type { AxiosInstance } from 'axios'
 import { API_BASE_URL, API_TIMEOUT } from './config'
 import type { BaseResponse } from './types/base'
 import { useToastStore } from '../utils/toast'
+import { healthCheck } from './modules/settings'
 
 const instance: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -10,8 +11,82 @@ const instance: AxiosInstance = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-// 请求拦截器：注入 token
+// ========== 系统状态管理 ==========
+let isRestarting = false
+let healthCheckTimer: number | null = null
+
+/**
+ * 获取系统重启状态
+ */
+export function getIsRestarting(): boolean {
+  return isRestarting
+}
+
+/**
+ * 设置系统重启状态
+ */
+export function setIsRestarting(value: boolean): void {
+  isRestarting = value
+}
+
+/**
+ * 启动健康检查轮询
+ * 
+ * @param onHealthy - 系统恢复健康时的回调
+ * @param interval - 检查间隔（毫秒），默认 2000ms
+ * @param maxAttempts - 最大尝试次数，默认 60 次（2 分钟）
+ */
+export function startHealthCheck(
+  onHealthy: () => void,
+  interval = 2000,
+  maxAttempts = 60
+): void {
+  let attempts = 0
+
+  const check = async () => {
+    attempts++
+
+    try {
+      await healthCheck()
+      // 健康检查成功
+      stopHealthCheck()
+      setIsRestarting(false)
+      onHealthy()
+    } catch {
+      // 健康检查失败，继续等待
+      if (attempts >= maxAttempts) {
+        // 超过最大尝试次数
+        stopHealthCheck()
+        setIsRestarting(false)
+        console.error('健康检查超时，系统可能未能成功重启')
+      }
+    }
+  }
+
+  // 立即执行第一次检查
+  check()
+
+  // 设置定时器
+  healthCheckTimer = window.setInterval(check, interval)
+}
+
+/**
+ * 停止健康检查轮询
+ */
+export function stopHealthCheck(): void {
+  if (healthCheckTimer !== null) {
+    clearInterval(healthCheckTimer)
+    healthCheckTimer = null
+  }
+}
+
+// 请求拦截器：注入 token 和检查系统状态
 instance.interceptors.request.use((config) => {
+  // 检查系统是否正在重启（除健康检查接口外）
+  if (getIsRestarting() && !config.url?.includes('/api/webui/health')) {
+    return Promise.reject(new Error('系统正在重启，请稍候...'))
+  }
+
   const token = sessionStorage.getItem('neo_token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
@@ -55,8 +130,12 @@ instance.interceptors.response.use(
       }
     }
 
+    // 跳过以下情况的 Toast 提示：
+    // 1. 开发环境下登录接口的网络错误
+    // 2. 健康检查接口的错误（重启期间的预期行为）
     const shouldSkipToast =
-      import.meta.env.DEV && requestUrl.includes('/api/auth/login') && error?.code === 'ERR_NETWORK'
+      (import.meta.env.DEV && requestUrl.includes('/api/auth/login') && error?.code === 'ERR_NETWORK') ||
+      (requestUrl.includes('/api/webui/health') && getIsRestarting())
 
     if (!shouldSkipToast) {
       useToastStore().show(msg, 'error')

@@ -2,6 +2,10 @@
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { logout } from '../../api/modules/auth'
+import { restartBot, shutdownBot } from '../../api/modules/system'
+import { setIsRestarting, startHealthCheck } from '../../api/base'
+import { useDialogStore } from '../../utils/dialog'
+import { useToastStore } from '../../utils/toast'
 
 const props = defineProps<{
   noPadding?: boolean
@@ -9,6 +13,8 @@ const props = defineProps<{
 
 const router = useRouter()
 const route = useRoute()
+const dialogStore = useDialogStore()
+const toastStore = useToastStore()
 
 const navItems = [
   { label: '主页', icon: 'material-symbols:home-outline-rounded', name: 'home', path: '/' },
@@ -18,7 +24,7 @@ const navItems = [
 ]
 
 const drawerOpen = ref(false)
-const railMode = ref(false) // Rail 模式：仅显示图标
+const railMode = ref(false) // Rail 模式:仅显示图标
 
 const isActive = (path: string) => {
   // 精确匹配
@@ -46,6 +52,85 @@ async function handleLogout() {
   } finally {
     sessionStorage.removeItem('neo_token')
     router.push({ name: 'login' })
+  }
+}
+
+async function handleRestart() {
+  const result = await dialogStore.confirm(
+    '确定要重启 Bot 系统吗？',
+    '确认重启',
+    '重启',
+    '取消'
+  )
+  
+  if (result) {
+    await performRestart()
+  }
+}
+
+async function performRestart() {
+  // 显示重启进行中对话框（无按钮，不可关闭）
+  const restartDialogId = dialogStore.show({
+    title: '系统重启中',
+    message: '正在重启 Bot 系统，请稍候...\n\n该对话框将在系统重启成功后自动关闭。',
+    buttons: [],
+  })
+
+  try {
+    // 先调用重启 API（在设置重启状态之前）
+    await restartBot()
+
+    // 重启指令发送成功后，设置重启状态，阻断所有非健康检查请求
+    setIsRestarting(true)
+
+    // 等待 2 秒让 Bot 真正开始重启，避免过早的健康检查返回成功
+    await new Promise(resolve => setTimeout(resolve, 2000))
+
+    // 开始健康检查轮询
+    startHealthCheck(() => {
+      // 系统恢复健康
+      dialogStore.close(restartDialogId)
+      setIsRestarting(false)
+      toastStore.show('系统重启成功', 'success')
+      
+      // 刷新页面以获取最新状态
+      setTimeout(() => {
+        window.location.reload()
+      }, 1000)
+    })
+  } catch (error) {
+    console.error('重启失败:', error)
+    setIsRestarting(false)
+    dialogStore.close(restartDialogId)
+    toastStore.show('重启失败，请稍后重试', 'error')
+  }
+}
+
+async function handleShutdown() {
+  const result = await dialogStore.confirm(
+    '确定要关闭 Bot 系统吗？关闭后需要手动重启。',
+    '确认关闭',
+    '关闭',
+    '取消'
+  )
+  
+  if (result) {
+    await performShutdown()
+  }
+}
+
+async function performShutdown() {
+  try {
+    await shutdownBot()
+    toastStore.show('关闭指令已发送', 'success')
+    
+    // 延迟跳转到登录页
+    setTimeout(() => {
+      sessionStorage.removeItem('neo_token')
+      router.push({ name: 'login' })
+    }, 2000)
+  } catch (error) {
+    toastStore.show('关闭失败，请稍后重试', 'error')
   }
 }
 </script>
@@ -80,6 +165,28 @@ async function handleLogout() {
 
       <!-- 底部操作区 -->
       <div class="rail-footer">
+        <button 
+          class="rail-item rail-restart" 
+          @click="handleRestart"
+          aria-label="重启系统"
+          title="重启 Bot"
+        >
+          <div class="rail-item-indicator"></div>
+          <Icon icon="material-symbols:restart-alt-rounded" width="24" height="24" class="rail-item-icon" />
+          <span class="rail-item-label">重启</span>
+        </button>
+        
+        <button 
+          class="rail-item rail-shutdown" 
+          @click="handleShutdown"
+          aria-label="关闭系统"
+          title="关闭 Bot"
+        >
+          <div class="rail-item-indicator"></div>
+          <Icon icon="material-symbols:power-settings-new-rounded" width="24" height="24" class="rail-item-icon" />
+          <span class="rail-item-label">关闭</span>
+        </button>
+        
         <button 
           class="rail-item rail-logout" 
           @click="handleLogout"
@@ -300,6 +407,24 @@ async function handleLogout() {
   padding: 0.5rem 0.5rem 0;
   width: 100%;
   border-top: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.rail-restart {
+  color: var(--md-sys-color-primary);
+}
+
+.rail-restart:hover {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+
+.rail-shutdown {
+  color: var(--md-sys-color-tertiary);
+}
+
+.rail-shutdown:hover {
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
 }
 
 .rail-logout {

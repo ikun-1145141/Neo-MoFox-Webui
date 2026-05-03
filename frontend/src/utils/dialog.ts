@@ -126,6 +126,29 @@ export function useDialogStore() {
   }
 
   /**
+   * 直接显示对话框（同步方式，返回对话框ID）
+   * 适用于需要手动控制关闭时机的场景
+   */
+  function show(options: {
+    title?: string
+    message: string
+    buttons?: Array<{ text: string; variant?: 'primary' | 'secondary' | 'ghost'; onClick: () => void }>
+    onClose?: () => void
+  }): number {
+    const id = ++_id
+    const dialog: DialogItem = {
+      id,
+      type: 'alert',
+      title: options.title,
+      message: options.message,
+      buttons: options.buttons || [],
+      onClose: options.onClose,
+    }
+    state.items.push(dialog)
+    return id
+  }
+
+  /**
    * 关闭指定 ID 的对话框
    */
   function close(id: number) {
@@ -150,6 +173,7 @@ export function useDialogStore() {
     alert,
     confirm,
     custom,
+    show,
     close,
     closeAll,
   }
