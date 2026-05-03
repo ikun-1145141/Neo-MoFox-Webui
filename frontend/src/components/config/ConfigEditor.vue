@@ -57,6 +57,21 @@
       </div>
     </div>
 
+    <!-- 配置节标签导航（仅表单模式显示且有多个配置节时） -->
+    <div v-if="editMode === 'form' && sortedSchema.length > 1" class="section-tabs">
+      <button
+        v-for="(section, index) in sortedSchema"
+        :key="section.name"
+        type="button"
+        class="section-tab"
+        :class="{ active: activeSectionIndex === index }"
+        @click="switchSection(index)"
+        :title="section.description || section.title || section.name"
+      >
+        {{ section.title || section.name }}
+      </button>
+    </div>
+
     <!-- 编辑器内容区 -->
     <div class="editor-content">
       <!-- 代码模式 -->
@@ -70,7 +85,7 @@
       <FormEditor
         v-else
         v-model="formData"
-        :schema="schema"
+        :schema="currentSectionSchema"
         :readonly="readonly"
       />
     </div>
@@ -87,73 +102,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { parse as parseToml } from 'toml'
 import Icon from '../common/Icon.vue'
 import TomlEditor from './TomlEditor.vue'
 import FormEditor from './FormEditor.vue'
+import { getRawConfig } from '@/api/modules/config'
 import type { SectionSchema } from '@/api/types/config'
-
-/**
- * 简单的对象转 TOML 字符串（用于展示）
- * 注意：这是简化实现，不支持所有 TOML 特性
- */
-function stringifyToml(obj: Record<string, any>, indent = 0): string {
-  const lines: string[] = []
-  const indentStr = '  '.repeat(indent)
-
-  for (const [key, value] of Object.entries(obj)) {
-    if (value === null || value === undefined) {
-      continue
-    }
-
-    if (Array.isArray(value)) {
-      // 数组表 [[key]]
-      if (value.length > 0 && typeof value[0] === 'object' && value[0] !== null) {
-        value.forEach((item) => {
-          lines.push(`${indentStr}[[${key}]]`)
-          for (const [k, v] of Object.entries(item)) {
-            lines.push(`${indentStr}${k} = ${tomlValue(v)}`)
-          }
-          lines.push('')
-        })
-      } else {
-        lines.push(`${indentStr}${key} = ${tomlValue(value)}`)
-      }
-    } else if (typeof value === 'object' && value !== null) {
-      // 节 [key]
-      lines.push(`${indentStr}[${key}]`)
-      for (const [k, v] of Object.entries(value)) {
-        lines.push(`${indentStr}${k} = ${tomlValue(v)}`)
-      }
-      lines.push('')
-    } else {
-      lines.push(`${indentStr}${key} = ${tomlValue(value)}`)
-    }
-  }
-
-  return lines.join('\n')
-}
-
-function tomlValue(value: any): string {
-  if (typeof value === 'string') {
-    return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
-  } else if (typeof value === 'boolean') {
-    return value ? 'true' : 'false'
-  } else if (typeof value === 'number') {
-    return String(value)
-  } else if (Array.isArray(value)) {
-    return `[${value.map(tomlValue).join(', ')}]`
-  } else if (value instanceof Date) {
-    return value.toISOString()
-  }
-  return String(value)
-}
+import { useToastStore } from '@/utils/toast'
 
 // Props
 interface Props {
   title?: string
   configPath?: string
+  configType?: 'bot' | 'model' | 'plugin'
+  pluginName?: string
   schema?: SectionSchema[]
   modelValue?: Record<string, any>
   readonly?: boolean
@@ -172,8 +135,14 @@ const emit = defineEmits<{
   save: [data: Record<string, any>]
 }>()
 
+// Toast 提示
+const toast = useToastStore()
+
 // 编辑模式：'code' | 'form'
 const editMode = ref<'code' | 'form'>('form')
+
+// 当前激活的配置节索引（仅表单模式使用）
+const activeSectionIndex = ref(0)
 
 // 表单数据（响应式）
 const formData = ref<Record<string, any>>({ ...props.modelValue })
@@ -188,34 +157,76 @@ const errorMessage = ref('')
 // 原始数据（用于检测变更）
 const originalData = ref<Record<string, any>>({ ...props.modelValue })
 
+// 排序后的 schema（按 order 排序）
+const sortedSchema = computed(() => {
+  if (!props.schema || props.schema.length === 0) {
+    return []
+  }
+  return [...props.schema].sort((a, b) => (a.order || 0) - (b.order || 0))
+})
+
+// 当前显示的配置节 schema（仅表单模式使用）
+const currentSectionSchema = computed(() => {
+  if (sortedSchema.value.length === 0) {
+    return []
+  }
+  return [sortedSchema.value[activeSectionIndex.value]]
+})
+
 // 是否有未保存的更改
 const hasChanges = computed(() => {
   return JSON.stringify(formData.value) !== JSON.stringify(originalData.value)
 })
 
-// 初始化代码内容
+/**
+ * 从后端获取原始 TOML 内容
+ */
+async function loadRawToml(): Promise<string> {
+  if (!props.configType) {
+    throw new Error('configType 必须指定才能获取原始 TOML')
+  }
+  
+  try {
+    const rawContent = await getRawConfig(props.configType, props.pluginName)
+    return rawContent
+  } catch (error: any) {
+    throw new Error(`获取原始 TOML 失败: ${error.message}`)
+  }
+}
+
+// 初始化时加载原始 TOML
+onMounted(async () => {
+  if (props.configType) {
+    try {
+      const rawToml = await loadRawToml()
+      codeContent.value = rawToml
+    } catch (error: any) {
+      console.warn('加载原始 TOML 失败:', error)
+      errorMessage.value = error.message
+    }
+  }
+})
+
+// 监听 modelValue 变化，更新表单数据
 watch(
   () => props.modelValue,
   (newValue) => {
-    try {
-      codeContent.value = stringifyToml(newValue)
-      formData.value = { ...newValue }
-      originalData.value = { ...newValue }
-    } catch (error: any) {
-      errorMessage.value = `TOML 序列化失败: ${error.message}`
-    }
+    formData.value = { ...newValue }
+    originalData.value = { ...newValue }
   },
-  { immediate: true }
+  { immediate: true, deep: true }
 )
 
 // 切换编辑模式
-function toggleMode() {
+async function toggleMode() {
   if (editMode.value === 'code') {
     // 从代码模式切换到表单模式
     try {
       const parsed = parseToml(codeContent.value)
       formData.value = parsed
       errorMessage.value = ''
+      // 重置到第一个配置节
+      activeSectionIndex.value = 0
     } catch (error: any) {
       errorMessage.value = `TOML 解析失败: ${error.message}，已保留代码模式`
       return
@@ -223,14 +234,25 @@ function toggleMode() {
     editMode.value = 'form'
   } else {
     // 从表单模式切换到代码模式
-    try {
-      codeContent.value = stringifyToml(formData.value)
-      errorMessage.value = ''
-    } catch (error: any) {
-      errorMessage.value = `TOML 序列化失败: ${error.message}，已保留表单模式`
-      return
+    if (props.configType) {
+      try {
+        // 从后端重新加载原始 TOML
+        const rawToml = await loadRawToml()
+        codeContent.value = rawToml
+        errorMessage.value = ''
+      } catch (error: any) {
+        errorMessage.value = `加载原始 TOML 失败: ${error.message}，已保留表单模式`
+        return
+      }
     }
     editMode.value = 'code'
+  }
+}
+
+// 切换配置节
+function switchSection(index: number) {
+  if (index >= 0 && index < sortedSchema.value.length) {
+    activeSectionIndex.value = index
   }
 }
 
@@ -250,7 +272,9 @@ async function handleSave() {
       try {
         dataToSave = parseToml(codeContent.value)
       } catch (error: any) {
-        errorMessage.value = `TOML 格式错误: ${error.message}`
+        const errorMsg = `TOML 格式错误: ${error.message}`
+        errorMessage.value = errorMsg
+        toast.show(errorMsg, 'error')
         return
       }
     } else {
@@ -264,8 +288,13 @@ async function handleSave() {
 
     // 更新原始数据
     originalData.value = { ...dataToSave }
+    
+    // 显示成功提示
+    toast.show('保存成功', 'success')
   } catch (error: any) {
-    errorMessage.value = `保存失败: ${error.message}`
+    const errorMsg = `保存失败: ${error.message}`
+    errorMessage.value = errorMsg
+    toast.show(errorMsg, 'error')
   } finally {
     isSaving.value = false
   }
@@ -282,21 +311,6 @@ watch(codeContent, (newCode) => {
     }
   }
 })
-
-// 监听表单数据变化（尝试实时序列化）
-watch(
-  formData,
-  (newData) => {
-    if (editMode.value === 'form') {
-      try {
-        codeContent.value = stringifyToml(newData)
-      } catch {
-        // 序列化失败时不更新代码内容
-      }
-    }
-  },
-  { deep: true }
-)
 </script>
 
 <style scoped>
@@ -318,6 +332,63 @@ watch(
   background: var(--md-sys-color-surface);
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
   flex-shrink: 0;
+}
+
+/* 配置节标签导航 */
+.section-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 16px;
+  background: var(--md-sys-color-surface-container-low);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--md-sys-color-outline-variant) transparent;
+}
+
+.section-tabs::-webkit-scrollbar {
+  height: 6px;
+}
+
+.section-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.section-tabs::-webkit-scrollbar-thumb {
+  background: var(--md-sys-color-outline-variant);
+  border-radius: 3px;
+}
+
+.section-tab {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+
+.section-tab:hover {
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+}
+
+.section-tab.active {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  font-weight: 600;
+}
+
+.section-tab.active:hover {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
 }
 
 .toolbar-left {

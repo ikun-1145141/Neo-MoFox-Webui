@@ -7,8 +7,6 @@ import http from '../base'
 import { API_WEBUI_PREFIX } from '../config'
 import type {
   EnhancedConfigResponse,
-  FullWriteRequest,
-  PatchWriteRequest,
   ModelTestRequest,
   ModelTestResult,
   PluginConfigEntry,
@@ -30,6 +28,19 @@ export function getConfig(
 ): Promise<EnhancedConfigResponse> {
   const params = pluginName ? `?plugin_name=${pluginName}` : ''
   return http.get(`${BASE}/read/${configType}${params}`)
+}
+
+/**
+ * 获取原始 TOML 文件内容
+ * @param configType 配置类型：bot | model | plugin
+ * @param pluginName 插件名（config_type=plugin 时必填）
+ */
+export function getRawConfig(
+  configType: 'bot' | 'model' | 'plugin',
+  pluginName?: string
+): Promise<string> {
+  const params = pluginName ? `?plugin_name=${pluginName}` : ''
+  return http.get(`${BASE}/raw/${configType}${params}`)
 }
 
 /**

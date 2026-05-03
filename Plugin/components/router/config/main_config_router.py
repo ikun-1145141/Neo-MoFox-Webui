@@ -86,6 +86,37 @@ class MainConfigRouter(BaseRouter):
                 logger.error(f"获取配置失败: {e}")
                 raise HTTPException(status_code=500, detail=f"获取配置失败: {str(e)}")
 
+        @self.app.get(
+            "/raw/{config_type}",
+            response_model=BaseResponse[str],
+            dependencies=[VerifiedDep],
+        )
+        async def get_raw_toml(
+            config_type: Literal["bot", "model", "plugin"],
+            plugin_name: str | None = Query(default=None),
+        ) -> BaseResponse[str]:
+            """获取原始 TOML 文件内容。
+
+            Args:
+                config_type: 配置类型（"bot", "model", "plugin"）
+                plugin_name: 插件名（config_type="plugin" 时必填）
+
+            Returns:
+                TOML 文件的原始字符串内容
+            """
+            try:
+                raw_content = await self.manager.get_raw_toml(config_type, plugin_name)
+                return BaseResponse.ok(data=raw_content, message="获取原始配置成功")
+            except FileNotFoundError as e:
+                logger.error(f"配置文件不存在: {e}")
+                raise HTTPException(status_code=404, detail=str(e))
+            except ValueError as e:
+                logger.error(f"参数错误: {e}")
+                raise HTTPException(status_code=400, detail=str(e))
+            except Exception as e:
+                logger.error(f"获取原始配置失败: {e}")
+                raise HTTPException(status_code=500, detail=f"获取原始配置失败: {str(e)}")
+
         @self.app.put(
             "/write/{config_type}",
             response_model=BaseResponse[EnhancedConfigResponse],

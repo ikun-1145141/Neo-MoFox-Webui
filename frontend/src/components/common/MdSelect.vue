@@ -72,7 +72,7 @@
       >
         <div
           v-for="(option, index) in options"
-          :key="getOptionValue(option, index)"
+          :key="`${getOptionValue(option)}-${index}`"
           class="md-select__option"
           :class="{
             'md-select__option--selected': isSelected(option),
@@ -160,7 +160,7 @@ const displayText = computed(() => {
 })
 
 // Methods
-function getOptionValue(option: any, index?: number): string | number {
+function getOptionValue(option: any): string | number {
   if (typeof option === 'object' && option !== null) {
     return option.value
   }

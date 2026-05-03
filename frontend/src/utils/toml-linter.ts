@@ -2,41 +2,27 @@
  * TOML 语法验证器（浏览器端）
  * 结合基础语法检查和 toml 库完整解析
  */
-import type { Text, Diagnostic } from '@codemirror/lint'
+import type { EditorView } from '@codemirror/view'
+import type { Diagnostic } from '@codemirror/lint'
 import { parse as parseTOML } from 'toml'
 
 /**
  * TOML 语法检查（用于 CodeMirror Lint）
- * @param doc - CodeMirror 文档对象
+ * @param view - CodeMirror 编辑器视图
  * @returns 诊断信息数组
  */
-export function lintTOML(doc: Text): Diagnostic[] {
+export function lintTOML(view: EditorView): Diagnostic[] {
   const diagnostics: Diagnostic[] = []
+  const doc = view.state.doc
   const text = doc.toString()
 
   try {
     // ═══ 阶段 1: 基础语法检查 ═══
     const lines = text.split('\n')
 
-    lines.forEach((line, lineIndex) => {
+    lines.forEach((line: string, lineIndex: number) => {
       const trimmed = line.trim()
       if (!trimmed || trimmed.startsWith('#')) return
-
-      // 检查未闭合的引号
-      if (
-        (trimmed.match(/"/g) || []).length % 2 !== 0 ||
-        (trimmed.match(/'/g) || []).length % 2 !== 0
-      ) {
-        const lineStart = doc.line(lineIndex + 1).from
-        const lineEnd = doc.line(lineIndex + 1).to
-        diagnostics.push({
-          from: lineStart,
-          to: lineEnd,
-          severity: 'error',
-          message: '未闭合的引号',
-        })
-        return
-      }
 
       // 检查键值对格式
       if (!trimmed.startsWith('[') && !trimmed.startsWith('[[') && trimmed.includes('=')) {

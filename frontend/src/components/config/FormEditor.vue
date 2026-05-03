@@ -22,10 +22,14 @@
         v-for="(section, sectionIndex) in sortedSchema"
         :key="section.name"
         class="section-accordion"
-        :class="{ expanded: expandedSections.has(sectionIndex) }"
+        :class="{
+          expanded: expandedSections.has(sectionIndex),
+          'single-section': sortedSchema.length === 1
+        }"
       >
-        <!-- 节标题（可点击折叠/展开） -->
+        <!-- 节标题（可点击折叠/展开）- 多个配置节时显示 -->
         <div
+          v-if="sortedSchema.length > 1"
           class="section-header"
           @click="toggleSection(sectionIndex)"
           :title="`点击${expandedSections.has(sectionIndex) ? '折叠' : '展开'}`"
@@ -50,8 +54,12 @@
           <span v-if="section.is_list" class="list-badge">列表</span>
         </div>
 
-        <!-- 节内容（折叠面板） -->
-        <div v-show="expandedSections.has(sectionIndex)" class="section-content">
+        <!-- 节内容（折叠面板 或 直接显示） -->
+        <div
+          v-show="sortedSchema.length === 1 || expandedSections.has(sectionIndex)"
+          class="section-content"
+          :class="{ 'single-section-content': sortedSchema.length === 1 }"
+        >
           <!-- 列表类型的节（如 models、api_providers） -->
           <div v-if="section.is_list" class="list-section">
             <div
@@ -164,12 +172,18 @@ const emit = defineEmits<{
 // 展开状态（默认全部展开）
 const expandedSections = ref<Set<number>>(new Set())
 
-// 初始化展开第一个节
+// 初始化展开第一个节（或单个节时总是展开）
 watch(
   () => props.schema,
   (newSchema) => {
-    if (newSchema && newSchema.length > 0 && expandedSections.value.size === 0) {
-      expandedSections.value.add(0)
+    if (newSchema && newSchema.length > 0) {
+      if (newSchema.length === 1) {
+        // 单个配置节时，总是展开
+        expandedSections.value = new Set([0])
+      } else if (expandedSections.value.size === 0) {
+        // 多个配置节时，默认展开第一个
+        expandedSections.value.add(0)
+      }
     }
   },
   { immediate: true }
@@ -326,6 +340,17 @@ function getFieldComponent(inputType: string, fieldType?: string) {
 
 .section-accordion.expanded {
   background: var(--md-sys-color-surface-container);
+}
+
+/* 单个配置节时的简化样式 */
+.section-accordion.single-section {
+  border: none;
+  background: transparent;
+  border-radius: 0;
+}
+
+.section-content.single-section-content {
+  padding: 0;
 }
 
 .section-header {

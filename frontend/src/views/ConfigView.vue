@@ -53,6 +53,7 @@
           v-if="activeTab === 'bot' && botConfig"
           :title="botConfig?.config_name"
           :config-path="botConfig?.config_path"
+          :config-type="'bot'"
           :schema="botConfig?.schema"
           :model-value="botConfig?.data"
           @save="handleSave('bot', $event)"
@@ -151,9 +152,9 @@ async function handleSave(configType: 'bot' | 'model', data: Record<string, any>
     }
 
     // 显示成功提示（可以集成 Toast 组件）
-    alert('保存成功！')
   } catch (error: any) {
-    alert(`保存失败: ${error.message}`)
+    console.error(`[ConfigView] 保存 ${configType} 配置失败:`, error)
+    // 显示错误提示（可以集成 Toast 组件）
   }
 }
 

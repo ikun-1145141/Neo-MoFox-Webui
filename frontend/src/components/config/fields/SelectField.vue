@@ -6,7 +6,7 @@
   <MdSelect
     :modelValue="modelValue"
     @update:modelValue="handleUpdate"
-    :options="field.choices || []"
+    :options="(field.choices as Array<string | number | { label: string; value: string | number }>) || []"
     :disabled="readonly"
     :label="field.label"
   />

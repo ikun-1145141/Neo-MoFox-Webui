@@ -303,12 +303,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { parse as parseToml } from 'toml'
 import Icon from '../common/Icon.vue'
 import TomlEditor from './TomlEditor.vue'
 import ModelEditDialog from './ModelEditDialog.vue'
-import { testModel as apiTestModel } from '@/api/modules/config'
+import { testModel as apiTestModel, getRawConfig } from '@/api/modules/config'
 import type { SectionSchema, ModelTestResult } from '@/api/types/config'
 
 // Props
@@ -400,6 +400,17 @@ const dialog = ref<{
 
 // ===== 初始化 =====
 
+// 初始化时加载原始 TOML
+onMounted(async () => {
+  try {
+    const rawToml = await getRawConfig('model')
+    codeContent.value = rawToml
+  } catch (error: any) {
+    console.warn('加载原始 TOML 失败:', error)
+    errorMessage.value = error.message
+  }
+})
+
 watch(
   () => props.modelValue,
   (newValue) => {
@@ -410,14 +421,13 @@ watch(
       ...newValue,
     }
     originalData.value = JSON.parse(JSON.stringify(localData.value))
-    updateCodeContent()
   },
   { immediate: true, deep: true }
 )
 
 // ===== 模式切换 =====
 
-function toggleEditMode() {
+async function toggleEditMode() {
   if (isCodeMode.value) {
     // 从代码模式切换到表单模式
     try {
@@ -435,71 +445,16 @@ function toggleEditMode() {
     }
   } else {
     // 从表单模式切换到代码模式
-    updateCodeContent()
-    isCodeMode.value = true
-  }
-}
-
-function updateCodeContent() {
-  try {
-    codeContent.value = stringifyToml(localData.value)
-  } catch (error: any) {
-    errorMessage.value = `TOML 序列化失败: ${error.message}`
-  }
-}
-
-// 简化的 TOML 序列化
-function stringifyToml(obj: Record<string, any>): string {
-  const lines: string[] = []
-
-  for (const [key, value] of Object.entries(obj)) {
-    if (value === null || value === undefined) continue
-
-    if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object') {
-      // 数组表 [[key]]
-      value.forEach((item) => {
-        lines.push(`[[${key}]]`)
-        for (const [k, v] of Object.entries(item)) {
-          lines.push(`${k} = ${tomlValue(v)}`)
-        }
-        lines.push('')
-      })
-    } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      // 对象节 [key]
-      lines.push(`[${key}]`)
-      for (const [k, v] of Object.entries(value)) {
-        if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
-          // 嵌套对象
-          lines.push(`[${key}.${k}]`)
-          for (const [subK, subV] of Object.entries(v)) {
-            lines.push(`${subK} = ${tomlValue(subV)}`)
-          }
-        } else {
-          lines.push(`${k} = ${tomlValue(v)}`)
-        }
-      }
-      lines.push('')
-    } else {
-      lines.push(`${key} = ${tomlValue(value)}`)
+    try {
+      // 从后端重新加载原始 TOML
+      const rawToml = await getRawConfig('model')
+      codeContent.value = rawToml
+      errorMessage.value = ''
+      isCodeMode.value = true
+    } catch (error: any) {
+      errorMessage.value = `加载原始 TOML 失败: ${error.message}`
     }
   }
-
-  return lines.join('\n')
-}
-
-function tomlValue(value: any): string {
-  if (typeof value === 'string') {
-    return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
-  } else if (typeof value === 'boolean') {
-    return value ? 'true' : 'false'
-  } else if (typeof value === 'number') {
-    return String(value)
-  } else if (Array.isArray(value)) {
-    return `[${value.map(tomlValue).join(', ')}]`
-  } else if (value instanceof Date) {
-    return value.toISOString()
-  }
-  return String(value)
 }
 
 // ===== 保存 =====

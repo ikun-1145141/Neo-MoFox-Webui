@@ -82,6 +82,8 @@
           v-else-if="currentPluginConfig"
           :title="currentPluginConfig.config_name"
           :config-path="currentPluginConfig.config_path"
+          :config-type="'plugin'"
+          :plugin-name="selectedPlugin.plugin_name"
           :schema="currentPluginConfig.schema"
           :model-value="currentPluginConfig.data"
           @save="handleSave"
@@ -178,11 +180,11 @@ async function handleSave(data: Record<string, any>) {
   if (!selectedPlugin.value) return
 
   try {
-    const response = await fullWriteConfig({
-      config_type: 'plugin',
-      plugin_name: selectedPlugin.value.plugin_name,
+    const response = await fullWriteConfig(
+      'plugin',
       data,
-    })
+      selectedPlugin.value.plugin_name
+    )
 
     currentPluginConfig.value = response
     alert('保存成功！')

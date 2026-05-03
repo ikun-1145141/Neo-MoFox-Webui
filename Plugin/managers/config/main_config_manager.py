@@ -10,7 +10,6 @@ from typing import Any, Literal
 
 from src.app.plugin_system.api.config_api import get_config
 from src.app.plugin_system.api.log_api import get_logger
-from src.kernel.config import ConfigBase
 from src.core.config.core_config import CoreConfig
 from src.core.config.model_config import ModelConfig
 
@@ -60,6 +59,42 @@ class MainConfigManager:
             return await self._get_plugin_config(plugin_name)
         else:
             raise ValueError(f"不支持的配置类型: {config_type}")
+
+    async def get_raw_toml(
+        self,
+        config_type: Literal["bot", "model", "plugin"],
+        plugin_name: str | None = None,
+    ) -> str:
+        """获取原始 TOML 文件内容。
+
+        Args:
+            config_type: 配置类型（"bot"、"model"、"plugin"）
+            plugin_name: 插件名（config_type="plugin" 时必填）
+
+        Returns:
+            TOML 文件的原始字符串内容
+
+        Raises:
+            ValueError: 参数错误
+            FileNotFoundError: 配置文件不存在
+        """
+        # 获取配置文件路径
+        if config_type == "bot":
+            config_path = self.bot_config_path
+        elif config_type == "model":
+            config_path = self.model_config_path
+        elif config_type == "plugin":
+            if not plugin_name:
+                raise ValueError("plugin_name 不能为空")
+            config_path = self._get_plugin_config_path(plugin_name)
+        else:
+            raise ValueError(f"不支持的配置类型: {config_type}")
+
+        # 读取原始内容
+        if not config_path.exists():
+            raise FileNotFoundError(f"配置文件不存在: {config_path}")
+
+        return config_path.read_text(encoding="utf-8")
 
     async def full_write(
         self,
