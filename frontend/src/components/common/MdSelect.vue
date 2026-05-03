@@ -117,6 +117,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import Icon from './Icon.vue'
+import { registerDropdown, unregisterDropdown, closeOtherDropdowns } from '@/composables/useDropdownManager'
 
 // Props
 interface Props {
@@ -151,6 +152,14 @@ const isOpen = ref(false)
 const isFocused = ref(false)
 const highlightedIndex = ref(-1)
 const dropdownStyle = ref<Record<string, string>>({})
+
+// 当前实例
+const currentInstance = {
+  close: () => {
+    isOpen.value = false
+    highlightedIndex.value = -1
+  }
+}
 
 // Computed
 const hasValue = computed(() => {
@@ -189,6 +198,10 @@ function toggleDropdown() {
 
 function openDropdown() {
   if (props.disabled) return
+  
+  // 关闭其他所有下拉框
+  closeOtherDropdowns(currentInstance)
+  
   isOpen.value = true
   updateDropdownPosition()
 
@@ -317,6 +330,7 @@ function handleScroll() {
 
 // 生命周期
 onMounted(() => {
+  registerDropdown(currentInstance)
   document.addEventListener('click', handleClickOutside)
   document.addEventListener('keydown', handleKeyDown)
   window.addEventListener('resize', updateDropdownPosition)
@@ -324,6 +338,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  unregisterDropdown(currentInstance)
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('resize', updateDropdownPosition)

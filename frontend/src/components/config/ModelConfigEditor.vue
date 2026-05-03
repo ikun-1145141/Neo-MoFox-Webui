@@ -230,10 +230,6 @@
           <div v-if="activeTab === 'tasks'" class="config-section">
             <div class="section-header">
               <h3>任务配置列表</h3>
-              <button type="button" class="add-btn" @click="addTask">
-                <Icon icon="material-symbols:add-rounded" :size="20" />
-                <span>添加任务</span>
-              </button>
             </div>
 
             <div class="config-list">
@@ -296,6 +292,7 @@
       :mode="dialog.mode"
       :data="dialog.data"
       :providers="providerNames"
+      :models="modelNames"
       @close="closeDialog"
       @submit="handleDialogSubmit"
     />
@@ -392,6 +389,11 @@ const hasChanges = computed(() => {
 // 提供商名称列表
 const providerNames = computed(() => {
   return localData.value.api_providers?.map((p: any) => p.name) || []
+})
+
+// 模型名称列表
+const modelNames = computed(() => {
+  return localData.value.models?.map((m: any) => m.name) || []
 })
 
 // 对话框状态
@@ -665,15 +667,6 @@ async function testModel(model: any, index: string | number) {
 
 // ===== 任务管理 =====
 
-function addTask() {
-  dialog.value = {
-    isOpen: true,
-    type: 'task',
-    mode: 'add',
-    data: {},
-  }
-}
-
 function editTask(taskName: string) {
   const taskData = localData.value.model_tasks[taskName]
   dialog.value = {
@@ -726,21 +719,8 @@ function handleDialogSubmit(data: Record<string, any>) {
     const taskName = data.name
     const { name, ...taskData } = data
     
-    if (dialog.value.mode === 'add') {
-      if (localData.value.model_tasks[taskName]) {
-        alert('任务名称已存在')
-        console.warn('[ModelConfigEditor] 任务名称已存在:', taskName)
-        return
-      }
-      localData.value.model_tasks[taskName] = taskData
-      console.log('[ModelConfigEditor] 添加任务成功:', taskName)
-    } else {
-      const oldName = dialog.value.editIndex as string
-      if (oldName !== taskName) {
-        // 任务名称不应该改变，但如果改了就删除旧的
-        delete localData.value.model_tasks[oldName]
-        console.log('[ModelConfigEditor] 删除旧任务名:', oldName)
-      }
+    // 只支持编辑模式
+    if (dialog.value.mode === 'edit') {
       localData.value.model_tasks[taskName] = taskData
       console.log('[ModelConfigEditor] 编辑任务成功:', taskName)
     }
@@ -1049,7 +1029,7 @@ function handleDialogSubmit(data: Record<string, any>) {
   padding: 12px;
   border-radius: 8px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   font-size: 13px;
   line-height: 1.5;
@@ -1074,6 +1054,10 @@ function handleDialogSubmit(data: Record<string, any>) {
 .result-message {
   margin: 0 0 6px 0;
   font-weight: 500;
+}
+
+.result-message:last-child {
+  margin-bottom: 0;
 }
 
 .result-response {

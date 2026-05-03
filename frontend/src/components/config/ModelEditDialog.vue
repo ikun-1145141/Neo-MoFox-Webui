@@ -128,9 +128,10 @@
             </div>
 
             <div class="form-field">
+              <label>所属提供商 *</label>
+              <p class="field-description">选择此模型所属的 API 提供商（需先在"供应商配置"中添加）</p>
               <MdSelect
                 v-model="formData.api_provider"
-                label="所属提供商"
                 :options="providers"
                 :error="!formData.api_provider ? '请选择一个提供商' : ''"
               />
@@ -172,30 +173,45 @@
             </div>
 
             <div class="form-field checkbox-field">
-              <input
-                id="model-force-stream"
-                v-model="formData.force_stream_mode"
-                type="checkbox"
-              />
-              <label for="model-force-stream">强制流式输出模式</label>
+              <label class="custom-checkbox">
+                <input
+                  id="model-force-stream"
+                  v-model="formData.force_stream_mode"
+                  type="checkbox"
+                />
+                <span class="checkbox-box">
+                  <Icon v-show="formData.force_stream_mode" icon="material-symbols:check-rounded" :size="16" />
+                </span>
+                <span class="checkbox-label">强制流式输出模式</span>
+              </label>
             </div>
 
             <div class="form-field checkbox-field">
-              <input
-                id="model-tool-call-compat"
-                v-model="formData.tool_call_compat"
-                type="checkbox"
-              />
-              <label for="model-tool-call-compat">Tool Call 兼容模式</label>
+              <label class="custom-checkbox">
+                <input
+                  id="model-tool-call-compat"
+                  v-model="formData.tool_call_compat"
+                  type="checkbox"
+                />
+                <span class="checkbox-box">
+                  <Icon v-show="formData.tool_call_compat" icon="material-symbols:check-rounded" :size="16" />
+                </span>
+                <span class="checkbox-label">Tool Call 兼容模式</span>
+              </label>
             </div>
 
             <div class="form-field checkbox-field">
-              <input
-                id="model-anti-truncation"
-                v-model="formData.anti_truncation"
-                type="checkbox"
-              />
-              <label for="model-anti-truncation">启用反截断</label>
+              <label class="custom-checkbox">
+                <input
+                  id="model-anti-truncation"
+                  v-model="formData.anti_truncation"
+                  type="checkbox"
+                />
+                <span class="checkbox-box">
+                  <Icon v-show="formData.anti_truncation" icon="material-symbols:check-rounded" :size="16" />
+                </span>
+                <span class="checkbox-label">启用反截断</span>
+              </label>
             </div>
           </form>
 
@@ -216,17 +232,17 @@
 
             <div class="form-field">
               <label for="task-models">模型列表 *</label>
+              <p class="field-description">选择此任务可使用的模型（需先在"模型配置"中添加）</p>
               <div class="model-list-editor">
                 <div
                   v-for="(_, idx) in formData.model_list"
                   :key="idx"
                   class="model-list-item"
                 >
-                  <input
+                  <MdSelect
                     v-model="formData.model_list[idx]"
-                    type="text"
-                    placeholder="模型名称"
-                    required
+                    :options="models"
+                    placeholder="选择模型"
                   />
                   <button
                     type="button"
@@ -288,6 +304,7 @@
 import { ref, watch } from 'vue'
 import Icon from '../common/Icon.vue'
 import MdSelect from '../common/MdSelect.vue'
+import { closeAllDropdowns } from '@/composables/useDropdownManager'
 
 // Props
 interface Props {
@@ -296,6 +313,7 @@ interface Props {
   mode: 'add' | 'edit'
   data?: Record<string, any>
   providers?: string[] // 模型编辑时需要的提供商列表
+  models?: string[] // 任务编辑时需要的模型列表
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -304,6 +322,7 @@ const props = withDefaults(defineProps<Props>(), {
   mode: 'add',
   data: () => ({}),
   providers: () => [],
+  models: () => [],
 })
 
 // Emits
@@ -385,6 +404,9 @@ function initForm() {
 
 // 任务：添加模型
 function addModel() {
+  // 关闭所有打开的下拉框
+  closeAllDropdowns()
+  
   if (!formData.value.model_list) {
     formData.value.model_list = []
   }
@@ -576,6 +598,13 @@ function handleSubmit() {
   color: var(--md-sys-color-on-surface-variant);
 }
 
+.field-description {
+  font-size: 13px;
+  color: var(--md-sys-color-on-surface-variant);
+  margin: -4px 0 4px 0;
+  line-height: 1.4;
+}
+
 .form-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -585,18 +614,68 @@ function handleSubmit() {
 .checkbox-field {
   flex-direction: row;
   align-items: center;
-  gap: 12px;
 }
 
-.checkbox-field input[type="checkbox"] {
+.custom-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.custom-checkbox input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.checkbox-box {
+  position: relative;
   width: 20px;
   height: 20px;
-  cursor: pointer;
+  border: 2px solid var(--md-sys-color-outline);
+  border-radius: 4px;
+  background: var(--md-sys-color-surface);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
-.checkbox-field label {
+.checkbox-box :deep(svg) {
+  opacity: 0;
+  transform: scale(0);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--md-sys-color-on-primary);
+}
+
+.custom-checkbox input[type="checkbox"]:checked + .checkbox-box {
+  background: var(--md-sys-color-primary);
+  border-color: var(--md-sys-color-primary);
+}
+
+.custom-checkbox input[type="checkbox"]:checked + .checkbox-box :deep(svg) {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.custom-checkbox:hover .checkbox-box {
+  border-color: var(--md-sys-color-primary);
+  box-shadow: 0 0 0 8px var(--md-sys-color-primary-container);
+}
+
+.custom-checkbox input[type="checkbox"]:focus-visible + .checkbox-box {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+
+.checkbox-label {
+  font-size: 14px;
+  color: var(--md-sys-color-on-surface);
   margin: 0;
-  cursor: pointer;
 }
 
 .model-list-editor {
