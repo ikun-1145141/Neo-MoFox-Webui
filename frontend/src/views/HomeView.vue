@@ -293,10 +293,8 @@ const quickLinks = [
         <div class="update-time" v-if="lastUpdate">
           最后更新时间：{{ lastUpdate }}
         </div>
-      </div>
 
-      <!-- 右侧快速入口 -->
-      <aside class="side-content">
+        <!-- 底部快速入口 -->
         <section class="quick-section">
           <h2 class="section-title">快速入口</h2>
           <div class="quick-grid">
@@ -317,24 +315,15 @@ const quickLinks = [
             </button>
           </div>
         </section>
-      </aside>
+      </div>
     </div>
   </AppShell>
 </template>
 
 <style scoped>
 .dashboard-layout {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 1.5rem;
   width: 100%;
   max-width: 100%;
-}
-
-@media (min-width: 1280px) {
-  .dashboard-layout {
-    grid-template-columns: 1fr 320px;
-  }
 }
 
 .main-content {
@@ -484,17 +473,6 @@ const quickLinks = [
   padding-top: 0.5rem;
 }
 
-/* 快速入口 */
-.side-content {
-  min-width: 0;
-}
-
-@media (max-width: 1279px) {
-  .side-content {
-    grid-column: 1;
-  }
-}
-
 .section-title {
   margin: 0 0 1rem;
   font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
@@ -504,9 +482,15 @@ const quickLinks = [
 }
 
 .quick-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+@media (max-width: 1024px) {
+  .quick-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .quick-card {
@@ -527,7 +511,7 @@ const quickLinks = [
 
 .quick-card:hover {
   background: color-mix(in srgb, var(--md-sys-color-surface-container-highest) 92%, transparent);
-  transform: translateX(4px);
+  transform: translateY(-2px);
 }
 
 .quick-icon {
