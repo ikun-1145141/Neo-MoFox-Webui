@@ -20,7 +20,23 @@ const navItems = [
 const drawerOpen = ref(false)
 const railMode = ref(false) // Rail 模式：仅显示图标
 
-const isActive = (path: string) => route.path === path || route.path.startsWith(path + '/')
+const isActive = (path: string) => {
+  // 精确匹配
+  if (route.path === path) return true
+  
+  // 检查是否是子路径
+  if (!route.path.startsWith(path + '/')) return false
+  
+  // 如果是子路径，检查是否有其他更具体的导航项匹配当前路由
+  const hasMoreSpecificMatch = navItems.some(item => 
+    item.path !== path && 
+    item.path.startsWith(path) && 
+    (route.path === item.path || route.path.startsWith(item.path + '/'))
+  )
+  
+  // 如果有更具体的匹配项，当前项不激活
+  return !hasMoreSpecificMatch
+}
 
 async function handleLogout() {
   try {

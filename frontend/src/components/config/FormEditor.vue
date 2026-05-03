@@ -93,7 +93,8 @@
                   <component
                     :is="getFieldComponent(field.input_type, field.type)"
                     :id="`${section.name}-${itemIndex}-${field.key}`"
-                    v-model="item[field.key]"
+                    :model-value="item[field.key]"
+                    @update:model-value="updateListItemField(section.name, itemIndex, field.key, $event)"
                     :field="field"
                     :readonly="readonly"
                   />
@@ -125,7 +126,8 @@
                 <component
                   :is="getFieldComponent(field.input_type, field.type)"
                   :id="`${section.name}-${field.key}`"
-                  v-model="getSectionData(section.name)[field.key]"
+                  :model-value="getSectionData(section.name)[field.key]"
+                  @update:model-value="updateObjectField(section.name, field.key, $event)"
                   :field="field"
                   :readonly="readonly"
                 />
@@ -263,6 +265,32 @@ function getDefaultValueForType(type: string): any {
   if (type.includes('list') || type.includes('array')) return []
   if (type.includes('dict') || type.includes('object')) return {}
   return ''
+}
+
+// 更新列表项字段值
+function updateListItemField(sectionName: string, itemIndex: number, fieldKey: string, value: any) {
+  const items = getListItems(sectionName)
+  const newItems = [...items]
+  newItems[itemIndex] = {
+    ...newItems[itemIndex],
+    [fieldKey]: value
+  }
+  emit('update:modelValue', {
+    ...props.modelValue,
+    [sectionName]: newItems,
+  })
+}
+
+// 更新对象字段值
+function updateObjectField(sectionName: string, fieldKey: string, value: any) {
+  const sectionData = getSectionData(sectionName)
+  emit('update:modelValue', {
+    ...props.modelValue,
+    [sectionName]: {
+      ...sectionData,
+      [fieldKey]: value
+    },
+  })
 }
 
 // 根据字段类型和 input_type 获取对应的字段组件
