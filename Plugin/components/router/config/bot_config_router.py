@@ -31,7 +31,7 @@ class BotConfigRouter(BaseRouter):
 
     router_name: str = "config-bot"
     router_description: str = "机器人配置 API"
-    custom_route_path: str = "/api/config-bot"
+    custom_route_path: str = "/webui/api/config-bot"
     cors_origins: list[str] = ["*"]
 
     dependencies: list[str] = []

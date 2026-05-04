@@ -34,7 +34,7 @@ class ModelConfigRouter(BaseRouter):
 
     router_name: str = "config-model"
     router_description: str = "模型配置 API"
-    custom_route_path: str = "/api/config-model"
+    custom_route_path: str = "/webui/api/config-model"
     cors_origins: list[str] = ["*"]
 
     dependencies: list[str] = []

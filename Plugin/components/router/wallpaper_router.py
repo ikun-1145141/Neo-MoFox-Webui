@@ -45,7 +45,7 @@ class WallpaperRouter(BaseRouter):
 
     router_name: str = "wallpaper"
     router_description: str = "WebUI 壁纸 API"
-    custom_route_path: str = "/api/wallpaper"
+    custom_route_path: str = "/webui/api/wallpaper"
     cors_origins: list[str] = ["*"]
 
     dependencies: list[str] = []
