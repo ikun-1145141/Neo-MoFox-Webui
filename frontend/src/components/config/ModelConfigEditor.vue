@@ -123,19 +123,19 @@
                 <div class="card-body">
                   <div class="info-grid">
                     <div class="info-item">
-                      <span class="label">{{ t('modelConfigEditor.providers.baseUrl') }}:</span>
+                      <span class="label">{{ t('modelConfigEditor.providers.baseUrl') }}</span>
                       <span class="value">{{ provider.base_url }}</span>
                     </div>
                     <div class="info-item">
-                      <span class="label">Client Type:</span>
+                      <span class="label">{{ t('modelConfigEditor.providers.clientType') }}</span>
                       <span class="value">{{ provider.client_type }}</span>
                     </div>
                     <div class="info-item">
-                      <span class="label">Timeout:</span>
+                      <span class="label">{{ t('modelConfigEditor.providers.timeout') }}</span>
                       <span class="value">{{ provider.timeout }}s</span>
                     </div>
                     <div class="info-item">
-                      <span class="label">Max Retry:</span>
+                      <span class="label">{{ t('modelConfigEditor.providers.maxRetry') }}</span>
                       <span class="value">{{ provider.max_retry }}</span>
                     </div>
                   </div>
@@ -188,23 +188,23 @@
                 <div class="card-body">
                   <div class="info-grid">
                     <div class="info-item">
-                      <span class="label">{{ t('modelConfigEditor.models.modelName') }}:</span>
+                      <span class="label">{{ t('modelConfigEditor.models.modelName') }}</span>
                       <span class="value">{{ model.model_identifier }}</span>
                     </div>
                     <div class="info-item">
-                      <span class="label">{{ t('modelConfigEditor.models.provider') }}:</span>
+                      <span class="label">{{ t('modelConfigEditor.models.provider') }}</span>
                       <span class="value">{{ model.api_provider }}</span>
                     </div>
                     <div class="info-item">
-                      <span class="label">Input Price:</span>
+                      <span class="label">{{ t('modelConfigEditor.models.inputPrice') }}</span>
                       <span class="value">¥{{ model.price_in }}/M tokens</span>
                     </div>
                     <div class="info-item">
-                      <span class="label">Output Price:</span>
+                      <span class="label">{{ t('modelConfigEditor.models.outputPrice') }}</span>
                       <span class="value">¥{{ model.price_out }}/M tokens</span>
                     </div>
                     <div class="info-item">
-                      <span class="label">Context Length:</span>
+                      <span class="label">{{ t('modelConfigEditor.models.contextLength') }}</span>
                       <span class="value">{{ model.max_context }} tokens</span>
                     </div>
                   </div>
@@ -215,7 +215,7 @@
                     <div class="result-content">
                       <p class="result-message">
                         {{ testResults.models.get(String(idx))!.success 
-                          ? t('modelConfigEditor.test.success') + `! Latency: ${testResults.models.get(String(idx))!.latency_ms?.toFixed(0)} ms` 
+                          ? t('modelConfigEditor.test.success') + `! ${t('modelConfigEditor.test.latency')}: ${testResults.models.get(String(idx))!.latency_ms?.toFixed(0)} ms` 
                           : t('modelConfigEditor.test.failed') + `: ${testResults.models.get(String(idx))!.error_message}` }}
                       </p>
                       <p v-if="testResults.models.get(String(idx))!.response_text" class="result-response">
@@ -258,15 +258,15 @@
                 <div class="card-body">
                   <div class="info-grid">
                     <div class="info-item">
-                      <span class="label">Model List:</span>
+                      <span class="label">{{ t('modelConfigEditor.tasks.modelList') }}</span>
                       <span class="value">{{ (task as any).model_list?.join(', ') || '-' }}</span>
                     </div>
                     <div class="info-item">
-                      <span class="label">Max Tokens:</span>
+                      <span class="label">{{ t('modelConfigEditor.tasks.maxTokens') }}</span>
                       <span class="value">{{ (task as any).max_tokens || '-' }}</span>
                     </div>
                     <div class="info-item">
-                      <span class="label">Temperature:</span>
+                      <span class="label">{{ t('modelConfigEditor.tasks.temperature') }}</span>
                       <span class="value">{{ (task as any).temperature || '-' }}</span>
                     </div>
                   </div>

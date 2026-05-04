@@ -221,27 +221,59 @@ function toggleSection(index: number) {
   }
 }
 
+// 根据路径获取嵌套对象的值
+function getValueByPath(obj: any, path: string): any {
+  const keys = path.split('.')
+  let current = obj
+  for (const key of keys) {
+    if (current && typeof current === 'object' && key in current) {
+      current = current[key]
+    } else {
+      return undefined
+    }
+  }
+  return current
+}
+
+// 根据路径设置嵌套对象的值
+function setValueByPath(obj: any, path: string, value: any): any {
+  const keys = path.split('.')
+  const result = { ...obj }
+  let current = result
+  
+  for (let i = 0; i < keys.length - 1; i++) {
+    const key = keys[i]
+    if (!current[key] || typeof current[key] !== 'object' || Array.isArray(current[key])) {
+      current[key] = {}
+    } else {
+      current[key] = { ...current[key] }
+    }
+    current = current[key]
+  }
+  
+  current[keys[keys.length - 1]] = value
+  return result
+}
+
 // 获取节数据
 function getSectionData(sectionName: string) {
-  if (!props.modelValue[sectionName]) {
+  let data = getValueByPath(props.modelValue, sectionName)
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
     // 初始化节数据
-    emit('update:modelValue', {
-      ...props.modelValue,
-      [sectionName]: {},
-    })
+    const newValue = setValueByPath(props.modelValue, sectionName, {})
+    emit('update:modelValue', newValue)
+    return {}
   }
-  return props.modelValue[sectionName] || {}
+  return data
 }
 
 // 获取列表项
 function getListItems(sectionName: string): any[] {
-  const items = props.modelValue[sectionName]
+  const items = getValueByPath(props.modelValue, sectionName)
   if (!Array.isArray(items)) {
     // 初始化为空数组
-    emit('update:modelValue', {
-      ...props.modelValue,
-      [sectionName]: [],
-    })
+    const newValue = setValueByPath(props.modelValue, sectionName, [])
+    emit('update:modelValue', newValue)
     return []
   }
   return items
@@ -257,10 +289,8 @@ function addListItem(sectionName: string, fields: FieldSchema[]) {
     newItem[field.key] = field.default !== undefined ? field.default : getDefaultValueForType(field.type)
   })
 
-  emit('update:modelValue', {
-    ...props.modelValue,
-    [sectionName]: [...items, newItem],
-  })
+  const newValue = setValueByPath(props.modelValue, sectionName, [...items, newItem])
+  emit('update:modelValue', newValue)
 }
 
 // 删除列表项
@@ -268,10 +298,8 @@ function removeListItem(sectionName: string, index: number) {
   const items = getListItems(sectionName)
   const newItems = items.filter((_, i) => i !== index)
 
-  emit('update:modelValue', {
-    ...props.modelValue,
-    [sectionName]: newItems,
-  })
+  const newValue = setValueByPath(props.modelValue, sectionName, newItems)
+  emit('update:modelValue', newValue)
 }
 
 // 根据类型获取默认值
@@ -291,22 +319,19 @@ function updateListItemField(sectionName: string, itemIndex: number, fieldKey: s
     ...newItems[itemIndex],
     [fieldKey]: value
   }
-  emit('update:modelValue', {
-    ...props.modelValue,
-    [sectionName]: newItems,
-  })
+  const newValue = setValueByPath(props.modelValue, sectionName, newItems)
+  emit('update:modelValue', newValue)
 }
 
 // 更新对象字段值
 function updateObjectField(sectionName: string, fieldKey: string, value: any) {
   const sectionData = getSectionData(sectionName)
-  emit('update:modelValue', {
-    ...props.modelValue,
-    [sectionName]: {
-      ...sectionData,
-      [fieldKey]: value
-    },
-  })
+  const newSectionData = {
+    ...sectionData,
+    [fieldKey]: value
+  }
+  const newValue = setValueByPath(props.modelValue, sectionName, newSectionData)
+  emit('update:modelValue', newValue)
 }
 
 function getRenderableField(field: FieldSchema): FieldSchema {

@@ -105,35 +105,81 @@ class ConfigParser:
             if section_model is None:
                 continue
 
-            # 获取节元数据
-            section_name = getattr(
-                section_model, "__config_section_name__", field_name
+            # 递归处理嵌套的 section
+            ConfigParser._extract_section_recursive(
+                section_model=section_model,
+                is_list=is_list,
+                parent_name=None,
+                sections=sections
             )
-            section_title = getattr(section_model, "__config_section_title__", None)
-            section_description = getattr(
-                section_model, "__config_section_description__", None
+
+        return sections
+
+    @staticmethod
+    def _extract_section_recursive(
+        section_model: type[SectionBase],
+        is_list: bool,
+        parent_name: str | None,
+        sections: list[SectionSchema]
+    ) -> None:
+        """递归提取 section schema，包括嵌套的 section。
+
+        Args:
+            section_model: Section 模型类
+            is_list: 是否为列表类型
+            parent_name: 父级 section 名称
+            sections: 输出的 sections 列表
+        """
+        # 获取节元数据
+        section_name = getattr(section_model, "__config_section_name__", "")
+        if parent_name:
+            full_section_name = f"{parent_name}.{section_name}"
+        else:
+            full_section_name = section_name
+
+        section_title = getattr(section_model, "__config_section_title__", None)
+        section_description = getattr(section_model, "__config_section_description__", None)
+        section_tag = getattr(section_model, "__config_section_tag__", None)
+
+        # 提取字段 Schema
+        fields: list[FieldSchema] = []
+        nested_sections: list[tuple[type[SectionBase], bool, str]] = []
+
+        for sub_field_name, sub_model_field in section_model.model_fields.items():
+            # 检查是否为嵌套的 SectionBase
+            nested_model, nested_is_list = ConfigParser._get_section_model(sub_model_field.annotation)
+            if nested_model is not None:
+                # 记录嵌套的 section，稍后递归处理
+                nested_sections.append((nested_model, nested_is_list, sub_field_name))
+                continue
+
+            # 普通字段
+            field_schema = ConfigParser._extract_field_schema(
+                sub_field_name, sub_model_field
             )
-            section_tag = getattr(section_model, "__config_section_tag__", None)
+            fields.append(field_schema)
 
-            # 提取字段 Schema
-            fields: list[FieldSchema] = []
-            for sub_field_name, sub_model_field in section_model.model_fields.items():
-                field_schema = ConfigParser._extract_field_schema(
-                    sub_field_name, sub_model_field
-                )
-                fields.append(field_schema)
-
+        # 只有当有普通字段时才添加当前 section
+        if fields:
             sections.append(
                 SectionSchema(
-                    name=section_name,
+                    name=full_section_name,
                     title=section_title,
                     description=section_description,
                     tag=section_tag,
                     fields=fields,
+                    is_list=is_list,
                 )
             )
 
-        return sections
+        # 递归处理嵌套的 sections
+        for nested_model, nested_is_list, nested_field_name in nested_sections:
+            ConfigParser._extract_section_recursive(
+                section_model=nested_model,
+                is_list=nested_is_list,
+                parent_name=full_section_name,
+                sections=sections
+            )
 
     @staticmethod
     def _get_section_model(
@@ -188,7 +234,20 @@ class ConfigParser:
         extra = model_field.json_schema_extra or {}
         literal_choices = ConfigParser._get_literal_choices(model_field.annotation)
         choices = extra.get("choices") or literal_choices
-        input_type = extra.get("input_type") or ("select" if choices else "text")
+        
+        # 智能推断 input_type
+        input_type = extra.get("input_type")
+        if not input_type:
+            if choices:
+                input_type = "select"
+            elif ConfigParser._is_list_type(model_field.annotation):
+                # 列表类型
+                input_type = "list"
+            elif ConfigParser._is_dict_type(model_field.annotation):
+                # 字典类型
+                input_type = "dict"
+            else:
+                input_type = "text"
 
         # 构建 FieldSchema
         return FieldSchema(
@@ -224,6 +283,46 @@ class ConfigParser:
             depends_on=extra.get("depends_on"),
             depends_value=extra.get("depends_value"),
         )
+
+    @staticmethod
+    def _is_nested_section(annotation: Any) -> bool:
+        """检测字段类型是否为嵌套的 SectionBase。
+
+        Args:
+            annotation: 类型注解
+
+        Returns:
+            是否为 SectionBase 子类
+        """
+        if isinstance(annotation, type) and issubclass(annotation, SectionBase):
+            return True
+        return False
+
+    @staticmethod
+    def _is_list_type(annotation: Any) -> bool:
+        """检测字段类型是否为列表。
+
+        Args:
+            annotation: 类型注解
+
+        Returns:
+            是否为列表类型
+        """
+        origin = get_origin(annotation)
+        return origin is list
+
+    @staticmethod
+    def _is_dict_type(annotation: Any) -> bool:
+        """检测字段类型是否为字典。
+
+        Args:
+            annotation: 类型注解
+
+        Returns:
+            是否为字典类型
+        """
+        origin = get_origin(annotation)
+        return origin is dict
 
     @staticmethod
     def _get_literal_choices(annotation: Any) -> list[Any] | None:
