@@ -28,6 +28,18 @@ const router = createRouter({
       meta: { requiresAuth: true, title: '插件配置', icon: 'material-symbols:extension-outline-rounded' },
     },
     {
+      path: '/plugins',
+      name: 'plugins',
+      component: () => import('../views/PluginsView.vue'),
+      meta: { requiresAuth: true, title: '插件管理', icon: 'material-symbols:extension-outline-rounded' },
+    },
+    {
+      path: '/plugins/:name',
+      name: 'plugin-detail',
+      component: () => import('../views/PluginDetailView.vue'),
+      meta: { requiresAuth: true, title: '插件详情', icon: 'material-symbols:extension-outline-rounded' },
+    },
+    {
       path: '/settings',
       component: () => import('../views/SettingsView.vue'),
       meta: { requiresAuth: true, title: '设置', icon: 'material-symbols:settings-outline-rounded' },

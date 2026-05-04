@@ -631,7 +631,7 @@ html[data-theme='dark'] .theme-card {
 }
 .action-btn {
   display: flex; align-items: center; gap: 0.375rem;
-  height: 2rem; padding: 0 0.75rem; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px;
+  height: 2rem; padding: 0 0.75rem; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 8px;
   background: transparent; color: var(--md-sys-color-on-surface);
   font-size: 0.8125rem; font-weight: 500; cursor: pointer; transition: background 0.15s;
 }
