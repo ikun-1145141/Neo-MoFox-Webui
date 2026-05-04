@@ -163,12 +163,12 @@ const errorMessage = ref('')
 // 原始数据（用于检测变更）
 const originalData = ref<Record<string, any>>({ ...props.modelValue })
 
-// 排序后的 schema（按 order 排序）
+// Schema
 const sortedSchema = computed(() => {
   if (!props.schema || props.schema.length === 0) {
     return []
   }
-  return [...props.schema].sort((a, b) => (a.order || 0) - (b.order || 0))
+  return props.schema
 })
 
 // 当前显示的配置节 schema（仅表单模式使用）

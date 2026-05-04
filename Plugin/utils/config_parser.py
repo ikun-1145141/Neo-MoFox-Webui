@@ -114,7 +114,6 @@ class ConfigParser:
                 section_model, "__config_section_description__", None
             )
             section_tag = getattr(section_model, "__config_section_tag__", None)
-            section_order = getattr(section_model, "__config_section_order__", 0)
 
             # 提取字段 Schema
             fields: list[FieldSchema] = []
@@ -124,22 +123,16 @@ class ConfigParser:
                 )
                 fields.append(field_schema)
 
-            # 按 order 排序字段
-            fields.sort(key=lambda f: f.order)
-
             sections.append(
                 SectionSchema(
                     name=section_name,
                     title=section_title,
                     description=section_description,
                     tag=section_tag,
-                    order=section_order,
                     fields=fields,
                 )
             )
 
-        # 按 order 排序节
-        sections.sort(key=lambda s: s.order)
         return sections
 
     @staticmethod
@@ -208,7 +201,6 @@ class ConfigParser:
             tag=extra.get("tag"),
             placeholder=extra.get("placeholder"),
             hint=extra.get("hint"),
-            order=extra.get("order", 0),
             hidden=extra.get("hidden", False),
             disabled=extra.get("disabled", False),
             # 验证约束

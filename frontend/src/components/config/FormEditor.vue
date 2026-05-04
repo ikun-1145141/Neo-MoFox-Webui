@@ -205,9 +205,9 @@ watch(
   { immediate: true }
 )
 
-// 排序后的配置节（按 order 字段）
+// Schema
 const sortedSchema = computed(() => {
-  return [...props.schema].sort((a, b) => a.order - b.order)
+  return props.schema
 })
 
 // 切换节的展开/折叠
