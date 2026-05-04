@@ -19,7 +19,7 @@ class WallpaperManager:
         wallpaper_dir: 壁纸目录路径
     """
 
-    SUPPORTED_EXTENSIONS: tuple[str, ...] = (".jpg", ".jpeg", ".png", ".webp")
+    SUPPORTED_EXTENSIONS: tuple[str, ...] = (".jpg", ".jpeg", ".png", ".webp", ".mp4", ".webm")
 
     def __init__(self) -> None:
         """初始化壁纸管理器。"""
@@ -28,6 +28,17 @@ class WallpaperManager:
     async def initialize(self) -> None:
         """初始化壁纸目录。"""
         await asyncio.to_thread(self.wallpaper_dir.mkdir, parents=True, exist_ok=True)
+
+    def is_video_wallpaper(self, path: Path) -> bool:
+        """判断壁纸是否为视频。
+        
+        Args:
+            path: 壁纸文件路径
+            
+        Returns:
+            是否为视频壁纸
+        """
+        return path.suffix.lower() in (".mp4", ".webm")
 
     async def get_wallpaper_path(self) -> Path | None:
         """获取当前壁纸路径。

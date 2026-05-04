@@ -337,7 +337,7 @@ watch(
   flex: 1;
   overflow: auto;
   background: color-mix(in srgb, var(--md-sys-color-surface) 60%, transparent);
-  backdrop-filter: blur(8px);
+  /* 背景模糊由外层容器控制，避免叠加 */
 }
 
 /* CodeMirror 样式覆盖 */

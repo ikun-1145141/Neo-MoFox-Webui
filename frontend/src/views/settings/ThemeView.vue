@@ -16,6 +16,11 @@ import {
   loadWallpaperColors,
   clearWallpaperColors,
 } from '../../utils/wallpaperColorManager'
+import {
+  extractFirstFrameAsFile,
+  isVideoFile,
+  isImageFile,
+} from '../../utils/videoFrameExtractor'
 
 const IS_DEV = import.meta.env.DEV
 const toast = useToastStore()
@@ -25,6 +30,7 @@ const uploading = ref(false)
 const autoSaveEnabled = ref(false)
 const lastSavedThemeSnapshot = ref('')
 const wallpaperVersion = ref(Date.now())
+const wallpaperType = ref<'image' | 'video' | 'none'>('none')
 const wallpaperInputRef = ref<HTMLInputElement | null>(null)
 const wallpaperColors = ref<string[]>([])
 const extractingColors = ref(false)
@@ -150,11 +156,13 @@ async function refreshWallpaperStatus() {
   try {
     const status = await getWallpaperStatus()
     settings.value.theme.has_wallpaper = status.has_wallpaper
+    wallpaperType.value = status.wallpaper_type
     settings.value.theme.wallpaper_blur = status.wallpaper_blur
     settings.value.theme.wallpaper_opacity = status.wallpaper_opacity
     wallpaperVersion.value = Date.now()
   } catch {
     settings.value.theme.has_wallpaper = false
+    wallpaperType.value = 'none'
   }
 }
 
@@ -202,15 +210,22 @@ async function handleWallpaperFileChange(event: Event) {
   const file = input.files?.[0]
   if (!file) return
 
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
-  if (!allowedTypes.includes(file.type)) {
-    toast.show('仅支持 JPG、PNG、WEBP 格式', 'error')
+  // 判断文件类型
+  const isImage = isImageFile(file)
+  const isVideo = isVideoFile(file)
+  
+  if (!isImage && !isVideo) {
+    toast.show('仅支持 JPG、PNG、WEBP、MP4、WEBM 格式', 'error')
     input.value = ''
     return
   }
 
-  if (file.size > 10 * 1024 * 1024) {
-    toast.show('壁纸文件不能超过 10MB', 'error')
+  // 根据文件类型检查大小限制
+  const maxSize = isImage ? 10 * 1024 * 1024 : 50 * 1024 * 1024  // 图片 10MB，视频 50MB
+  const maxSizeMB = maxSize / (1024 * 1024)
+  
+  if (file.size > maxSize) {
+    toast.show(`${isImage ? '图片' : '视频'}壁纸文件不能超过 ${maxSizeMB}MB`, 'error')
     input.value = ''
     return
   }
@@ -219,15 +234,27 @@ async function handleWallpaperFileChange(event: Event) {
   extractingColors.value = true
   
   try {
-    // 先进行颜色提取
+    // 准备取色的源文件：图片直接使用，视频提取第一帧
+    let colorSourceFile: File
+    
+    if (isVideo) {
+      console.log('正在从视频提取第一帧...', 'info')
+      // 从视频提取第一帧作为图片
+      colorSourceFile = await extractFirstFrameAsFile(file)
+    } else {
+      colorSourceFile = file
+    }
+    
+    // 对图片（或视频第一帧）进行取色
     console.log('正在分析壁纸颜色...', 'info')
-    const colors = await extractColorsFromImage(file, 6)
+    const colors = await extractColorsFromImage(colorSourceFile, 6)
     wallpaperColors.value = colors
     saveWallpaperColors(colors)
     
-    // 上传壁纸
+    // 上传原始文件（图片或视频）到后端
     const status = await uploadWallpaper(file)
     settings.value.theme.has_wallpaper = status.has_wallpaper
+    wallpaperType.value = status.wallpaper_type
     settings.value.theme.wallpaper_blur = status.wallpaper_blur
     settings.value.theme.wallpaper_opacity = status.wallpaper_opacity
     wallpaperVersion.value = Date.now()
@@ -239,10 +266,10 @@ async function handleWallpaperFileChange(event: Event) {
       applyCurrentTheme()
     }
     
-    toast.show('壁纸上传成功', 'success')
+    toast.show(`${isImage ? '图片' : '视频'}壁纸上传成功`, 'success')
   } catch (error) {
     console.error('上传壁纸失败:', error)
-    toast.show('上传壁纸失败', 'error')
+    toast.show(`上传壁纸失败: ${error instanceof Error ? error.message : '未知错误'}`, 'error')
   } finally {
     uploading.value = false
     extractingColors.value = false
@@ -377,12 +404,27 @@ onMounted(() => {
             </div>
 
             <div class="wallpaper-preview" :class="{ empty: !settings.theme.has_wallpaper }">
+              <!-- 图片壁纸预览 -->
               <img
-                v-if="settings.theme.has_wallpaper"
+                v-if="settings.theme.has_wallpaper && wallpaperType === 'image'"
                 :src="getCurrentWallpaperImageUrl()"
                 alt="当前壁纸"
                 class="wallpaper-preview-img"
               />
+              
+              <!-- 视频壁纸预览 -->
+              <video
+                v-else-if="settings.theme.has_wallpaper && wallpaperType === 'video'"
+                :src="getCurrentWallpaperImageUrl()"
+                class="wallpaper-preview-video"
+                autoplay
+                loop
+                muted
+                playsinline
+                disablePictureInPicture
+              />
+              
+              <!-- 无壁纸提示 -->
               <div v-else class="wallpaper-empty">
                 <Icon icon="material-symbols:wallpaper-rounded" width="32" height="32" style="opacity:0.4; margin-bottom: 8px" />
                 <span>当前未设置壁纸</span>
@@ -415,7 +457,7 @@ onMounted(() => {
               ref="wallpaperInputRef"
               type="file"
               class="wallpaper-file-input"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
               @change="handleWallpaperFileChange"
             />
           </div>
@@ -681,6 +723,12 @@ html[data-theme='dark'] .action-btn { border-color: rgba(255,255,255,0.15); }
   justify-content: center;
 }
 .wallpaper-preview-img {
+  width: 100%;
+  height: 180px;
+  display: block;
+  object-fit: cover;
+}
+.wallpaper-preview-video {
   width: 100%;
   height: 180px;
   display: block;

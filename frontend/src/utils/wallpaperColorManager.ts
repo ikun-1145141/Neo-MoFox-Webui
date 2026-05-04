@@ -98,13 +98,26 @@ export async function extractColorsFromImage(
   file: File,
   colorCount: number = 6
 ): Promise<string[]> {
+  console.log('[颜色提取] 开始提取颜色:', {
+    fileName: file.name,
+    fileSize: `${(file.size / 1024).toFixed(2)}KB`,
+    fileType: file.type,
+    colorCount
+  })
+  
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
 
     reader.onload = (e) => {
+      console.log('[颜色提取] 文件读取完成，开始加载图片')
       const img = new Image()
 
       img.onload = () => {
+        console.log('[颜色提取] 图片加载成功:', {
+          width: img.width,
+          height: img.height
+        })
+        
         try {
           // 创建 canvas 并设置尺寸
           const canvas = document.createElement('canvas')
@@ -125,6 +138,12 @@ export async function extractColorsFromImage(
 
           // 获取像素数据
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+          console.log('[颜色提取] 获取像素数据:', {
+            width: imageData.width,
+            height: imageData.height,
+            dataLength: imageData.data.length
+          })
+          
           const pixels: RGB[] = []
 
           // 采样像素（每隔几个像素取一个）
@@ -143,12 +162,16 @@ export async function extractColorsFromImage(
             pixels.push({ r, g, b })
           }
 
+          console.log('[颜色提取] 采样完成，有效像素数:', pixels.length)
+          
           if (pixels.length < colorCount) {
+            console.error('[颜色提取] ❌ 图片颜色数量不足')
             reject(new Error('图片颜色数量不足'))
             return
           }
 
           // 使用 K-means 提取主要颜色
+          console.log('[颜色提取] 开始 K-means 聚类...')
           const mainColors = kMeansClustering(pixels, colorCount)
 
           // 按饱和度和亮度排序，优先选择鲜艳的颜色
@@ -165,13 +188,16 @@ export async function extractColorsFromImage(
             .sort((a, b) => b.score - a.score)
             .map(item => rgbToHex(item.color.r, item.color.g, item.color.b))
 
+          console.log('[颜色提取] ✅ 颜色提取成功:', sortedColors)
           resolve(sortedColors)
         } catch (error) {
+          console.error('[颜色提取] ❌ 处理失败:', error)
           reject(error)
         }
       }
 
-      img.onerror = () => {
+      img.onerror = (e) => {
+        console.error('[颜色提取] ❌ 图片加载失败:', e)
         reject(new Error('图片加载失败'))
       }
 
