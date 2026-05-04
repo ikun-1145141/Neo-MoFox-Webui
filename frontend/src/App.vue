@@ -5,6 +5,7 @@ import DialogManager from './components/common/DialogManager.vue'
 import { applyMd3Theme } from './utils/md3theme'
 import { getSettings } from './api/modules/settings'
 import { getWallpaperStatus, getWallpaperImageUrl } from './api/modules/wallpaper'
+import { setLocale } from './utils/i18n'
 
 type ThemeMode = 'auto' | 'light' | 'dark'
 
@@ -47,6 +48,7 @@ async function syncSettingsAndApplyTheme() {
     const settings = await getSettings()
     currentThemeMode = settings.theme.mode
     currentPrimaryColor = settings.theme.primary_color
+    setLocale(settings.ui.language)
   } catch {
     // 后端不可用时回退到默认主题
   } finally {

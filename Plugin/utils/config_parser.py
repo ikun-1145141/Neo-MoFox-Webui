@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import tomllib
 from pathlib import Path
-from typing import Any, get_args, get_origin
+from typing import Any, Literal, get_args, get_origin
 
 from pydantic_core import PydanticUndefined
 
@@ -193,6 +193,9 @@ class ConfigParser:
 
         # 获取 json_schema_extra 中的 UI 属性
         extra = model_field.json_schema_extra or {}
+        literal_choices = ConfigParser._get_literal_choices(model_field.annotation)
+        choices = extra.get("choices") or literal_choices
+        input_type = extra.get("input_type") or ("select" if choices else "text")
 
         # 构建 FieldSchema
         return FieldSchema(
@@ -201,7 +204,7 @@ class ConfigParser:
             description=model_field.description or "",
             type=field_type,
             default=default_value,
-            input_type=extra.get("input_type", "text"),
+            input_type=input_type,
             tag=extra.get("tag"),
             placeholder=extra.get("placeholder"),
             hint=extra.get("hint"),
@@ -217,7 +220,7 @@ class ConfigParser:
             max_length=getattr(model_field, "max_length", None),
             pattern=getattr(model_field, "pattern", None),
             # 控件特定
-            choices=extra.get("choices"),
+            choices=choices,
             rows=extra.get("rows"),
             step=extra.get("step"),
             # 列表配置
@@ -229,6 +232,13 @@ class ConfigParser:
             depends_on=extra.get("depends_on"),
             depends_value=extra.get("depends_value"),
         )
+
+    @staticmethod
+    def _get_literal_choices(annotation: Any) -> list[Any] | None:
+        """Extract select choices from Literal annotations."""
+        if get_origin(annotation) is Literal:
+            return list(get_args(annotation))
+        return None
 
     @staticmethod
     def _get_type_string(annotation: Any) -> str:

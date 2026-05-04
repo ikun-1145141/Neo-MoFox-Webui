@@ -384,7 +384,7 @@ onMounted(() => {
                 class="wallpaper-preview-img"
               />
               <div v-else class="wallpaper-empty">
-                <Icon icon="material-symbols:wallpaper-rounded" width="32" height="32" style="opacity:0.4; margin-bottom: 8px" />
+                <Icon icon="material-symbols:wallpaper-rounded" width="32" height="32" class="wallpaper-empty-icon" />
                 <span>当前未设置壁纸</span>
               </div>
             </div>
@@ -687,8 +687,15 @@ html[data-theme='dark'] .action-btn { border-color: rgba(255,255,255,0.15); }
   object-fit: cover;
 }
 .wallpaper-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 0.875rem;
   color: var(--md-sys-color-on-surface-variant);
+}
+.wallpaper-empty-icon {
+  opacity: 0.4;
 }
 .wallpaper-actions {
   display: flex;
