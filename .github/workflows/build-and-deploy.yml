@@ -61,6 +61,9 @@ jobs:
           # 复制 Plugin 目录（包含构建后的静态文件）到临时位置
           cp -r Plugin/* /tmp/deploy/
           
+          # 复制根目录的 README.md
+          cp README.md /tmp/deploy/
+          
           # 排除不需要的文件和目录
           rm -rf /tmp/deploy/__pycache__
           find /tmp/deploy -name "*.pyc" -delete
@@ -137,6 +140,7 @@ jobs:
           echo "### 📦 Deploy Content (Root Directory)" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "." >> $GITHUB_STEP_SUMMARY
+          echo "├── README.md         (from root)" >> $GITHUB_STEP_SUMMARY
           echo "├── manifest.json" >> $GITHUB_STEP_SUMMARY
           echo "├── plugin.py" >> $GITHUB_STEP_SUMMARY
           echo "├── static/           (compiled frontend)" >> $GITHUB_STEP_SUMMARY
