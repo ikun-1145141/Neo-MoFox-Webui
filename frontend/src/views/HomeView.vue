@@ -134,22 +134,34 @@ const llmItems = computed(() => {
 
 const quickLinks = computed(() => [
   {
-    label: t('home.quickLinks.theme.label'),
-    desc: t('home.quickLinks.theme.desc'),
-    icon: 'material-symbols:format-paint-outline-rounded',
-    to: '/settings/theme',
+    label: t('home.quickLinks.home.label'),
+    desc: t('home.quickLinks.home.desc'),
+    icon: 'material-symbols:home-outline-rounded',
+    to: '/',
   },
   {
-    label: t('home.quickLinks.general.label'),
-    desc: t('home.quickLinks.general.desc'),
+    label: t('home.quickLinks.config.label'),
+    desc: t('home.quickLinks.config.desc'),
     icon: 'material-symbols:tune-rounded',
-    to: '/settings/general',
+    to: '/config',
   },
   {
-    label: t('home.quickLinks.data.label'),
-    desc: t('home.quickLinks.data.desc'),
-    icon: 'material-symbols:storage-rounded',
-    to: '/settings/data',
+    label: t('home.quickLinks.plugins.label'),
+    desc: t('home.quickLinks.plugins.desc'),
+    icon: 'material-symbols:extension-outline-rounded',
+    to: '/plugins',
+  },
+  {
+    label: t('home.quickLinks.configPlugins.label'),
+    desc: t('home.quickLinks.configPlugins.desc'),
+    icon: 'material-symbols:settings-outline-rounded',
+    to: '/config/plugins',
+  },
+  {
+    label: t('home.quickLinks.settings.label'),
+    desc: t('home.quickLinks.settings.desc'),
+    icon: 'material-symbols:setting-outline-rounded',
+    to: '/settings',
   },
 ])
 </script>
@@ -503,7 +515,7 @@ const quickLinks = computed(() => [
 
 .quick-section {
   position: sticky;
-  top: 1rem;
+  top: 5rem; /* 增加 top 的距离，避免被顶部的导航栏遮挡 */
 }
 
 .quick-grid {

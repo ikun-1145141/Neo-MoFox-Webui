@@ -7,7 +7,7 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: () => import('../views/LoginView.vue'),
-      meta: { requiresAuth: false },
+      meta: { requiresAuth: false, title: '登录' },
     },
     {
       path: '/',
@@ -83,6 +83,19 @@ router.beforeEach((to) => {
   }
   if (to.name === 'login' && token) {
     return { name: 'home' }
+  }
+})
+
+// 路由后置守卫：更新页面标题
+router.afterEach((to) => {
+  const baseTitle = 'Neo-MoFox-WebUI'
+  const pageTitle = to.meta.title as string | undefined
+  
+  // 类似 VitePress 的标题格式：页面标题 | 站点名称
+  if (pageTitle) {
+    document.title = `${pageTitle} | ${baseTitle}`
+  } else {
+    document.title = baseTitle
   }
 })
 

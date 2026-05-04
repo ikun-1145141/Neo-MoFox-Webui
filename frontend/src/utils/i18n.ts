@@ -139,17 +139,25 @@ const messages = {
       },
       quickLinks: {
         title: '快速入口',
-        theme: {
-          label: '主题设置',
-          desc: '自定义颜色、外观主题',
+        home: {
+          label: '主页',
+          desc: '返回控制台主页',
         },
-        general: {
-          label: '通用设置',
-          desc: '语言、字体与系统行为',
+        config: {
+          label: '配置管理',
+          desc: '管理机器人和模型配置',
         },
-        data: {
-          label: '数据管理',
-          desc: '导出 / 导入配置文件',
+        plugins: {
+          label: '插件管理',
+          desc: '查看和管理已安装插件',
+        },
+        configPlugins: {
+          label: '插件配置',
+          desc: '配置插件参数',
+        },
+        settings: {
+          label: '设置',
+          desc: '系统设置和偏好',
         },
       },
       uptime: {
@@ -674,17 +682,25 @@ const messages = {
       },
       quickLinks: {
         title: 'Quick Links',
-        theme: {
-          label: 'Theme Settings',
-          desc: 'Customize colors and appearance',
+        home: {
+          label: 'Home',
+          desc: 'Back to dashboard',
         },
-        general: {
-          label: 'General Settings',
-          desc: 'Language, font and system behavior',
+        config: {
+          label: 'Config Management',
+          desc: 'Manage bot and model configuration',
         },
-        data: {
-          label: 'Data Management',
-          desc: 'Export / Import configuration files',
+        plugins: {
+          label: 'Plugin Management',
+          desc: 'View and manage installed plugins',
+        },
+        configPlugins: {
+          label: 'Plugin Config',
+          desc: 'Configure plugin parameters',
+        },
+        settings: {
+          label: 'Settings',
+          desc: 'System settings and preferences',
         },
       },
       uptime: {

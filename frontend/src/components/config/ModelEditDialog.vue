@@ -306,7 +306,7 @@ import { useI18n } from '@/utils/i18n'
 import { useDialogStore } from '@/utils/dialog'
 import Icon from '../common/Icon.vue'
 import MdSelect from '../common/MdSelect.vue'
-import { closeAllDropdowns } from '@/composables/useDropdownManager'
+import { closeAllDropdowns } from '@/utils/useDropdownManager'
 
 const { t } = useI18n()
 const dialogStore = useDialogStore()
