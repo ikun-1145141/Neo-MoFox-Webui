@@ -43,11 +43,11 @@ const props = withDefaults(defineProps<Props>(), {
 
 <style scoped>
 .data-panel {
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-low) 86%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container) 95%, transparent);
   border-radius: 1.25rem;
   padding: 1.5rem;
   box-shadow: 0px 4px 16px rgba(24, 28, 32, 0.04);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(12px);
   transition: transform 0.2s, box-shadow 0.2s;
   display: flex;
   flex-direction: column;

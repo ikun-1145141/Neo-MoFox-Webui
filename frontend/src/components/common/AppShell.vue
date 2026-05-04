@@ -19,7 +19,8 @@ const toastStore = useToastStore()
 const navItems = [
   { label: '主页', icon: 'material-symbols:home-outline-rounded', name: 'home', path: '/' },
   { label: '配置', icon: 'material-symbols:tune-rounded', name: 'config', path: '/config' },
-  { label: '插件', icon: 'material-symbols:extension-outline-rounded', name: 'config-plugins', path: '/config/plugins' },
+  { label: '插件管理', icon: 'material-symbols:extension-outline-rounded', name: 'plugins', path: '/plugins' },
+  { label: '插件配置', icon: 'material-symbols:settings-outline-rounded', name: 'config-plugins', path: '/config/plugins' },
   { label: '设置', icon: 'material-symbols:setting-outline-rounded', name: 'settings-theme', path: '/settings' },
 ]
 
@@ -286,7 +287,8 @@ async function performShutdown() {
   position: fixed;
   inset: 0;
   z-index: 199;
-  background: rgba(0, 0, 0, 0.4);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 40%, transparent);
+  backdrop-filter: blur(4px);
 }
 
 /* ====== Rail 头部 - FAB 样式 Logo ====== */

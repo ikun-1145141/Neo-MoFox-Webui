@@ -341,7 +341,7 @@ watch(codeContent, (newCode) => {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  background: color-mix(in srgb, var(--md-sys-color-surface) 70%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 92%, transparent);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
   flex-shrink: 0;
@@ -352,7 +352,7 @@ watch(codeContent, (newCode) => {
   display: flex;
   gap: 4px;
   padding: 8px 16px;
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-low) 70%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 88%, transparent);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
   flex-shrink: 0;
@@ -493,8 +493,8 @@ watch(codeContent, (newCode) => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: color-mix(in srgb, var(--md-sys-color-surface) 80%, transparent);
-  backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 95%, transparent);
+  backdrop-filter: blur(16px);
 }
 
 /* 错误提示 */
@@ -524,7 +524,7 @@ watch(codeContent, (newCode) => {
 }
 
 .error-banner .close-btn:hover {
-  background: rgba(0, 0, 0, 0.1);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container) 85%, transparent);
 }
 
 /* ===== 移动端适配 ===== */
