@@ -96,7 +96,7 @@ async function handleLogin() {
         </button>
       </form>
 
-      <p class="login-footer">Neo-MoFox WebUI · 管理测试界面仅供内部使用</p>
+      <p class="login-footer">Neo-MoFox WebUI · Have a safe and nice day!</p>
     </div>
   </div>
 </template>
@@ -217,12 +217,14 @@ async function handleLogin() {
 }
 .field-input {
   flex: 1;
+  min-width: 0; /* 确保 flex 正常收缩 */
   border: none;
   background: transparent;
   font-size: 1rem;
   color: var(--md-sys-color-on-surface);
   outline: none;
   font-family: 'Inter', system-ui, sans-serif;
+  padding-right: 0.5rem; /* 给按钮留出空间，防止文字被遮挡 */
 }
 .field-input::placeholder {
   color: var(--md-sys-color-outline);
@@ -236,6 +238,7 @@ async function handleLogin() {
   align-items: center;
   padding: 0;
   transition: color 0.15s;
+  flex-shrink: 0; /* 确保按钮不会被压缩 */
 }
 .field-toggle:hover {
   color: var(--md-sys-color-on-surface);

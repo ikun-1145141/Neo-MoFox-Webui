@@ -73,7 +73,7 @@ class WebuiSettingsRouter(BaseRouter):
     def register_endpoints(self) -> None:
         """注册 API 端点。"""
 
-        @self.app.get("/settings", response_model=BaseResponse[WebuiSettings], dependencies=[VerifiedDep])
+        @self.app.get("/settings", response_model=BaseResponse[WebuiSettings])
         async def get_settings() -> BaseResponse[WebuiSettings]:
             """获取当前设置。
 

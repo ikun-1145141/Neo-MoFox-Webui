@@ -110,6 +110,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from '@/utils/i18n'
 import { useToastStore } from '@/utils/toast'
 import AppShell from '@/components/common/AppShell.vue'
@@ -123,6 +124,7 @@ import {
 } from '@/api/modules/config'
 import type { PluginConfigEntry, EnhancedConfigResponse } from '@/api/types/config'
 
+const route = useRoute()
 const { t } = useI18n()
 const toast = useToastStore()
 
@@ -157,6 +159,17 @@ async function loadPluginList() {
   try {
     isLoadingList.value = true
     plugins.value = await listPluginConfigs()
+    
+    // 检查 URL 查询参数，自动选中指定插件
+    const pluginNameFromQuery = route.query.plugin as string | undefined
+    if (pluginNameFromQuery) {
+      const targetPlugin = plugins.value.find(
+        p => p.plugin_name === pluginNameFromQuery
+      )
+      if (targetPlugin) {
+        selectPlugin(targetPlugin)
+      }
+    }
   } catch (error: any) {
     console.error('加载插件列表失败:', error)
   } finally {
