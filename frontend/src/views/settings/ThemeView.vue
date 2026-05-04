@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onBeforeUnmount, onMounted, watch } from 'vue'
+import { ref, onBeforeUnmount, onMounted, watch, computed } from 'vue'
 import { getSettings, updateSettings, resetSettings } from '../../api/modules/settings'
 import {
   deleteWallpaper,
@@ -10,6 +10,12 @@ import {
 import { applyMd3Theme } from '../../utils/md3theme'
 import { useToastStore } from '../../utils/toast'
 import type { WebuiSettings } from '../../api/types/settings'
+import {
+  extractColorsFromImage,
+  saveWallpaperColors,
+  loadWallpaperColors,
+  clearWallpaperColors,
+} from '../../utils/wallpaperColorManager'
 
 const IS_DEV = import.meta.env.DEV
 const toast = useToastStore()
@@ -20,6 +26,8 @@ const autoSaveEnabled = ref(false)
 const lastSavedThemeSnapshot = ref('')
 const wallpaperVersion = ref(Date.now())
 const wallpaperInputRef = ref<HTMLInputElement | null>(null)
+const wallpaperColors = ref<string[]>([])
+const extractingColors = ref(false)
 
 let autoSaveTimer: number | null = null
 const AUTO_SAVE_DELAY_MS = 600
@@ -46,6 +54,24 @@ const presetColors = [
   { label: '玫瑰红', hex: '#c2185b' },
   { label: '金黄色', hex: '#f9a825' },
 ]
+
+// 判断颜色来源
+const colorSource = computed(() => {
+  const currentColor = settings.value.theme.primary_color
+  
+  // 检查是否是预设颜色
+  if (presetColors.some(c => c.hex === currentColor)) {
+    return 'preset'
+  }
+  
+  // 检查是否是壁纸取色
+  if (wallpaperColors.value.includes(currentColor)) {
+    return 'wallpaper'
+  }
+  
+  // 其他情况为自定义
+  return 'custom'
+})
 
 const themeModes: { label: string; value: WebuiSettings['theme']['mode']; icon: string }[] = [
   { label: '跟随系统', value: 'auto', icon: 'material-symbols:brightness-auto-outline-rounded' },
@@ -190,18 +216,36 @@ async function handleWallpaperFileChange(event: Event) {
   }
 
   uploading.value = true
+  extractingColors.value = true
+  
   try {
+    // 先进行颜色提取
+    console.log('正在分析壁纸颜色...', 'info')
+    const colors = await extractColorsFromImage(file, 6)
+    wallpaperColors.value = colors
+    saveWallpaperColors(colors)
+    
+    // 上传壁纸
     const status = await uploadWallpaper(file)
     settings.value.theme.has_wallpaper = status.has_wallpaper
     settings.value.theme.wallpaper_blur = status.wallpaper_blur
     settings.value.theme.wallpaper_opacity = status.wallpaper_opacity
     wallpaperVersion.value = Date.now()
     emitWallpaperUpdated()
+    
+    // 自动应用第一个取色
+    if (colors.length > 0) {
+      settings.value.theme.primary_color = colors[0]
+      applyCurrentTheme()
+    }
+    
     toast.show('壁纸上传成功', 'success')
-  } catch {
-    // 错误提示由全局拦截器处理
+  } catch (error) {
+    console.error('上传壁纸失败:', error)
+    toast.show('上传壁纸失败', 'error')
   } finally {
     uploading.value = false
+    extractingColors.value = false
     input.value = ''
   }
 }
@@ -213,6 +257,11 @@ async function handleDeleteWallpaper() {
     settings.value.theme.has_wallpaper = false
     wallpaperVersion.value = Date.now()
     emitWallpaperUpdated()
+    
+    // 清除壁纸取色
+    wallpaperColors.value = []
+    clearWallpaperColors()
+    
     toast.show('壁纸已删除', 'success')
   } catch {
     // 错误提示由全局拦截器处理
@@ -243,7 +292,14 @@ onBeforeUnmount(() => {
   clearAutoSaveTimer()
 })
 
-onMounted(fetchSettings)
+onMounted(() => {
+  fetchSettings()
+  // 加载 localStorage 中的壁纸颜色
+  const savedColors = loadWallpaperColors()
+  if (savedColors && savedColors.length > 0) {
+    wallpaperColors.value = savedColors
+  }
+})
 </script>
 
 <template>
@@ -285,124 +341,155 @@ onMounted(fetchSettings)
         </div>
       </section>
 
-      <section class="setting-section">
+      <section class="setting-section theme-layout-section">
         <div class="section-text">
-          <h3 class="section-heading">主题主色调</h3>
-          <p class="section-desc">选择全局界面的主导配色，UI 引擎将基于该色彩生成完整的 MD3 衍生色板</p>
+          <h3 class="section-heading">主题与壁纸</h3>
+          <p class="section-desc">配置个性化背景壁纸，选择或自动提取界面主色彩</p>
         </div>
 
-        <div class="color-presets">
-          <button
-            v-for="c in presetColors"
-            :key="c.hex"
-            class="color-swatch"
-            :style="{ background: c.hex }"
-            :title="c.label"
-            :class="{ active: settings.theme.primary_color === c.hex }"
-            @click="selectColor(c.hex)"
-          >
-            <Icon
-              v-if="settings.theme.primary_color === c.hex"
-              icon="material-symbols:check-rounded"
-              width="18"
-              height="18"
-              style="color: #fff"
-            />
-          </button>
-        </div>
+        <div class="theme-layout">
+          <!-- 壁纸卡片 -->
+          <div class="theme-card">
+            <div class="card-header">
+              <div class="card-title">
+                <Icon icon="material-symbols:image-outline" width="20" height="20" />
+                <span>界面壁纸</span>
+              </div>
+              <div class="card-actions">
+                <button
+                  class="action-btn-danger"
+                  v-if="settings.theme.has_wallpaper"
+                  :disabled="uploading"
+                  @click="handleDeleteWallpaper"
+                  title="删除壁纸"
+                >
+                  <Icon icon="material-symbols:delete-outline-rounded" width="16" height="16" />
+                </button>
+                <button
+                  class="action-btn"
+                  :disabled="uploading"
+                  @click="wallpaperInputRef?.click()"
+                >
+                  <Icon icon="material-symbols:upload-rounded" width="16" height="16" />
+                  {{ settings.theme.has_wallpaper ? '更换' : '上传' }}
+                </button>
+              </div>
+            </div>
 
-        <div class="custom-color-row">
-          <label class="custom-color-label">
-            <Icon icon="material-symbols:colorize-outline-rounded" width="18" height="18" />
-            自定义颜色
-          </label>
-          <div class="custom-color-wrap">
+            <div class="wallpaper-preview" :class="{ empty: !settings.theme.has_wallpaper }">
+              <img
+                v-if="settings.theme.has_wallpaper"
+                :src="getCurrentWallpaperImageUrl()"
+                alt="当前壁纸"
+                class="wallpaper-preview-img"
+              />
+              <div v-else class="wallpaper-empty">
+                <Icon icon="material-symbols:wallpaper-rounded" width="32" height="32" style="opacity:0.4; margin-bottom: 8px" />
+                <span>当前未设置壁纸</span>
+              </div>
+            </div>
+
+            <div class="slider-grid" :class="{ 'disabled': !settings.theme.has_wallpaper }">
+              <label class="slider-row">
+                <span class="slider-label">模糊强度</span>
+                <input
+                  v-model.number="settings.theme.wallpaper_blur"
+                  type="range" min="0" max="20" step="1"
+                  :disabled="!settings.theme.has_wallpaper"
+                />
+                <span class="slider-val">{{ settings.theme.wallpaper_blur }}px</span>
+              </label>
+
+              <label class="slider-row">
+                <span class="slider-label">遮罩透明度</span>
+                <input
+                  v-model.number="settings.theme.wallpaper_opacity"
+                  type="range" min="0" max="1" step="0.05"
+                  :disabled="!settings.theme.has_wallpaper"
+                />
+                <span class="slider-val">{{ Math.round(settings.theme.wallpaper_opacity * 100) }}%</span>
+              </label>
+            </div>
+            
             <input
-              type="color"
-              class="color-picker"
-              :value="settings.theme.primary_color"
-              @input="(e) => selectColor((e.target as HTMLInputElement).value)"
+              ref="wallpaperInputRef"
+              type="file"
+              class="wallpaper-file-input"
+              accept="image/jpeg,image/png,image/webp"
+              @change="handleWallpaperFileChange"
             />
-            <span class="color-hex-val">{{ settings.theme.primary_color }}</span>
           </div>
-        </div>
 
-        <div class="color-preview-strip">
-          <div class="preview-chip primary-chip">Primary</div>
-          <div class="preview-chip secondary-chip">Secondary</div>
-          <div class="preview-chip tertiary-chip">Tertiary</div>
-        </div>
-      </section>
+          <!-- 主题色卡片 -->
+          <div class="theme-card">
+            <div class="card-header">
+              <div class="card-title">
+                <Icon icon="material-symbols:palette-outline" width="20" height="20" />
+                <span>主题色彩</span>
+              </div>
+            </div>
 
-      <section class="setting-section">
-        <div class="section-text">
-          <h3 class="section-heading">壁纸背景</h3>
-          <p class="section-desc">仅支持单张壁纸，上传新壁纸会自动覆盖旧壁纸</p>
-        </div>
+            <div class="colors-scroll-area">
+              <!-- 壁纸取色 -->
+              <div class="color-group" v-if="wallpaperColors.length > 0">
+                <div class="color-group-title">
+                  <span>壁纸取色</span>
+                  <span v-if="colorSource === 'wallpaper'" class="active-badge">使用中</span>
+                </div>
+                <div class="color-presets">
+                  <button
+                    v-for="(hex, idx) in wallpaperColors"
+                    :key="hex"
+                    class="color-swatch ring-swatch"
+                    :style="{ background: hex }"
+                    :title="`壁纸取色 ${idx + 1}`"
+                    :class="{ active: settings.theme.primary_color === hex }"
+                    @click="selectColor(hex)"
+                  >
+                    <Icon v-if="settings.theme.primary_color === hex" icon="material-symbols:check-rounded" width="18" height="18" style="color: #fff" />
+                  </button>
+                </div>
+              </div>
 
-        <div class="wallpaper-preview" :class="{ empty: !settings.theme.has_wallpaper }">
-          <img
-            v-if="settings.theme.has_wallpaper"
-            :src="getCurrentWallpaperImageUrl()"
-            alt="当前壁纸"
-            class="wallpaper-preview-img"
-          />
-          <div v-else class="wallpaper-empty">当前未设置壁纸</div>
-        </div>
+              <!-- 预设颜色 -->
+              <div class="color-group">
+                <div class="color-group-title">
+                  <span>推荐预设</span>
+                  <span v-if="colorSource === 'preset'" class="active-badge">使用中</span>
+                </div>
+                <div class="color-presets">
+                  <button
+                    v-for="c in presetColors"
+                    :key="c.hex"
+                    class="color-swatch ring-swatch"
+                    :style="{ background: c.hex }"
+                    :title="c.label"
+                    :class="{ active: settings.theme.primary_color === c.hex }"
+                    @click="selectColor(c.hex)"
+                  >
+                    <Icon v-if="settings.theme.primary_color === c.hex" icon="material-symbols:check-rounded" width="18" height="18" style="color: #fff" />
+                  </button>
+                </div>
+              </div>
 
-        <input
-          ref="wallpaperInputRef"
-          type="file"
-          class="wallpaper-file-input"
-          accept="image/jpeg,image/png,image/webp"
-          @change="handleWallpaperFileChange"
-        />
-
-        <div class="wallpaper-actions">
-          <button
-            class="btn-outlined"
-            :disabled="uploading"
-            @click="wallpaperInputRef?.click()"
-          >
-            <Icon icon="material-symbols:upload-rounded" width="18" height="18" />
-            {{ settings.theme.has_wallpaper ? '更换壁纸' : '上传壁纸' }}
-          </button>
-          <button
-            class="btn-outlined btn-danger"
-            :disabled="uploading || !settings.theme.has_wallpaper"
-            @click="handleDeleteWallpaper"
-          >
-            <Icon icon="material-symbols:delete-outline-rounded" width="18" height="18" />
-            删除壁纸
-          </button>
-        </div>
-
-        <div class="slider-grid">
-          <label class="slider-row">
-            <span class="slider-label">模糊强度</span>
-            <input
-              v-model.number="settings.theme.wallpaper_blur"
-              type="range"
-              min="0"
-              max="20"
-              step="1"
-              :disabled="!settings.theme.has_wallpaper"
-            />
-            <span class="slider-val">{{ settings.theme.wallpaper_blur }}px</span>
-          </label>
-
-          <label class="slider-row">
-            <span class="slider-label">遮罩透明度</span>
-            <input
-              v-model.number="settings.theme.wallpaper_opacity"
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              :disabled="!settings.theme.has_wallpaper"
-            />
-            <span class="slider-val">{{ Math.round(settings.theme.wallpaper_opacity * 100) }}%</span>
-          </label>
+              <!-- 自定义颜色 -->
+              <div class="color-group">
+                <div class="color-group-title">
+                  <span>自定义颜色</span>
+                  <span v-if="colorSource === 'custom'" class="active-badge">使用中</span>
+                </div>
+                <div class="custom-color-inline">
+                  <input
+                    type="color"
+                    class="color-picker"
+                    :value="settings.theme.primary_color"
+                    @input="(e) => selectColor((e.target as HTMLInputElement).value)"
+                  />
+                  <span class="color-hex-val">{{ settings.theme.primary_color.toUpperCase() }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -453,6 +540,99 @@ onMounted(fetchSettings)
   font-size: 1.0625rem; font-weight: 600; color: var(--md-sys-color-on-surface);
 }
 .section-desc { margin: 0; font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant); }
+
+/* ==== 新壁纸与主题卡片布局 ==== */
+.theme-layout-section {
+  padding: 1.5rem;
+}
+.theme-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+@media (min-width: 800px) {
+  .theme-layout {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.theme-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  background: var(--md-sys-color-surface);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  padding: 1.25rem;
+  box-shadow: rgba(0, 0, 0, 0.02) 0px 4px 18px;
+}
+html[data-theme='dark'] .theme-card {
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: rgba(0, 0, 0, 0.2) 0px 4px 18px;
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface);
+}
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+.action-btn {
+  display: flex; align-items: center; gap: 0.375rem;
+  height: 2rem; padding: 0 0.75rem; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px;
+  background: transparent; color: var(--md-sys-color-on-surface);
+  font-size: 0.8125rem; font-weight: 500; cursor: pointer; transition: background 0.15s;
+}
+html[data-theme='dark'] .action-btn { border-color: rgba(255,255,255,0.15); }
+.action-btn:hover:not(:disabled) { background: var(--md-sys-color-surface-container-highest); }
+.action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.action-btn-danger {
+  display: flex; align-items: center; justify-content: center;
+  width: 2rem; height: 2rem; border: none; border-radius: 8px;
+  background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);
+  cursor: pointer; transition: filter 0.15s;
+}
+.action-btn-danger:hover:not(:disabled) { filter: brightness(0.9); }
+.action-btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.colors-scroll-area {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+.color-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.color-group-title {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-size: 0.8125rem; color: var(--md-sys-color-on-surface-variant); font-weight: 500;
+}
+.active-badge {
+  padding: 0.125rem 0.375rem;
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+.ring-swatch.active { outline: 2px solid var(--md-sys-color-primary); outline-offset: 2px; }
+
+.custom-color-inline {
+  display: flex; align-items: center; gap: 0.5rem;
+}
+/* ==== 旧样式保留区 ==== */
 .mode-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; }
 .mode-card {
   position: relative; display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
@@ -478,14 +658,6 @@ onMounted(fetchSettings)
 }
 .color-swatch:hover { transform: scale(1.1); }
 .color-swatch.active { outline: 3px solid var(--md-sys-color-outline); outline-offset: 2px; }
-.custom-color-row {
-  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;
-}
-.custom-color-label {
-  display: flex; align-items: center; gap: 0.5rem;
-  font-size: 0.9rem; color: var(--md-sys-color-on-surface-variant);
-}
-.custom-color-wrap { display: flex; align-items: center; gap: 0.75rem; }
 .color-picker {
   width: 44px; height: 44px; border-radius: 9999px; border: none; padding: 0; cursor: pointer; background: none;
 }
@@ -495,11 +667,6 @@ onMounted(fetchSettings)
   font-family: 'Inter', monospace; font-size: 0.875rem; color: var(--md-sys-color-on-surface);
   background: var(--md-sys-color-surface-container); padding: 0.25rem 0.75rem; border-radius: 0.5rem;
 }
-.color-preview-strip { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-.preview-chip { padding: 0.375rem 1rem; border-radius: 9999px; font-size: 0.8125rem; font-weight: 600; }
-.primary-chip { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
-.secondary-chip { background: var(--md-sys-color-secondary); color: var(--md-sys-color-on-secondary); }
-.tertiary-chip { background: var(--md-sys-color-tertiary); color: var(--md-sys-color-on-tertiary); }
 .wallpaper-file-input { display: none; }
 .wallpaper-preview {
   border-radius: 1rem;
