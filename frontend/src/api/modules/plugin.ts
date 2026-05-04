@@ -6,6 +6,8 @@ import type {
   PluginSummary,
   PluginDetail,
   PluginReloadResult,
+  PluginLoadResult,
+  PluginUnloadResult,
   PluginComponentInfo,
 } from '../types/plugin'
 import { API_WEBUI_PREFIX } from '../config'
@@ -46,4 +48,22 @@ export function getPluginComponents(
 ): Promise<PluginComponentInfo[]> {
   const params = componentType ? { component_type: componentType } : {}
   return http.get(`${BASE}/plugin/${encodeURIComponent(pluginName)}/components`, { params })
+}
+
+/**
+ * POST /api/plugin/load - 从指定路径加载插件
+ * @param pluginPath 插件路径
+ */
+export function loadPlugin(pluginPath: string): Promise<PluginLoadResult> {
+  return http.post(`${BASE}/plugin/load`, {}, {
+    params: { plugin_path: pluginPath }
+  })
+}
+
+/**
+ * POST /api/plugin/{plugin_name}/unload - 卸载指定插件
+ * @param pluginName 插件名称
+ */
+export function unloadPlugin(pluginName: string): Promise<PluginUnloadResult> {
+  return http.post(`${BASE}/plugin/${encodeURIComponent(pluginName)}/unload`, {})
 }

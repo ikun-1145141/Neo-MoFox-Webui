@@ -194,14 +194,16 @@ watch(
   (newValues, oldValues) => {
     scheduleAutoSave()
     
-    // 即时预览壁纸效果
+    // 即时预览壁纸效果，通过 requestAnimationFrame 优化滑动滑块时的频繁重绘问题
     if (
       newValues[2] !== oldValues?.[2] ||
       newValues[3] !== oldValues?.[3]
     ) {
-      emitWallpaperUpdated({
-        wallpaper_blur: newValues[2],
-        wallpaper_opacity: newValues[3],
+      requestAnimationFrame(() => {
+        emitWallpaperUpdated({
+          wallpaper_blur: newValues[2],
+          wallpaper_opacity: newValues[3],
+        })
       })
     }
   }
@@ -419,8 +421,7 @@ onMounted(() => {
                 v-else-if="settings.theme.has_wallpaper && wallpaperType === 'video'"
                 :src="getCurrentWallpaperImageUrl()"
                 class="wallpaper-preview-video"
-                autoplay
-                loop
+                preload="metadata"
                 muted
                 playsinline
                 disablePictureInPicture
@@ -718,6 +719,9 @@ html[data-theme='dark'] .action-btn { border-color: rgba(255,255,255,0.15); }
   min-height: 140px;
   background: var(--md-sys-color-surface-container);
   border: 1px solid var(--md-sys-color-outline-variant);
+  /* 开启硬件加速，缓解滑动卡顿 */
+  transform: translateZ(0);
+  will-change: transform;
 }
 .wallpaper-preview.empty {
   display: flex;
@@ -729,12 +733,20 @@ html[data-theme='dark'] .action-btn { border-color: rgba(255,255,255,0.15); }
   height: 180px;
   display: block;
   object-fit: cover;
+  /* 开启硬件加速 */
+  transform: translateZ(0);
+  will-change: transform;
+  pointer-events: none; /* 防止图片拦截移动端触摸滑动事件 */
 }
 .wallpaper-preview-video {
   width: 100%;
   height: 180px;
   display: block;
   object-fit: cover;
+  /* 开启硬件加速 */
+  transform: translateZ(0);
+  will-change: transform;
+  pointer-events: none; /* 防止视频拦截移动端触摸滑动事件 */
 }
 .wallpaper-empty {
   display: flex;

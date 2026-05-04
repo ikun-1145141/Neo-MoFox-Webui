@@ -3,7 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppShell from '../components/common/AppShell.vue'
 import Icon from '../components/common/Icon.vue'
-import { getPluginDetail, reloadPlugin } from '../api/modules/plugin'
+import { getPluginDetail, reloadPlugin, loadPlugin, unloadPlugin } from '../api/modules/plugin'
 import type { PluginDetail, PluginComponentInfo } from '../api/types/plugin'
 import { useDialogStore } from '../utils/dialog'
 import { useToastStore } from '../utils/toast'
@@ -19,6 +19,8 @@ const pluginName = computed(() => route.params.name as string)
 const plugin = ref<PluginDetail | null>(null)
 const isLoading = ref(true)
 const isReloading = ref(false)
+const isLoadingPlugin = ref(false)
+const isUnloadingPlugin = ref(false)
 const selectedType = ref<string>('all')
 
 // 翻译工具函数：替换带参数的文本
@@ -73,6 +75,63 @@ const componentTypes = computed(() => {
   if (!plugin.value) return []
   return [...new Set(plugin.value.components.map(c => c.component_type))]
 })
+
+// 加载插件
+const handleLoad = async () => {
+  if (!plugin.value) return
+  
+  const confirmed = await dialogStore.confirm(
+    tr('plugins.detail.dialogs.loadMessage', { name: pluginName.value }),
+    t('plugins.detail.dialogs.loadTitle'),
+    t('plugins.detail.dialogs.loadConfirm'),
+    t('plugins.detail.dialogs.cancel')
+  )
+  
+  if (!confirmed) return
+  
+  isLoadingPlugin.value = true
+  try {
+    const result = await loadPlugin(plugin.value.plugin_path)
+    if (result.success) {
+      toastStore.show(tr('plugins.detail.toast.loadSuccess', { name: pluginName.value }), 'success')
+      await fetchPluginDetail()
+    } else {
+      toastStore.show(tr('plugins.detail.toast.loadFailed', { error: result.error_message }), 'error')
+    }
+  } catch (error) {
+    console.error('加载插件失败:', error)
+  } finally {
+    isLoadingPlugin.value = false
+  }
+}
+
+// 卸载插件
+const handleUnload = async () => {
+  const confirmed = await dialogStore.confirm(
+    tr('plugins.detail.dialogs.unloadMessage', { name: pluginName.value }),
+    t('plugins.detail.dialogs.unloadTitle'),
+    t('plugins.detail.dialogs.unloadConfirm'),
+    t('plugins.detail.dialogs.cancel')
+  )
+  
+  if (!confirmed) return
+  
+  isUnloadingPlugin.value = true
+  try {
+    const result = await unloadPlugin(pluginName.value)
+    if (result.success) {
+      toastStore.show(tr('plugins.detail.toast.unloadSuccess', { name: pluginName.value }), 'success')
+      // 卸载成功后返回插件列表页面，避免用户再次点击卸载按钮
+      router.push({ name: 'plugins' })
+    } else {
+      toastStore.show(tr('plugins.detail.toast.unloadFailed', { error: result.error_message }), 'error')
+    }
+  } catch (error) {
+    console.error('卸载插件失败:', error)
+  } finally {
+    isUnloadingPlugin.value = false
+  }
+}
 
 // 重载插件
 const handleReload = async () => {
@@ -193,22 +252,45 @@ onMounted(async () => {
 
         <!-- 操作按钮 -->
         <div class="plugin-actions">
-          <button
-            v-if="plugin.has_config"
-            class="action-btn action-btn-primary"
-            @click="goToConfig"
-          >
-            <Icon icon="material-symbols:settings-outline-rounded" width="20" height="20" />
-            <span>{{ t('plugins.detail.actions.config') }}</span>
-          </button>
-          <button
-            class="action-btn action-btn-secondary"
-            @click="handleReload"
-            :disabled="isReloading"
-          >
-            <Icon icon="material-symbols:refresh-rounded" width="20" height="20" />
-            <span>{{ isReloading ? t('plugins.detail.actions.reloading') : t('plugins.detail.actions.reload') }}</span>
-          </button>
+          <!-- 未加载状态：只显示加载按钮 -->
+          <template v-if="!plugin.is_loaded">
+            <button
+              class="action-btn action-btn-primary"
+              @click="handleLoad"
+              :disabled="isLoadingPlugin"
+            >
+              <Icon icon="material-symbols:play-circle-outline-rounded" width="20" height="20" />
+              <span>{{ isLoadingPlugin ? t('plugins.detail.actions.loading') : t('plugins.detail.actions.load') }}</span>
+            </button>
+          </template>
+          
+          <!-- 已加载状态：显示配置、重载、卸载按钮 -->
+          <template v-else>
+            <button
+              v-if="plugin.has_config"
+              class="action-btn action-btn-primary"
+              @click="goToConfig"
+            >
+              <Icon icon="material-symbols:settings-outline-rounded" width="20" height="20" />
+              <span>{{ t('plugins.detail.actions.config') }}</span>
+            </button>
+            <button
+              class="action-btn action-btn-secondary"
+              @click="handleReload"
+              :disabled="isReloading"
+            >
+              <Icon icon="material-symbols:refresh-rounded" width="20" height="20" />
+              <span>{{ isReloading ? t('plugins.detail.actions.reloading') : t('plugins.detail.actions.reload') }}</span>
+            </button>
+            <button
+              class="action-btn action-btn-danger"
+              @click="handleUnload"
+              :disabled="isUnloadingPlugin"
+            >
+              <Icon icon="material-symbols:stop-circle-outline-rounded" width="20" height="20" />
+              <span>{{ isUnloadingPlugin ? t('plugins.detail.actions.unloading') : t('plugins.detail.actions.unload') }}</span>
+            </button>
+          </template>
         </div>
       </div>
 
@@ -244,12 +326,15 @@ onMounted(async () => {
       </div>
 
       <!-- 组件列表 -->
-      <div class="components-section">
+      <div class="components-section" :class="{ disabled: !plugin.is_loaded }">
         <div class="section-header">
-          <h2 class="section-title">{{ t('plugins.detail.components.title') }}</h2>
+          <h2 class="section-title">
+            {{ t('plugins.detail.components.title') }}
+            <span v-if="!plugin.is_loaded" class="disabled-hint">{{ t('plugins.detail.components.disabledHint') }}</span>
+          </h2>
           
           <!-- 类型筛选 -->
-          <div class="type-filter">
+          <div class="type-filter" v-if="plugin.is_loaded">
             <button
               class="filter-btn"
               :class="{ active: selectedType === 'all' }"
@@ -275,6 +360,7 @@ onMounted(async () => {
             v-for="component in filteredComponents"
             :key="component.signature"
             class="component-card"
+            :class="{ disabled: !plugin.is_loaded }"
           >
             <div class="component-card-header">
               <div class="component-type-icon">
@@ -500,6 +586,17 @@ onMounted(async () => {
   transform: scale(1.02);
 }
 
+.action-btn-danger {
+  background: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-on-error-container);
+}
+
+.action-btn-danger:hover {
+  background: var(--md-sys-color-error);
+  color: var(--md-sys-color-on-error);
+  transform: scale(1.02);
+}
+
 .action-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -561,6 +658,11 @@ onMounted(async () => {
   margin-top: 2rem;
 }
 
+.components-section.disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
 .section-header {
   display: flex;
   align-items: center;
@@ -576,6 +678,14 @@ onMounted(async () => {
   font-weight: 700;
   color: var(--md-sys-color-on-surface);
   margin: 0;
+}
+
+.disabled-hint {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--md-sys-color-on-surface-variant);
+  opacity: 0.7;
+  margin-left: 0.5rem;
 }
 
 /* ====== 类型筛选 ====== */
@@ -631,6 +741,16 @@ onMounted(async () => {
   box-shadow: 
     rgba(0, 0, 0, 0.04) 0px 4px 12px,
     rgba(0, 0, 0, 0.02) 0px 2px 6px;
+}
+
+.component-card.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.component-card.disabled:hover {
+  border-color: var(--md-sys-color-outline-variant);
+  box-shadow: none;
 }
 
 /* ====== 组件卡片头部 ====== */

@@ -1,14 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import AppShell from '../components/common/AppShell.vue'
 import PageHeader from '../components/common/PageHeader.vue'
 import Icon from '../components/common/Icon.vue'
-import { getPluginList } from '../api/modules/plugin'
+import { getPluginList, loadPlugin } from '../api/modules/plugin'
 import type { PluginSummary } from '../api/types/plugin'
+import { useDialogStore } from '../utils/dialog'
+import { useToastStore } from '../utils/toast'
 import { useI18n } from '../utils/i18n'
 
 const router = useRouter()
+const dialogStore = useDialogStore()
+const toastStore = useToastStore()
 const { t } = useI18n()
 
 const plugins = ref<PluginSummary[]>([])
@@ -27,6 +31,42 @@ const fetchPlugins = async () => {
   }
 }
 
+// 加载插件
+const isLoadingPlugin = ref(false)
+const handleLoad = async (plugin: PluginSummary) => {
+  // 检查插件路径是否存在
+  if (!plugin.plugin_path) {
+    toastStore.show(tr('plugins.detail.toast.loadFailed', { error: '插件路径未找到' }), 'error')
+    return
+  }
+  
+  const confirmed = await dialogStore.confirm(
+    tr('plugins.detail.dialogs.loadMessage', { name: plugin.plugin_name }),
+    t('plugins.detail.dialogs.loadTitle'),
+    t('plugins.detail.dialogs.loadConfirm'),
+    t('plugins.detail.dialogs.cancel')
+  )
+  
+  if (!confirmed) return
+  
+  isLoadingPlugin.value = true
+  try {
+    const result = await loadPlugin(plugin.plugin_path)
+    if (result.success) {
+      toastStore.show(tr('plugins.detail.toast.loadSuccess', { name: plugin.plugin_name }), 'success')
+      await fetchPlugins()
+      filterPlugins()
+    } else {
+      toastStore.show(tr('plugins.detail.toast.loadFailed', { error: result.error_message }), 'error')
+    }
+  } catch (error) {
+    console.error('加载插件失败:', error)
+    toastStore.show(tr('plugins.detail.toast.loadFailed', { error: 'Unknown Error' }), 'error')
+  } finally {
+    isLoadingPlugin.value = false
+  }
+}
+
 // 搜索过滤
 const filteredPlugins = ref<PluginSummary[]>([])
 const filterPlugins = () => {
@@ -41,6 +81,15 @@ const filterPlugins = () => {
     plugin.plugin_description?.toLowerCase().includes(query)
   )
 }
+
+// 按加载状态分类
+const loadedPlugins = computed(() => 
+  filteredPlugins.value.filter(p => p.is_loaded)
+)
+
+const unloadedPlugins = computed(() => 
+  filteredPlugins.value.filter(p => !p.is_loaded)
+)
 
 // 导航到插件详情
 const goToDetail = (pluginName: string) => {
@@ -136,13 +185,20 @@ const handleSearch = () => {
     </div>
 
     <!-- 插件卡片网格 -->
-    <div v-else class="plugin-grid">
-      <div
-        v-for="plugin in filteredPlugins"
-        :key="plugin.plugin_name"
-        class="plugin-card"
-        @click="goToDetail(plugin.plugin_name)"
-      >
+    <div v-else class="plugin-lists">
+      <!-- 已加载的插件 -->
+      <div v-if="loadedPlugins.length > 0" class="plugin-section">
+        <h3 class="section-title">
+          <Icon icon="material-symbols:check-circle-outline-rounded" width="20" height="20" />
+          {{ t('plugins.sections.loaded') }} ({{ loadedPlugins.length }})
+        </h3>
+        <div class="plugin-grid">
+          <div
+            v-for="plugin in loadedPlugins"
+            :key="plugin.plugin_name"
+            class="plugin-card"
+            @click="goToDetail(plugin.plugin_name)"
+          >
         <!-- 插件头部 -->
         <div class="plugin-card-header">
           <div class="plugin-icon">
@@ -166,7 +222,7 @@ const handleSearch = () => {
         <div class="plugin-card-footer">
           <div class="component-badges">
             <div
-              v-for="type in plugin.component_types.slice(0, 3)"
+              v-for="type in plugin.component_types.slice(0, 2)"
               :key="type"
               class="component-badge"
               :title="getComponentTypeName(type)"
@@ -174,8 +230,8 @@ const handleSearch = () => {
               <Icon :icon="getComponentTypeIcon(type)" width="16" height="16" />
               <span>{{ getComponentTypeName(type) }}</span>
             </div>
-            <div v-if="plugin.component_types.length > 3" class="component-badge more">
-              +{{ plugin.component_types.length - 3 }}
+            <div v-if="plugin.component_types.length > 2" class="component-badge more">
+              +{{ plugin.component_types.length - 2 }}
             </div>
           </div>
           <div class="component-count">
@@ -186,6 +242,75 @@ const handleSearch = () => {
         <!-- 配置标识 -->
         <div v-if="plugin.has_config" class="config-indicator">
           <Icon icon="material-symbols:settings-outline-rounded" width="16" height="16" />
+        </div>
+      </div>
+        </div>
+      </div>
+
+      <!-- 未加载的插件 -->
+      <div v-if="unloadedPlugins.length > 0" class="plugin-section">
+        <h3 class="section-title">
+          <Icon icon="material-symbols:cancel-outline-rounded" width="20" height="20" />
+          {{ t('plugins.sections.unloaded') }} ({{ unloadedPlugins.length }})
+        </h3>
+        <div class="plugin-grid">
+          <div
+            v-for="plugin in unloadedPlugins"
+            :key="plugin.plugin_name"
+            class="plugin-card plugin-card-unloaded"
+          >
+            <!-- 插件头部 -->
+            <div class="plugin-card-header">
+              <div class="plugin-icon">
+                <Icon icon="material-symbols:extension-rounded" width="32" height="32" />
+              </div>
+              <div class="plugin-actions-unloaded">
+                <button
+                  class="action-btn action-btn-primary"
+                  @click="handleLoad(plugin)"
+                  :disabled="isLoadingPlugin"
+                >
+                  <Icon icon="material-symbols:play-arrow-rounded" width="20" height="20" />
+                  <span>{{ t('plugins.detail.load') }}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 插件信息 -->
+            <div class="plugin-card-body">
+              <h3 class="plugin-name">{{ plugin.plugin_name }}</h3>
+              <p class="plugin-version">{{ tr('plugins.version', { version: plugin.plugin_version }) }}</p>
+              <p class="plugin-description">
+                {{ plugin.plugin_description || t('plugins.noDescription') }}
+              </p>
+            </div>
+
+            <!-- 插件组件信息 -->
+            <div class="plugin-card-footer">
+              <div class="component-badges">
+                <div
+                  v-for="type in plugin.component_types.slice(0, 2)"
+                  :key="type"
+                  class="component-badge"
+                  :title="getComponentTypeName(type)"
+                >
+                  <Icon :icon="getComponentTypeIcon(type)" width="16" height="16" />
+                  <span>{{ getComponentTypeName(type) }}</span>
+                </div>
+                <div v-if="plugin.component_types.length > 2" class="component-badge more">
+                  +{{ plugin.component_types.length - 2 }}
+                </div>
+              </div>
+              <div class="component-count">
+                {{ plugin.component_count }} {{ t('plugins.components') }}
+              </div>
+            </div>
+
+            <!-- 配置标识 -->
+            <div v-if="plugin.has_config" class="config-indicator">
+              <Icon icon="material-symbols:settings-outline-rounded" width="16" height="16" />
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -278,6 +403,30 @@ const handleSearch = () => {
 }
 
 /* ====== 插件卡片网格 ====== */
+.plugin-lists {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.plugin-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface);
+  margin: 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--md-sys-color-outline-variant);
+}
+
 .plugin-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -308,6 +457,21 @@ const handleSearch = () => {
     rgba(0, 0, 0, 0.04) 0px 4px 12px;
   border-color: var(--md-sys-color-primary);
   background: color-mix(in srgb, var(--md-sys-color-surface-container-highest) 92%, transparent);
+}
+
+.plugin-card-unloaded {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.plugin-card-unloaded:hover {
+  opacity: 1;
+  transform: translateY(-4px);
+  box-shadow: 
+    rgba(0, 0, 0, 0.06) 0px 8px 24px,
+    rgba(0, 0, 0, 0.04) 0px 4px 12px;
+  border-color: var(--md-sys-color-outline-variant);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container) 88%, transparent);
 }
 
 /* ====== 卡片头部 ====== */
@@ -347,6 +511,44 @@ const handleSearch = () => {
   box-shadow: 0 0 8px var(--md-sys-color-tertiary);
 }
 
+/* ====== 未加载的插件操作按钮 ====== */
+.plugin-actions-unloaded {
+  display: flex;
+  align-items: center;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 20px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.action-btn-primary {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+}
+
+.action-btn-primary:hover {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  transform: scale(1.02);
+}
+
+.action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
 /* ====== 卡片内容 ====== */
 .plugin-card-body {
   flex: 1;
@@ -360,6 +562,9 @@ const handleSearch = () => {
   color: var(--md-sys-color-on-surface);
   margin: 0 0 0.25rem;
   letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .plugin-version {
@@ -382,6 +587,7 @@ const handleSearch = () => {
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
+  height: 2.64rem; /* 固定两行高度保持卡片底部对齐 */
 }
 
 /* ====== 卡片底部 ====== */
@@ -398,7 +604,9 @@ const handleSearch = () => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  min-height: 32px;
 }
 
 .component-badge {
@@ -411,6 +619,7 @@ const handleSearch = () => {
   color: var(--md-sys-color-on-surface-variant);
   font-size: 0.75rem;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .component-badge.more {

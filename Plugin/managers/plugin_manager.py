@@ -14,8 +14,10 @@ from src.app.plugin_system.api.log_api import get_logger  # type: ignore
 from src.app.plugin_system.api.plugin_api import (  # type: ignore
     get_manifest,
     get_plugin,
+    get_plugin_path,
     is_plugin_loaded,
     list_loaded_plugins,
+    list_unloaded_plugins,
     load_plugin,
     reload_plugin,
     unload_plugin,
@@ -48,25 +50,34 @@ class PluginManagementManager:
         self._registry = get_global_registry()
 
     async def list_plugins(self) -> list[PluginSummary]:
-        """获取所有已加载插件的摘要列表。
+        """获取所有插件的摘要列表（包括已加载和未加载的插件）。
 
         Returns:
             插件摘要列表
         """
-        plugin_names = list_loaded_plugins()
         plugin_summaries: list[PluginSummary] = []
 
-        # 并行获取所有插件信息
+        # 获取已加载插件
+        plugin_names = list_loaded_plugins()
         tasks = [self._get_plugin_summary(name) for name in plugin_names]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         for result in results:
             if isinstance(result, Exception):
-                logger.warning(f"获取插件信息失败: {result}")
+                logger.warning(f"获取已加载插件信息失败: {result}")
                 continue
-            # 此时 result 类型为 PluginSummary | None
-            if result is not None:
+            if isinstance(result, PluginSummary):
                 plugin_summaries.append(result)
+
+        # 获取未加载插件
+        try:
+            unloaded_plugins_info = await list_unloaded_plugins()
+            for plugin_name, plugin_info in unloaded_plugins_info.items():
+                summary = self._convert_unloaded_to_summary(plugin_name, plugin_info)
+                if summary is not None:
+                    plugin_summaries.append(summary)
+        except Exception as e:
+            logger.error(f"获取未加载插件信息失败: {e}", exc_info=True)
 
         return plugin_summaries
 
@@ -102,6 +113,9 @@ class PluginManagementManager:
                 except ValueError:
                     continue
 
+            # 获取插件路径（使用新的 API）
+            plugin_path = get_plugin_path(plugin_name)
+
             return PluginSummary(
                 plugin_name=plugin_name,
                 plugin_description=manifest.description or "",
@@ -110,9 +124,35 @@ class PluginManagementManager:
                 has_config=has_config,
                 component_count=component_count,
                 component_types=sorted(list(component_types)),
+                plugin_path=plugin_path,
             )
         except Exception as e:
             logger.error(f"获取插件 {plugin_name} 摘要信息失败: {e}", exc_info=True)
+            return None
+
+    def _convert_unloaded_to_summary(self, plugin_name: str, plugin_info: dict[str, Any]) -> PluginSummary | None:
+        """将未加载插件信息转换为 PluginSummary 格式。
+
+        Args:
+            plugin_name: 插件名称
+            plugin_info: 未加载插件的信息字典（来自 list_unloaded_plugins）
+
+        Returns:
+            插件摘要，失败返回 None
+        """
+        try:
+            return PluginSummary(
+                plugin_name=plugin_name,
+                plugin_description=plugin_info.get("description", ""),
+                plugin_version=plugin_info.get("version", "1.0.0"),
+                is_loaded=False,
+                has_config=False,  # 未加载的插件无法确定是否有配置
+                component_count=0,  # 未加载的插件无法获取组件数量
+                component_types=[],  # 未加载的插件无法获取组件类型
+                plugin_path=plugin_info.get("path"),  # 包含插件路径用于加载操作
+            )
+        except Exception as e:
+            logger.error(f"转换未加载插件 {plugin_name} 信息失败: {e}", exc_info=True)
             return None
 
     async def get_plugin_detail(self, plugin_name: str) -> PluginDetail:
@@ -198,7 +238,6 @@ class PluginManagementManager:
         try:
             # 解析签名
             sig = parse_signature(signature)
-            plugin_name = sig["plugin_name"]
             component_type = sig["component_type"]
             component_name = sig["component_name"]
 
@@ -231,7 +270,9 @@ class PluginManagementManager:
             elif component_type == ComponentType.AGENT:
                 extra["agent_name"] = getattr(component_cls, "agent_name", None)
                 # usables 通常在实例化后才有，这里尝试获取类级别的定义
-                extra["usables"] = getattr(component_cls, "usables", [])
+                # 注意: usables 可能包含 Protocol 类型，需转换为可序列化格式
+                raw_usables = getattr(component_cls, "usables", [])
+                extra["usables"] = self._serialize_usables(raw_usables)
 
             return PluginComponentInfo(
                 signature=signature,
@@ -244,6 +285,38 @@ class PluginManagementManager:
         except Exception as e:
             logger.error(f"提取组件 {signature} 信息失败: {e}", exc_info=True)
             return None
+
+    def _serialize_usables(self, usables: Any) -> list[str]:
+        """将 usables 转换为可序列化的格式。
+
+        Args:
+            usables: 原始 usables 数据（可能包含 Protocol 类型）
+
+        Returns:
+            字符串列表（类型名称）
+        """
+        if not usables:
+            return []
+
+        result: list[str] = []
+        if not isinstance(usables, list):
+            usables = [usables]
+
+        for item in usables:
+            try:
+                # 如果是类型对象，获取其名称
+                if hasattr(item, "__name__"):
+                    result.append(item.__name__)
+                elif hasattr(item, "__class__"):
+                    result.append(item.__class__.__name__)
+                else:
+                    # 尝试转换为字符串
+                    result.append(str(item))
+            except Exception as e:
+                logger.debug(f"序列化 usable 失败: {e}")
+                continue
+
+        return result
 
     async def reload_plugin_operation(self, plugin_name: str) -> PluginReloadResult:
         """重载插件。
@@ -395,6 +468,7 @@ class PluginManagementManager:
         try:
             # 执行卸载
             success = await unload_plugin(plugin_name)
+            logger.info(str(success))
             unload_time = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
             if success:

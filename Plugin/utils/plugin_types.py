@@ -41,6 +41,7 @@ class PluginSummary(BaseModel):
         has_config: 是否有配置文件
         component_count: 组件总数
         component_types: 包含的组件类型列表
+        plugin_path: 插件路径（可选，未加载插件会包含）
     """
 
     plugin_name: str = Field(..., description="插件名称")
@@ -50,19 +51,21 @@ class PluginSummary(BaseModel):
     has_config: bool = Field(default=False, description="是否有配置文件")
     component_count: int = Field(default=0, description="组件总数")
     component_types: list[str] = Field(default_factory=list, description="包含的组件类型列表")
+    plugin_path: str | None = Field(default=None, description="插件路径（未加载插件会包含）")
 
 
 class PluginDetail(PluginSummary):
     """插件详细信息（详情展示）。
 
     Attributes:
-        plugin_path: 插件路径
         manifest: 插件清单（原始数据）
         components: 组件列表
         dependencies: 依赖的组件签名列表
+    
+    Note:
+        plugin_path 继承自 PluginSummary，在详情中应始终存在
     """
 
-    plugin_path: str = Field(..., description="插件路径")
     manifest: dict[str, Any] = Field(..., description="插件清单（原始数据）")
     components: list[PluginComponentInfo] = Field(default_factory=list, description="组件列表")
     dependencies: list[str] = Field(default_factory=list, description="依赖的组件签名列表")

@@ -43,6 +43,8 @@ export interface PluginSummary {
   component_count: number
   /** 包含的组件类型列表 */
   component_types: string[]
+  /** 插件路径（可选，未加载插件会包含） */
+  plugin_path?: string
 }
 
 /**
