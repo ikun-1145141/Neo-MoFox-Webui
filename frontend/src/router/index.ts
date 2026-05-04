@@ -7,7 +7,7 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: () => import('../views/LoginView.vue'),
-      meta: { requiresAuth: false },
+      meta: { requiresAuth: false, title: '登录' },
     },
     {
       path: '/',
@@ -26,6 +26,18 @@ const router = createRouter({
       name: 'config-plugins',
       component: () => import('../views/PluginConfigView.vue'),
       meta: { requiresAuth: true, title: '插件配置', icon: 'material-symbols:extension-outline-rounded' },
+    },
+    {
+      path: '/plugins',
+      name: 'plugins',
+      component: () => import('../views/PluginsView.vue'),
+      meta: { requiresAuth: true, title: '插件管理', icon: 'material-symbols:extension-outline-rounded' },
+    },
+    {
+      path: '/plugins/:name',
+      name: 'plugin-detail',
+      component: () => import('../views/PluginDetailView.vue'),
+      meta: { requiresAuth: true, title: '插件详情', icon: 'material-symbols:extension-outline-rounded' },
     },
     {
       path: '/settings',
@@ -71,6 +83,19 @@ router.beforeEach((to) => {
   }
   if (to.name === 'login' && token) {
     return { name: 'home' }
+  }
+})
+
+// 路由后置守卫：更新页面标题
+router.afterEach((to) => {
+  const baseTitle = 'Neo-MoFox-WebUI'
+  const pageTitle = to.meta.title as string | undefined
+  
+  // 类似 VitePress 的标题格式：页面标题 | 站点名称
+  if (pageTitle) {
+    document.title = `${pageTitle} | ${baseTitle}`
+  } else {
+    document.title = baseTitle
   }
 })
 

@@ -70,7 +70,6 @@ export interface SectionSchema {
   title?: string
   description?: string
   tag?: string
-  order: number
   fields: FieldSchema[]
   // 前端扩展字段（用于区分列表类型的节）
   is_list?: boolean

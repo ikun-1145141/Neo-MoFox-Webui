@@ -10,7 +10,7 @@ import {
 
 export function applyMd3Theme(sourceHex: string, dark: boolean) {
   const theme = themeFromSourceColor(argbFromHex(sourceHex))
-  applyTheme(theme, { target: document.body, dark })
+  applyTheme(theme, { target: document.documentElement, dark })
 }
 
 export function hexFromArgb(argb: number): string {

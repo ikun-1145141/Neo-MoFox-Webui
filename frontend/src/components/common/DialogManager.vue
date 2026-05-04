@@ -72,9 +72,9 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
-  /* Notion 风格的柔和黑色遮罩 */
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(2px);
+  /* Notion 风格的柔和遮罩 */
+  background: color-mix(in srgb, var(--md-sys-color-surface) 45%, transparent);
+  backdrop-filter: blur(4px);
 }
 
 /* ===== 对话框容器 ===== */
@@ -93,7 +93,7 @@ onBeforeUnmount(() => {
     rgba(0, 0, 0, 0.02) 0px 0.8px 2.925px,
     rgba(0, 0, 0, 0.01) 0px 0.175px 1.04062px;
   /* Notion 风格：超细边框 */
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--md-sys-color-outline-variant);
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
@@ -173,12 +173,12 @@ onBeforeUnmount(() => {
 
 /* ===== Secondary 按钮（Notion 温暖灰）===== */
 .dialog-btn-secondary {
-  background: rgba(0, 0, 0, 0.05);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container) 60%, transparent);
   color: var(--md-sys-color-on-surface, rgba(0, 0, 0, 0.95));
 }
 
 .dialog-btn-secondary:hover {
-  background: rgba(0, 0, 0, 0.08);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container) 80%, transparent);
   transform: scale(1.02);
 }
 
@@ -194,7 +194,7 @@ onBeforeUnmount(() => {
 }
 
 .dialog-btn-ghost:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container) 50%, transparent);
   text-decoration: underline;
 }
 

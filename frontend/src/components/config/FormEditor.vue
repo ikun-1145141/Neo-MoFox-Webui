@@ -84,18 +84,24 @@
                   :key="field.key"
                   class="form-field"
                 >
-                  <label :for="`${section.name}-${itemIndex}-${field.key}`" class="field-label">
-                    {{ field.label || field.key }}
-                  </label>
-                  <p v-if="field.description" class="field-description">{{ field.description }}</p>
+                  <div class="field-header">
+                    <label :for="`${section.name}-${itemIndex}-${field.key}`" class="field-label">
+                      <span class="field-title-zh">{{ getFieldTitle(field) }}</span>
+                      <span class="field-name-en">{{ field.key }}</span>
+                      <div v-if="getFieldDescriptionText(field)" class="field-tooltip">
+                        <Icon icon="material-symbols:help-outline-rounded" :size="16" class="help-icon" />
+                        <div class="tooltip-popup">{{ getFieldDescriptionText(field) }}</div>
+                      </div>
+                    </label>
+                  </div>
 
                   <!-- 根据 input_type 渲染不同的输入控件 -->
                   <component
-                    :is="getFieldComponent(field.input_type, field.type)"
+                    :is="getFieldComponent(getRenderableField(field).input_type, field.type)"
                     :id="`${section.name}-${itemIndex}-${field.key}`"
                     :model-value="item[field.key]"
                     @update:model-value="updateListItemField(section.name, itemIndex, field.key, $event)"
-                    :field="field"
+                    :field="getRenderableField(field)"
                     :readonly="readonly"
                   />
                 </div>
@@ -117,18 +123,24 @@
                 :key="field.key"
                 class="form-field"
               >
-                <label :for="`${section.name}-${field.key}`" class="field-label">
-                  {{ field.label || field.key }}
-                </label>
-                <p v-if="field.description" class="field-description">{{ field.description }}</p>
+                <div class="field-header">
+                  <label :for="`${section.name}-${field.key}`" class="field-label">
+                    <span class="field-title-zh">{{ getFieldTitle(field) }}</span>
+                    <span class="field-name-en">{{ field.key }}</span>
+                    <div v-if="getFieldDescriptionText(field)" class="field-tooltip">
+                      <Icon icon="material-symbols:help-outline-rounded" :size="16" class="help-icon" />
+                      <div class="tooltip-popup">{{ getFieldDescriptionText(field) }}</div>
+                    </div>
+                  </label>
+                </div>
 
                 <!-- 根据 input_type 渲染不同的输入控件 -->
                 <component
-                  :is="getFieldComponent(field.input_type, field.type)"
+                  :is="getFieldComponent(getRenderableField(field).input_type, field.type)"
                   :id="`${section.name}-${field.key}`"
                   :model-value="getSectionData(section.name)[field.key]"
                   @update:model-value="updateObjectField(section.name, field.key, $event)"
-                  :field="field"
+                  :field="getRenderableField(field)"
                   :readonly="readonly"
                 />
               </div>
@@ -152,6 +164,8 @@ import BooleanField from './fields/BooleanField.vue'
 import SelectField from './fields/SelectField.vue'
 import TextareaField from './fields/TextareaField.vue'
 import ListField from './fields/ListField.vue'
+import DictField from './fields/DictField.vue'
+import SliderField from './fields/SliderField.vue'
 
 // Props
 interface Props {
@@ -174,6 +188,8 @@ const emit = defineEmits<{
 // 展开状态（默认全部展开）
 const expandedSections = ref<Set<number>>(new Set())
 
+type SelectOption = string | number | { label: string; value: string | number }
+
 // 初始化展开第一个节（或单个节时总是展开）
 watch(
   () => props.schema,
@@ -191,9 +207,9 @@ watch(
   { immediate: true }
 )
 
-// 排序后的配置节（按 order 字段）
+// Schema
 const sortedSchema = computed(() => {
-  return [...props.schema].sort((a, b) => a.order - b.order)
+  return props.schema
 })
 
 // 切换节的展开/折叠
@@ -205,27 +221,59 @@ function toggleSection(index: number) {
   }
 }
 
+// 根据路径获取嵌套对象的值
+function getValueByPath(obj: any, path: string): any {
+  const keys = path.split('.')
+  let current = obj
+  for (const key of keys) {
+    if (current && typeof current === 'object' && key in current) {
+      current = current[key]
+    } else {
+      return undefined
+    }
+  }
+  return current
+}
+
+// 根据路径设置嵌套对象的值
+function setValueByPath(obj: any, path: string, value: any): any {
+  const keys = path.split('.')
+  const result = { ...obj }
+  let current = result
+  
+  for (let i = 0; i < keys.length - 1; i++) {
+    const key = keys[i]
+    if (!current[key] || typeof current[key] !== 'object' || Array.isArray(current[key])) {
+      current[key] = {}
+    } else {
+      current[key] = { ...current[key] }
+    }
+    current = current[key]
+  }
+  
+  current[keys[keys.length - 1]] = value
+  return result
+}
+
 // 获取节数据
 function getSectionData(sectionName: string) {
-  if (!props.modelValue[sectionName]) {
+  let data = getValueByPath(props.modelValue, sectionName)
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
     // 初始化节数据
-    emit('update:modelValue', {
-      ...props.modelValue,
-      [sectionName]: {},
-    })
+    const newValue = setValueByPath(props.modelValue, sectionName, {})
+    emit('update:modelValue', newValue)
+    return {}
   }
-  return props.modelValue[sectionName] || {}
+  return data
 }
 
 // 获取列表项
 function getListItems(sectionName: string): any[] {
-  const items = props.modelValue[sectionName]
+  const items = getValueByPath(props.modelValue, sectionName)
   if (!Array.isArray(items)) {
     // 初始化为空数组
-    emit('update:modelValue', {
-      ...props.modelValue,
-      [sectionName]: [],
-    })
+    const newValue = setValueByPath(props.modelValue, sectionName, [])
+    emit('update:modelValue', newValue)
     return []
   }
   return items
@@ -241,10 +289,8 @@ function addListItem(sectionName: string, fields: FieldSchema[]) {
     newItem[field.key] = field.default !== undefined ? field.default : getDefaultValueForType(field.type)
   })
 
-  emit('update:modelValue', {
-    ...props.modelValue,
-    [sectionName]: [...items, newItem],
-  })
+  const newValue = setValueByPath(props.modelValue, sectionName, [...items, newItem])
+  emit('update:modelValue', newValue)
 }
 
 // 删除列表项
@@ -252,10 +298,8 @@ function removeListItem(sectionName: string, index: number) {
   const items = getListItems(sectionName)
   const newItems = items.filter((_, i) => i !== index)
 
-  emit('update:modelValue', {
-    ...props.modelValue,
-    [sectionName]: newItems,
-  })
+  const newValue = setValueByPath(props.modelValue, sectionName, newItems)
+  emit('update:modelValue', newValue)
 }
 
 // 根据类型获取默认值
@@ -275,22 +319,81 @@ function updateListItemField(sectionName: string, itemIndex: number, fieldKey: s
     ...newItems[itemIndex],
     [fieldKey]: value
   }
-  emit('update:modelValue', {
-    ...props.modelValue,
-    [sectionName]: newItems,
-  })
+  const newValue = setValueByPath(props.modelValue, sectionName, newItems)
+  emit('update:modelValue', newValue)
 }
 
 // 更新对象字段值
 function updateObjectField(sectionName: string, fieldKey: string, value: any) {
   const sectionData = getSectionData(sectionName)
-  emit('update:modelValue', {
-    ...props.modelValue,
-    [sectionName]: {
-      ...sectionData,
-      [fieldKey]: value
-    },
+  const newSectionData = {
+    ...sectionData,
+    [fieldKey]: value
+  }
+  const newValue = setValueByPath(props.modelValue, sectionName, newSectionData)
+  emit('update:modelValue', newValue)
+}
+
+function getRenderableField(field: FieldSchema): FieldSchema {
+  const explicitChoices = normalizeChoices(field.choices)
+  
+  if (!hasChoices(explicitChoices)) {
+    return field
+  }
+
+  return {
+    ...field,
+    input_type: 'select',
+    choices: explicitChoices,
+  }
+}
+
+function getFieldTitle(field: FieldSchema): string {
+  // 优先使用 label，如果 label 等于 key 则返回 key
+  return field.label && field.label !== field.key ? field.label : field.key
+}
+
+function getFieldDescriptionText(field: FieldSchema): string {
+  // 直接返回 hint 字段
+  return field.hint || ''
+}
+
+function hasChoices(value: unknown): value is SelectOption[] {
+  return Array.isArray(value) && value.length > 0
+}
+
+function normalizeChoices(choices: unknown): SelectOption[] {
+  if (!Array.isArray(choices)) return []
+
+  const normalized: SelectOption[] = []
+  choices.forEach((choice) => {
+    if (typeof choice === 'string' || typeof choice === 'number') {
+      normalized.push({
+        label: String(choice),
+        value: choice,
+      })
+      return
+    }
+
+    if (
+      choice &&
+      typeof choice === 'object' &&
+      'value' in choice &&
+      (typeof choice.value === 'string' || typeof choice.value === 'number')
+    ) {
+      const value = choice.value
+      const label = 'label' in choice && typeof choice.label === 'string'
+        ? choice.label
+        : String(value)
+
+      normalized.push({
+        label,
+        value,
+      })
+    }
   })
+
+  return normalized
 }
 
 // 根据字段类型和 input_type 获取对应的字段组件
@@ -304,8 +407,9 @@ function getFieldComponent(inputType: string, fieldType?: string) {
     case 'textarea':
       return TextareaField
     case 'number':
-    case 'slider':
       return NumberField
+    case 'slider':
+      return SliderField
     case 'switch':
     case 'boolean':
       return BooleanField
@@ -314,12 +418,17 @@ function getFieldComponent(inputType: string, fieldType?: string) {
       return SelectField
     case 'list':
       return ListField
+    case 'dict':
+    case 'object':
+    case 'json':
+      return DictField
     case 'text':
       // text 类型时，根据字段类型推断
       if (fieldType) {
         if (fieldType === 'bool') return BooleanField
         if (fieldType.includes('int') || fieldType.includes('float')) return NumberField
         if (fieldType.includes('list') || fieldType.includes('array')) return ListField
+        if (fieldType.includes('dict') || fieldType.includes('object')) return DictField
       }
       return TextField
     default:
@@ -328,6 +437,7 @@ function getFieldComponent(inputType: string, fieldType?: string) {
         if (fieldType === 'bool') return BooleanField
         if (fieldType.includes('int') || fieldType.includes('float')) return NumberField
         if (fieldType.includes('list') || fieldType.includes('array')) return ListField
+        if (fieldType.includes('dict') || fieldType.includes('object')) return DictField
       }
       return TextField
   }
@@ -360,7 +470,7 @@ function getFieldComponent(inputType: string, fieldType?: string) {
   background: var(--md-sys-color-surface-container-low);
   border: 1px solid var(--md-sys-color-outline-variant);
   border-radius: 12px;
-  overflow: hidden;
+  overflow: visible;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -387,6 +497,12 @@ function getFieldComponent(inputType: string, fieldType?: string) {
   cursor: pointer;
   user-select: none;
   transition: background 0.2s;
+  border-radius: inherit;
+}
+
+.section-accordion.expanded .section-header {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .section-header:hover {
@@ -552,24 +668,82 @@ function getFieldComponent(inputType: string, fieldType?: string) {
   padding: 0;
 }
 
+.field-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
 .field-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--md-sys-color-on-surface);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.field-title-zh {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface);
+}
+
+.field-name-en {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 .required-mark {
   color: var(--md-sys-color-error);
 }
 
-.field-description {
-  font-size: 12px;
+.field-tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: help;
+  margin-left: 2px;
+}
+
+.help-icon {
   color: var(--md-sys-color-on-surface-variant);
-  margin: 0;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.field-tooltip:hover .help-icon {
+  opacity: 1;
+}
+
+.tooltip-popup {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  background: var(--md-sys-color-inverse-surface, #313033);
+  color: var(--md-sys-color-inverse-on-surface, #f4eff4);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
   line-height: 1.4;
+  width: max-content;
+  max-width: 260px;
+  white-space: normal;
+  z-index: 100;
+  transition: all 0.2s;
+  pointer-events: none;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  font-weight: normal;
+  text-align: left;
+}
+
+.field-tooltip:hover .tooltip-popup {
+  visibility: visible;
+  opacity: 1;
+  transform: translateX(-50%) translateY(-8px);
 }
 
 /* 对象节样式 */

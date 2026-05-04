@@ -6,19 +6,135 @@
 
 ## 目录
 
-- [环境要求](#环境要求)
-- [安装 Node.js 和 npm](#安装-nodejs-和-npm)
-- [获取项目](#获取项目)
-- [安装前端依赖](#安装前端依赖)
-- [配置后端插件](#配置后端插件)
-- [配置 Neo-MoFox](#配置-neo-mofox)
-- [启动服务](#启动服务)
-- [访问 WebUI](#访问-webui)
+- [⭐ 快速部署（推荐）](#⭐-快速部署推荐)
+- [完整开发环境部署](#完整开发环境部署)
+  - [环境要求](#环境要求)
+  - [安装 Node.js 和 npm](#安装-nodejs-和-npm)
+  - [获取项目](#获取项目)
+  - [安装前端依赖](#安装前端依赖)
+  - [配置后端插件](#配置后端插件)
+  - [配置 Neo-MoFox](#配置-neo-mofox)
+  - [启动服务](#启动服务)
+  - [访问 WebUI](#访问-webui)
 - [常见问题](#常见问题)
 
 ---
 
-## 环境要求
+## ⭐ 快速部署（推荐）
+
+> **适用场景**：生产环境使用，无需 Node.js/npm，无需构建前端，开箱即用。
+
+### 环境要求
+
+- **Neo-MoFox**：已安装并配置完成
+- **Python**：3.10 或更高版本
+- **Git**：用于克隆项目
+
+### 部署步骤
+
+#### 1. 克隆预构建版本到插件目录
+
+**方式一：直接克隆到插件目录（推荐）**
+
+```bash
+# 进入 Neo-MoFox 的插件目录
+cd /path/to/Neo-MoFox/plugins
+
+# 克隆 webui-static 分支（包含预构建的前端静态文件）
+git clone -b webui-static https://github.com/ikun-1145141/Neo-MoFox-Webui webui
+```
+
+**Windows 用户：**
+
+```powershell
+# 进入 Neo-MoFox 的插件目录
+cd C:\path\to\Neo-MoFox\plugins
+
+# 克隆 webui-static 分支
+git clone -b webui-static https://github.com/ikun-1145141/Neo-MoFox-Webui webui
+```
+
+#### 2. 验证插件文件结构
+
+确保插件目录结构如下：
+
+```
+Neo-MoFox/
+└── plugins/
+    └── webui/
+        ├── manifest.json
+        ├── plugin.py
+        ├── static/              # 预构建的前端静态文件
+        │   ├── index.html
+        │   ├── assets/
+        │   └── ...
+        ├── adapter/
+        ├── event_handler/
+        ├── router/
+        ├── services/
+        └── utils/
+```
+
+#### 3. 配置 Neo-MoFox
+
+编辑 `config/core.toml`：
+
+```toml
+[http_router]
+# 启用 HTTP 路由
+enable_http_router = true
+
+# 监听地址（127.0.0.1 仅本地，0.0.0.0 允许外部访问）
+http_router_host = "127.0.0.1"
+
+# 监听端口
+http_router_port = 8005
+
+# API 访问密钥（请修改为强密码）
+api_keys = ["your-secure-api-key-here"]
+```
+
+#### 4. 启动 Neo-MoFox
+
+```bash
+# 进入 Neo-MoFox 目录
+cd /path/to/Neo-MoFox
+
+# 启动
+uv run main.py
+```
+
+#### 5. 访问 WebUI
+
+在浏览器中打开：
+
+```
+http://localhost:8005
+```
+
+使用您在 `core.toml` 中配置的 `api_keys` 登录。
+
+### 更新插件
+
+当需要更新到最新版本时：
+
+```bash
+# 进入插件目录
+cd /path/to/Neo-MoFox/plugins/webui
+
+# 拉取最新版本
+git pull origin webui-static
+
+# 重启 Neo-MoFox
+```
+
+---
+
+## 完整开发环境部署
+
+> **适用场景**：需要修改前端代码、参与开发或自定义 UI。
+
+### 环境要求
 
 在开始安装之前，请确保您的系统满足以下要求：
 

@@ -15,8 +15,8 @@ export default defineConfig({
     port: 9178,
     strictPort: false,
     proxy: {
-      // 代理所有 /api 开头的请求
-      '/api': {
+      // 代理所有 /webui/api 开头的请求
+      '/webui/api': {
         target: 'http://localhost:8005', // 代理目标地址
         changeOrigin: true, // 允许跨域
       },

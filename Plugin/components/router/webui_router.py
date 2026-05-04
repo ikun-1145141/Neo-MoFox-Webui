@@ -56,7 +56,7 @@ class WebuiSettingsRouter(BaseRouter):
 
     router_name: str = "webui"
     router_description: str = "WebUI API 接口"
-    custom_route_path: str = "/api/webui"
+    custom_route_path: str = "/webui/api/webui"
     cors_origins: list[str] = ["*"]  # 开发环境允许所有来源，生产环境应该限制
 
     dependencies: list[str] = []
@@ -73,7 +73,7 @@ class WebuiSettingsRouter(BaseRouter):
     def register_endpoints(self) -> None:
         """注册 API 端点。"""
 
-        @self.app.get("/settings", response_model=BaseResponse[WebuiSettings], dependencies=[VerifiedDep])
+        @self.app.get("/settings", response_model=BaseResponse[WebuiSettings])
         async def get_settings() -> BaseResponse[WebuiSettings]:
             """获取当前设置。
 

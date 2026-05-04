@@ -26,13 +26,13 @@
           type="button"
           class="mode-toggle-btn"
           @click="toggleMode"
-          :title="editMode === 'code' ? '切换到表单模式' : '切换到代码模式'"
+          :title="editMode === 'code' ? t('configEditor.modeToggle.toForm') : t('configEditor.modeToggle.toCode')"
         >
           <Icon
             :icon="editMode === 'code' ? 'material-symbols:edit-note-rounded' : 'material-symbols:code-rounded'"
             :size="20"
           />
-          <span>{{ editMode === 'code' ? '表单模式' : '代码模式' }}</span>
+          <span>{{ editMode === 'code' ? t('configEditor.modeToggle.formLabel') : t('configEditor.modeToggle.codeLabel') }}</span>
         </button>
 
         <!-- 保存按钮 -->
@@ -41,7 +41,7 @@
           class="save-btn"
           @click="handleSave"
           :disabled="isSaving || !hasChanges"
-          :title="hasChanges ? '保存更改' : '无更改'"
+          :title="hasChanges ? t('configEditor.save.hasChanges') : t('configEditor.save.noChanges')"
         >
           <Icon
             v-if="!isSaving"
@@ -54,7 +54,7 @@
             :size="20"
             class="spinning"
           />
-          <span>{{ isSaving ? '保存中...' : '保存' }}</span>
+          <span>{{ isSaving ? t('configEditor.save.saving') : t('configEditor.save.button') }}</span>
         </button>
       </div>
     </div>
@@ -107,12 +107,15 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { parse as parseToml } from 'toml'
+import { useI18n } from '@/utils/i18n'
 import Icon from '../common/Icon.vue'
 import TomlEditor from './TomlEditor.vue'
 import FormEditor from './FormEditor.vue'
 import { getRawConfig } from '@/api/modules/config'
 import type { SectionSchema } from '@/api/types/config'
 import { useToastStore } from '@/utils/toast'
+
+const { t } = useI18n()
 
 // Props
 interface Props {
@@ -126,7 +129,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  title: '配置编辑器',
+  title: '',
   schema: () => [],
   modelValue: () => ({}),
   readonly: false,
@@ -160,12 +163,12 @@ const errorMessage = ref('')
 // 原始数据（用于检测变更）
 const originalData = ref<Record<string, any>>({ ...props.modelValue })
 
-// 排序后的 schema（按 order 排序）
+// Schema
 const sortedSchema = computed(() => {
   if (!props.schema || props.schema.length === 0) {
     return []
   }
-  return [...props.schema].sort((a, b) => (a.order || 0) - (b.order || 0))
+  return props.schema
 })
 
 // 当前显示的配置节 schema（仅表单模式使用）
@@ -186,14 +189,14 @@ const hasChanges = computed(() => {
  */
 async function loadRawToml(): Promise<string> {
   if (!props.configType) {
-    throw new Error('configType 必须指定才能获取原始 TOML')
+    throw new Error(t('configEditor.errors.configTypeRequired'))
   }
   
   try {
     const rawContent = await getRawConfig(props.configType, props.pluginName)
     return rawContent
   } catch (error: any) {
-    throw new Error(`获取原始 TOML 失败: ${error.message}`)
+    throw new Error(t('configEditor.errors.getRawTomlFailed', { error: error.message }))
   }
 }
 
@@ -231,7 +234,7 @@ async function toggleMode() {
       // 重置到第一个配置节
       activeSectionIndex.value = 0
     } catch (error: any) {
-      errorMessage.value = `TOML 解析失败: ${error.message}，已保留代码模式`
+      errorMessage.value = t('configEditor.errors.tomlParse', { error: error.message })
       return
     }
     editMode.value = 'form'
@@ -244,7 +247,7 @@ async function toggleMode() {
         codeContent.value = rawToml
         errorMessage.value = ''
       } catch (error: any) {
-        errorMessage.value = `加载原始 TOML 失败: ${error.message}，已保留表单模式`
+        errorMessage.value = t('configEditor.errors.loadRawToml', { error: error.message })
         return
       }
     }
@@ -275,7 +278,7 @@ async function handleSave() {
       try {
         dataToSave = parseToml(codeContent.value)
       } catch (error: any) {
-        const errorMsg = `TOML 格式错误: ${error.message}`
+        const errorMsg = t('configEditor.errors.tomlFormat', { error: error.message })
         errorMessage.value = errorMsg
         toast.show(errorMsg, 'error')
         return
@@ -293,9 +296,9 @@ async function handleSave() {
     originalData.value = { ...dataToSave }
     
     // 显示成功提示
-    toast.show('保存成功', 'success')
+    toast.show(t('configEditor.save.success'), 'success')
   } catch (error: any) {
-    const errorMsg = `保存失败: ${error.message}`
+    const errorMsg = t('configEditor.save.failed', { error: error.message })
     errorMessage.value = errorMsg
     toast.show(errorMsg, 'error')
   } finally {
@@ -341,7 +344,7 @@ watch(codeContent, (newCode) => {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  background: color-mix(in srgb, var(--md-sys-color-surface) 70%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 78%, transparent);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
   flex-shrink: 0;
@@ -352,7 +355,7 @@ watch(codeContent, (newCode) => {
   display: flex;
   gap: 4px;
   padding: 8px 16px;
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-low) 70%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 72%, transparent);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
   flex-shrink: 0;
@@ -389,9 +392,11 @@ watch(codeContent, (newCode) => {
   flex-shrink: 0;
 }
 
-.section-tab:hover {
-  background: var(--md-sys-color-surface-container-high);
-  color: var(--md-sys-color-on-surface);
+@media (hover: hover) {
+  .section-tab:hover {
+    background: var(--md-sys-color-surface-container-high);
+    color: var(--md-sys-color-on-surface);
+  }
 }
 
 .section-tab.active {
@@ -400,9 +405,11 @@ watch(codeContent, (newCode) => {
   font-weight: 600;
 }
 
-.section-tab.active:hover {
-  background: var(--md-sys-color-primary);
-  color: var(--md-sys-color-on-primary);
+@media (hover: hover) {
+  .section-tab.active:hover {
+    background: var(--md-sys-color-primary);
+    color: var(--md-sys-color-on-primary);
+  }
 }
 
 .toolbar-left {
@@ -451,10 +458,12 @@ watch(codeContent, (newCode) => {
   color: var(--md-sys-color-on-secondary-container);
 }
 
-.mode-toggle-btn:hover {
-  background: var(--md-sys-color-secondary);
-  color: var(--md-sys-color-on-secondary);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+@media (hover: hover) {
+  .mode-toggle-btn:hover {
+    background: var(--md-sys-color-secondary);
+    color: var(--md-sys-color-on-secondary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
 }
 
 .save-btn {
@@ -462,10 +471,12 @@ watch(codeContent, (newCode) => {
   color: var(--md-sys-color-on-primary);
 }
 
-.save-btn:hover:not(:disabled) {
-  background: var(--md-sys-color-primary);
-  box-shadow: 0 2px 8px rgba(0, 88, 189, 0.3);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .save-btn:hover:not(:disabled) {
+    background: var(--md-sys-color-primary);
+    box-shadow: 0 2px 8px rgba(0, 88, 189, 0.3);
+    transform: translateY(-1px);
+  }
 }
 
 .save-btn:disabled {
@@ -493,6 +504,8 @@ watch(codeContent, (newCode) => {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  background: color-mix(in srgb, var(--md-sys-color-surface) 80%, transparent);
+  backdrop-filter: blur(16px);
 }
 
 /* 错误提示 */
@@ -521,8 +534,10 @@ watch(codeContent, (newCode) => {
   justify-content: center;
 }
 
-.error-banner .close-btn:hover {
-  background: rgba(0, 0, 0, 0.1);
+@media (hover: hover) {
+  .error-banner .close-btn:hover {
+    background: color-mix(in srgb, var(--md-sys-color-surface-container) 85%, transparent);
+  }
 }
 
 /* ===== 移动端适配 ===== */
@@ -560,12 +575,6 @@ watch(codeContent, (newCode) => {
   .section-tab {
     padding: 8px 16px;
     font-size: 13px;
-  }
-
-  .editor-content {
-    padding: 0;
-    background: color-mix(in srgb, var(--md-sys-color-surface) 80%, transparent);
-    backdrop-filter: blur(12px);
   }
 }
 </style>

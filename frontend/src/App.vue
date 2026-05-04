@@ -5,6 +5,7 @@ import DialogManager from './components/common/DialogManager.vue'
 import { applyMd3Theme } from './utils/md3theme'
 import { getSettings } from './api/modules/settings'
 import { getWallpaperStatus, getWallpaperImageUrl } from './api/modules/wallpaper'
+import { setLocale } from './utils/i18n'
 
 type ThemeMode = 'auto' | 'light' | 'dark'
 
@@ -12,6 +13,7 @@ let mediaQuery: MediaQueryList | null = null
 let currentThemeMode: ThemeMode = 'auto'
 let currentPrimaryColor = '#0058bd'
 const hasWallpaper = ref(false)
+const wallpaperType = ref<'image' | 'video' | 'none'>('none')
 const wallpaperBlur = ref(0)
 const wallpaperOpacity = ref(0.5)
 const wallpaperVersion = ref(Date.now())
@@ -47,6 +49,7 @@ async function syncSettingsAndApplyTheme() {
     const settings = await getSettings()
     currentThemeMode = settings.theme.mode
     currentPrimaryColor = settings.theme.primary_color
+    setLocale(settings.ui.language)
   } catch {
     // 后端不可用时回退到默认主题
   } finally {
@@ -58,11 +61,13 @@ async function syncWallpaperStatus(forceImageUpdate = false) {
   try {
     const status = await getWallpaperStatus()
     hasWallpaper.value = status.has_wallpaper
+    wallpaperType.value = status.wallpaper_type
     wallpaperBlur.value = status.wallpaper_blur
     wallpaperOpacity.value = status.wallpaper_opacity
     if (forceImageUpdate) wallpaperVersion.value = Date.now()
   } catch {
     hasWallpaper.value = false
+    wallpaperType.value = 'none'
   }
 }
 
@@ -96,7 +101,24 @@ onBeforeUnmount(() => {
 
 <template>
   <div v-if="hasWallpaper" class="wallpaper-layer" aria-hidden="true">
-    <div class="wallpaper-image" :style="wallpaperImageStyle" />
+    <!-- 图片壁纸 -->
+    <div 
+      v-if="wallpaperType === 'image'" 
+      class="wallpaper-image" 
+      :style="wallpaperImageStyle" 
+    />
+    
+    <!-- 视频壁纸 -->
+    <video
+      v-else-if="wallpaperType === 'video'"
+      class="wallpaper-video"
+      :style="{ filter: `blur(${wallpaperBlur}px)` }"
+      :src="getWallpaperImageUrl(wallpaperVersion)"
+      autoplay
+      loop
+      muted
+      playsinline
+    />
   </div>
 
   <div class="app-content-layer">
@@ -142,6 +164,15 @@ html {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
+  transform: scale(1.04);
+}
+
+.wallpaper-video {
+  position: absolute;
+  inset: -24px;
+  width: calc(100% + 48px);
+  height: calc(100% + 48px);
+  object-fit: cover;
   transform: scale(1.04);
 }
 

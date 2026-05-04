@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { logout } from '../../api/modules/auth'
 import { restartBot, shutdownBot } from '../../api/modules/system'
 import { setIsRestarting, startHealthCheck } from '../../api/base'
 import { useDialogStore } from '../../utils/dialog'
 import { useToastStore } from '../../utils/toast'
+import { useI18n } from '../../utils/i18n'
 
 const props = defineProps<{
   noPadding?: boolean
@@ -15,16 +16,22 @@ const router = useRouter()
 const route = useRoute()
 const dialogStore = useDialogStore()
 const toastStore = useToastStore()
+const { t } = useI18n()
 
 const navItems = [
-  { label: '主页', icon: 'material-symbols:home-outline-rounded', name: 'home', path: '/' },
-  { label: '配置', icon: 'material-symbols:tune-rounded', name: 'config', path: '/config' },
-  { label: '插件', icon: 'material-symbols:extension-outline-rounded', name: 'config-plugins', path: '/config/plugins' },
-  { label: '设置', icon: 'material-symbols:setting-outline-rounded', name: 'settings-theme', path: '/settings' },
+  { labelKey: 'app.nav.home', icon: 'material-symbols:home-outline-rounded', name: 'home', path: '/' },
+  { labelKey: 'app.nav.config', icon: 'material-symbols:tune-rounded', name: 'config', path: '/config' },
+  { labelKey: 'app.nav.plugins', icon: 'material-symbols:extension-outline-rounded', name: 'plugins', path: '/plugins' },
+  { labelKey: 'app.nav.config-plugins', icon: 'material-symbols:settings-outline-rounded', name: 'config-plugins', path: '/config/plugins' },
+  { labelKey: 'app.nav.settings', icon: 'material-symbols:setting-outline-rounded', name: 'settings-theme', path: '/settings' },
 ]
 
 const drawerOpen = ref(false)
 const railMode = ref(false) // Rail 模式:仅显示图标
+const pageTitle = computed(() => {
+  const routeName = typeof route.name === 'string' ? route.name : ''
+  return routeName ? t(`routes.${routeName}`) : 'Neo-MoFox WebUI'
+})
 
 const isActive = (path: string) => {
   // 精确匹配
@@ -57,10 +64,10 @@ async function handleLogout() {
 
 async function handleRestart() {
   const result = await dialogStore.confirm(
-    '确定要重启 Bot 系统吗？',
-    '确认重启',
-    '重启',
-    '取消'
+    t('app.dialogs.restartMessage'),
+    t('app.dialogs.restartTitle'),
+    t('app.dialogs.restartConfirm'),
+    t('app.dialogs.cancel')
   )
   
   if (result) {
@@ -71,8 +78,8 @@ async function handleRestart() {
 async function performRestart() {
   // 显示重启进行中对话框（无按钮，不可关闭）
   const restartDialogId = dialogStore.show({
-    title: '系统重启中',
-    message: '正在重启 Bot 系统，请稍候...\n\n该对话框将在系统重启成功后自动关闭。',
+    title: t('app.dialogs.restartingTitle'),
+    message: t('app.dialogs.restartingMessage'),
     buttons: [],
   })
 
@@ -91,7 +98,7 @@ async function performRestart() {
       // 系统恢复健康
       dialogStore.close(restartDialogId)
       setIsRestarting(false)
-      toastStore.show('系统重启成功', 'success')
+      toastStore.show(t('app.toast.restartSuccess'), 'success')
       
       // 刷新页面以获取最新状态
       setTimeout(() => {
@@ -102,16 +109,16 @@ async function performRestart() {
     console.error('重启失败:', error)
     setIsRestarting(false)
     dialogStore.close(restartDialogId)
-    toastStore.show('重启失败，请稍后重试', 'error')
+    toastStore.show(t('app.toast.restartFailed'), 'error')
   }
 }
 
 async function handleShutdown() {
   const result = await dialogStore.confirm(
-    '确定要关闭 Bot 系统吗？关闭后需要手动重启。',
-    '确认关闭',
-    '关闭',
-    '取消'
+    t('app.dialogs.shutdownMessage'),
+    t('app.dialogs.shutdownTitle'),
+    t('app.dialogs.shutdownConfirm'),
+    t('app.dialogs.cancel')
   )
   
   if (result) {
@@ -122,7 +129,7 @@ async function handleShutdown() {
 async function performShutdown() {
   try {
     await shutdownBot()
-    toastStore.show('关闭指令已发送', 'success')
+    toastStore.show(t('app.toast.shutdownSent'), 'success')
     
     // 延迟跳转到登录页
     setTimeout(() => {
@@ -130,7 +137,7 @@ async function performShutdown() {
       router.push({ name: 'login' })
     }, 2000)
   } catch (error) {
-    toastStore.show('关闭失败，请稍后重试', 'error')
+    toastStore.show(t('app.toast.shutdownFailed'), 'error')
   }
 }
 </script>
@@ -141,7 +148,7 @@ async function performShutdown() {
     <aside class="nav-rail" :class="{ open: drawerOpen, rail: railMode }">
       <!-- Logo / 品牌区 -->
       <div class="rail-header">
-        <button class="rail-fab" @click="router.push('/')" aria-label="导航到主页">
+        <button class="rail-fab" @click="router.push('/')" :aria-label="t('app.aria.goHome')">
           <Icon icon="material-symbols:robot-2-outline-rounded" width="28" height="28" />
         </button>
       </div>
@@ -155,11 +162,11 @@ async function performShutdown() {
           class="rail-item"
           :class="{ active: isActive(item.path) }"
           @click="drawerOpen = false"
-          :aria-label="item.label"
+          :aria-label="t(item.labelKey)"
         >
           <div class="rail-item-indicator"></div>
           <Icon :icon="item.icon" width="24" height="24" class="rail-item-icon" />
-          <span class="rail-item-label">{{ item.label }}</span>
+          <span class="rail-item-label">{{ t(item.labelKey) }}</span>
         </router-link>
       </nav>
 
@@ -168,40 +175,35 @@ async function performShutdown() {
         <button 
           class="rail-item rail-restart" 
           @click="handleRestart"
-          aria-label="重启系统"
-          title="重启 Bot"
+          :aria-label="t('app.aria.restartSystem')"
+          :title="t('app.actions.restart') + ' Bot'"
         >
           <div class="rail-item-indicator"></div>
           <Icon icon="material-symbols:restart-alt-rounded" width="24" height="24" class="rail-item-icon" />
-          <span class="rail-item-label">重启</span>
+          <span class="rail-item-label">{{ t('app.actions.restart') }}</span>
         </button>
         
         <button 
           class="rail-item rail-shutdown" 
           @click="handleShutdown"
-          aria-label="关闭系统"
-          title="关闭 Bot"
+          :aria-label="t('app.aria.shutdownSystem')"
+          :title="t('app.actions.shutdown') + ' Bot'"
         >
           <div class="rail-item-indicator"></div>
           <Icon icon="material-symbols:power-settings-new-rounded" width="24" height="24" class="rail-item-icon" />
-          <span class="rail-item-label">关闭</span>
+          <span class="rail-item-label">{{ t('app.actions.shutdown') }}</span>
         </button>
         
         <button 
           class="rail-item rail-logout" 
           @click="handleLogout"
-          aria-label="退出登录"
+          :aria-label="t('app.aria.logout')"
         >
           <div class="rail-item-indicator"></div>
           <Icon icon="material-symbols:logout-rounded" width="24" height="24" class="rail-item-icon" />
-          <span class="rail-item-label">退出</span>
+          <span class="rail-item-label">{{ t('app.actions.logout') }}</span>
         </button>
       </div>
-
-      <!-- 移动端关闭按钮 -->
-      <button class="rail-close-mobile" @click="drawerOpen = false" aria-label="关闭导航">
-        <Icon icon="material-symbols:close-rounded" width="24" height="24" />
-      </button>
     </aside>
 
     <!-- 遮罩层（移动端） -->
@@ -211,7 +213,7 @@ async function performShutdown() {
     <main class="main-content">
       <!-- 顶栏 -->
       <header class="top-bar">
-        <button class="menu-btn" @click="drawerOpen = !drawerOpen" aria-label="打开菜单">
+        <button class="menu-btn" @click="drawerOpen = !drawerOpen" :aria-label="t('app.aria.openMenu')">
           <Icon icon="material-symbols:menu-rounded" width="24" height="24" />
         </button>
         <h2 class="page-title">
@@ -222,10 +224,10 @@ async function performShutdown() {
             height="20"
             class="page-title-icon"
           />
-          {{ route.meta?.title ?? 'Neo-MoFox WebUI' }}
+          {{ pageTitle }}
         </h2>
         <div class="top-bar-actions">
-          <button class="icon-btn" @click="handleLogout" aria-label="退出登录">
+          <button class="icon-btn" @click="handleLogout" :aria-label="t('app.aria.logout')">
             <Icon icon="material-symbols:logout-rounded" width="22" height="22" />
           </button>
         </div>
@@ -274,7 +276,6 @@ async function performShutdown() {
     box-shadow: none;
   }
   .menu-btn { display: none !important; }
-  .rail-close-mobile { display: none !important; }
 }
 
 /* 移动端打开状态 */
@@ -286,7 +287,8 @@ async function performShutdown() {
   position: fixed;
   inset: 0;
   z-index: 199;
-  background: rgba(0, 0, 0, 0.4);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 40%, transparent);
+  backdrop-filter: blur(4px);
 }
 
 /* ====== Rail 头部 - FAB 样式 Logo ====== */
@@ -436,33 +438,6 @@ async function performShutdown() {
   color: var(--md-sys-color-on-error-container);
 }
 
-/* ====== 移动端关闭按钮 ====== */
-.rail-close-mobile {
-  display: none;
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: var(--md-sys-color-surface-container-high);
-  border: none;
-  cursor: pointer;
-  color: var(--md-sys-color-on-surface);
-  align-items: center;
-  justify-content: center;
-  transition: background 0.2s;
-}
-
-.rail-close-mobile:hover {
-  background: var(--md-sys-color-surface-container-highest);
-}
-
-@media (max-width: 899px) {
-  .nav-rail.open .rail-close-mobile {
-    display: flex;
-  }
-}
 .drawer-footer {
   padding-top: 0.5rem;
   border-top: 1px solid transparent;
@@ -482,7 +457,6 @@ async function performShutdown() {
   flex-direction: column;
   min-width: 0;
   background: color-mix(in srgb, var(--md-sys-color-surface) calc(var(--wallpaper-mask-opacity, 0.88) * 100%), transparent);
-  backdrop-filter: blur(6px);
 }
 
 .top-bar {

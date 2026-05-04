@@ -24,14 +24,18 @@ if TYPE_CHECKING:
 
 logger = get_logger("wallpaper_router")
 
-MAX_WALLPAPER_SIZE_BYTES = 10 * 1024 * 1024
-SUPPORTED_WALLPAPER_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+# 图片壁纸限制 10MB，视频壁纸限制 50MB
+MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
+MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024
+SUPPORTED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+SUPPORTED_VIDEO_EXTENSIONS = {".mp4", ".webm"}
 
 
 class WallpaperStatus(BaseModel):
     """壁纸状态响应模型。"""
 
     has_wallpaper: bool = Field(description="是否存在壁纸")
+    wallpaper_type: str = Field(description="壁纸类型：image, video, none")
     wallpaper_blur: float = Field(description="壁纸模糊强度")
     wallpaper_opacity: float = Field(description="壁纸遮罩透明度")
 
@@ -41,7 +45,7 @@ class WallpaperRouter(BaseRouter):
 
     router_name: str = "wallpaper"
     router_description: str = "WebUI 壁纸 API"
-    custom_route_path: str = "/api/wallpaper"
+    custom_route_path: str = "/webui/api/wallpaper"
     cors_origins: list[str] = ["*"]
 
     dependencies: list[str] = []
@@ -56,6 +60,15 @@ class WallpaperRouter(BaseRouter):
         """构建壁纸状态。"""
         settings = await self.config_manager.get_settings()
         has_wallpaper = await self.wallpaper_manager.has_wallpaper()
+        
+        # 确定壁纸类型
+        wallpaper_type = "none"
+        if has_wallpaper:
+            current_path = await self.wallpaper_manager.get_wallpaper_path()
+            if current_path and self.wallpaper_manager.is_video_wallpaper(current_path):
+                wallpaper_type = "video"
+            else:
+                wallpaper_type = "image"
 
         if settings.theme.has_wallpaper != has_wallpaper:
             settings = await self.config_manager.update_settings(
@@ -64,6 +77,7 @@ class WallpaperRouter(BaseRouter):
 
         return WallpaperStatus(
             has_wallpaper=has_wallpaper,
+            wallpaper_type=wallpaper_type,
             wallpaper_blur=settings.theme.wallpaper_blur,
             wallpaper_opacity=settings.theme.wallpaper_opacity,
         )
@@ -73,18 +87,33 @@ class WallpaperRouter(BaseRouter):
 
         @self.app.post("/upload", response_model=BaseResponse[WallpaperStatus], dependencies=[VerifiedDep])
         async def upload_wallpaper(file: UploadFile = File(...)) -> BaseResponse[WallpaperStatus]:
-            """上传单张壁纸。"""
+            """上传壁纸（支持图片和视频）。"""
             try:
                 filename = (file.filename or "").strip()
                 extension = f".{filename.split('.')[-1].lower()}" if "." in filename else ""
-                if extension not in SUPPORTED_WALLPAPER_EXTENSIONS:
-                    raise HTTPException(status_code=400, detail="仅支持 jpg/jpeg/png/webp 格式")
+                
+                # 判断文件类型
+                is_image = extension in SUPPORTED_IMAGE_EXTENSIONS
+                is_video = extension in SUPPORTED_VIDEO_EXTENSIONS
+                
+                if not (is_image or is_video):
+                    raise HTTPException(
+                        status_code=400, 
+                        detail="仅支持 jpg/jpeg/png/webp/mp4/webm 格式"
+                    )
 
                 content = await file.read()
                 if not content:
                     raise HTTPException(status_code=400, detail="上传文件不能为空")
-                if len(content) > MAX_WALLPAPER_SIZE_BYTES:
-                    raise HTTPException(status_code=400, detail="壁纸文件大小不能超过 10MB")
+                
+                # 根据类型检查文件大小
+                max_size = MAX_IMAGE_SIZE_BYTES if is_image else MAX_VIDEO_SIZE_BYTES
+                max_size_mb = max_size // (1024 * 1024)
+                if len(content) > max_size:
+                    raise HTTPException(
+                        status_code=400, 
+                        detail=f"{'图片' if is_image else '视频'}壁纸文件不能超过 {max_size_mb}MB"
+                    )
 
                 await self.wallpaper_manager.save_wallpaper(content=content, extension=extension)
                 await self.config_manager.update_settings({"theme": {"has_wallpaper": True}})

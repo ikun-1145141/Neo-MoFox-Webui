@@ -221,24 +221,21 @@ Neo-MoFox-Webui/
 
 ## 🚀 快速开始
 
-### 前置要求
+### ⭐ 方式一：快速部署（推荐，生产环境）
 
-- Python 3.10+
-- Node.js 18+ / npm 9+
-- Neo-MoFox 核心框架
+**无需 Node.js/npm，无需构建，开箱即用！**
 
-### 后端部署
-
-1. **安装插件**
+#### 1. 克隆预构建版本
 
 ```bash
-# 在 Neo-MoFox 项目根目录
-cd plugins/
-cp -r /path/to/Neo-MoFox-WebUI/Plugin /path/to/Neo-MoFox/plugins/webui
+# 进入 Neo-MoFox 的插件目录
+cd /path/to/Neo-MoFox/plugins
 
+# 克隆 webui-static 分支（包含预构建的前端）
+git clone -b webui-static https://github.com/ikun-1145141/Neo-MoFox-Webui webui
 ```
 
-2. **配置核心框架**
+#### 2. 配置 Neo-MoFox
 
 编辑 `config/core.toml`：
 
@@ -250,27 +247,61 @@ http_router_port = 8005
 api_keys = ["your_secure_api_key_here"]
 ```
 
-3. **启动 Neo-MoFox**
+#### 3. 启动并访问
 
 ```bash
+# 启动 Neo-MoFox
+cd /path/to/Neo-MoFox
+uv run main.py
+
+# 在浏览器打开 http://localhost:8005
+```
+
+---
+
+### 🛠️ 方式二：开发环境部署
+
+**适用于需要修改前端代码的开发者。**
+
+#### 前置要求
+
+- Python 3.10+
+- Node.js 18+ / npm 9+
+- Neo-MoFox 核心框架
+
+#### 1. 克隆源码
+
+```bash
+git clone https://github.com/ikun-1145141/Neo-MoFox-Webui
+cd Neo-MoFox-Webui
+```
+
+#### 2. 安装插件
+
+```bash
+# 复制 Plugin 目录到 Neo-MoFox
+cp -r Plugin /path/to/Neo-MoFox/plugins/webui
+```
+
+#### 3. 配置核心框架
+
+编辑 `config/core.toml`（同方式一）
+
+#### 4. 启动后端
+
+```bash
+cd /path/to/Neo-MoFox
 uv run main.py
 ```
 
 后端将在 `http://127.0.0.1:8005` 启动。
 
-### 前端开发
-
-1. **安装依赖**
+#### 5. 启动前端开发服务器
 
 ```bash
-cd frontend/
+cd Neo-MoFox-Webui/frontend
 npm install
-```
-
-2. **启动开发服务器**
-
-```bash
-npm start dev
+npm run dev
 ```
 
 前端将在 `http://localhost:9178` 启动，API 请求将自动代理到后端。

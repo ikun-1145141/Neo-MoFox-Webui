@@ -65,7 +65,6 @@ class FieldSchema(BaseModel):
     tag: str | None = Field(default=None, description="预设标签")
     placeholder: str | None = Field(default=None, description="占位符")
     hint: str | None = Field(default=None, description="帮助提示")
-    order: int = Field(default=0, description="显示顺序")
     hidden: bool = Field(default=False, description="是否隐藏")
     disabled: bool = Field(default=False, description="是否只读")
 
@@ -103,6 +102,7 @@ class SectionSchema(BaseModel):
         description: 节描述
         tag: 预设标签
         order: 显示顺序
+        is_list: 是否为列表类型（如 models、api_providers）
         fields: 本节包含的字段 Schema 列表
     """
 
@@ -110,7 +110,7 @@ class SectionSchema(BaseModel):
     title: str | None = Field(default=None, description="显示标题")
     description: str | None = Field(default=None, description="节描述")
     tag: str | None = Field(default=None, description="预设标签")
-    order: int = Field(default=0, description="显示顺序")
+    is_list: bool = Field(default=False, description="是否为列表类型")
     fields: list[FieldSchema] = Field(default_factory=list, description="字段列表")
 
 

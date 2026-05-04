@@ -11,6 +11,9 @@ import { useRouter } from 'vue-router'
 import { healthCheck } from '../api/modules/settings'
 import { getDashboardOverview, getMessageTrend, getPlatformStatistics } from '../api/modules/dashboard'
 import type { DashboardOverview, MessageTrend, PlatformStatistics } from '../api/types/dashboard'
+import { useI18n } from '../utils/i18n'
+
+const { t } = useI18n()
 
 const router = useRouter()
 
@@ -72,11 +75,11 @@ const formatUptime = (seconds: number): string => {
   const minutes = Math.floor((seconds % 3600) / 60)
   
   const parts = []
-  if (days > 0) parts.push(`${days}天`)
-  if (hours > 0) parts.push(`${hours}小时`)
-  if (minutes > 0) parts.push(`${minutes}分钟`)
+  if (days > 0) parts.push(`${days}${t('home.uptime.days')}`)
+  if (hours > 0) parts.push(`${hours}${t('home.uptime.hours')}`)
+  if (minutes > 0) parts.push(`${minutes}${t('home.uptime.minutes')}`)
   
-  return parts.join(' ') || '刚启动'
+  return parts.join(' ') || t('home.uptime.justStarted')
 }
 
 const runtimeItems = computed(() => {
@@ -84,19 +87,19 @@ const runtimeItems = computed(() => {
   const { runtime } = dashboardData.value
   return [
     {
-      label: '活跃任务',
+      label: t('home.runtime.activeTasks'),
       value: `${runtime.task.active_tasks} / ${runtime.task.total_tasks}`
     },
     {
-      label: '协程池守护',
+      label: t('home.runtime.daemonTasks'),
       value: runtime.task.daemon_tasks
     },
     {
-      label: '事件订阅',
+      label: t('home.runtime.eventSubscriptions'),
       value: runtime.event.total_subscriptions
     },
     {
-      label: '调度成功率',
+      label: t('home.runtime.schedulerSuccessRate'),
       value: `${(runtime.scheduler.success_rate * 100).toFixed(1)}%`
     }
   ]
@@ -107,55 +110,67 @@ const llmItems = computed(() => {
   const { llm } = dashboardData.value
   return [
     {
-      label: '总请求数',
+      label: t('home.llm.totalRequests'),
       value: llm.total_requests
     },
     {
-      label: '成功率',
+      label: t('home.llm.successRate'),
       value: `${(llm.success_rate * 100).toFixed(1)}%`
     },
     {
-      label: '输入 Token',
+      label: t('home.llm.inputTokens'),
       value: llm.total_tokens_in.toLocaleString()
     },
     {
-      label: '输出 Token',
+      label: t('home.llm.outputTokens'),
       value: llm.total_tokens_out.toLocaleString()
     },
     {
-      label: '总花费',
+      label: t('home.llm.totalCost'),
       value: `$${llm.total_cost.toFixed(4)}`
     }
   ]
 })
 
-const quickLinks = [
+const quickLinks = computed(() => [
   {
-    label: '主题设置',
-    desc: '自定义颜色、外观主题',
-    icon: 'material-symbols:format-paint-outline-rounded',
-    to: '/settings/theme',
+    label: t('home.quickLinks.home.label'),
+    desc: t('home.quickLinks.home.desc'),
+    icon: 'material-symbols:home-outline-rounded',
+    to: '/',
   },
   {
-    label: '通用设置',
-    desc: '语言、字体与系统行为',
+    label: t('home.quickLinks.config.label'),
+    desc: t('home.quickLinks.config.desc'),
     icon: 'material-symbols:tune-rounded',
-    to: '/settings/general',
+    to: '/config',
   },
   {
-    label: '数据管理',
-    desc: '导出 / 导入配置文件',
-    icon: 'material-symbols:storage-rounded',
-    to: '/settings/data',
+    label: t('home.quickLinks.plugins.label'),
+    desc: t('home.quickLinks.plugins.desc'),
+    icon: 'material-symbols:extension-outline-rounded',
+    to: '/plugins',
   },
-]
+  {
+    label: t('home.quickLinks.configPlugins.label'),
+    desc: t('home.quickLinks.configPlugins.desc'),
+    icon: 'material-symbols:settings-outline-rounded',
+    to: '/config/plugins',
+  },
+  {
+    label: t('home.quickLinks.settings.label'),
+    desc: t('home.quickLinks.settings.desc'),
+    icon: 'material-symbols:setting-outline-rounded',
+    to: '/settings',
+  },
+])
 </script>
 
 <template>
   <AppShell>
     <PageHeader
-      title="控制台"
-      subtitle="实时监控和统计数据"
+      :title="t('home.title')"
+      :subtitle="t('home.subtitle')"
       icon="material-symbols:dashboard-outline-rounded"
     />
 
@@ -166,29 +181,29 @@ const quickLinks = [
         <section class="stat-grid-top">
         <StatCard
           v-if="healthStatus === 'loading'"
-          label="后端状态"
-          value="检测中..."
+          :label="t('home.stats.backendStatus')"
+          :value="t('home.stats.checking')"
           icon="material-symbols:progress-activity"
           color-variant="outline"
           :loading="true"
         />
         <StatCard
           v-else-if="healthStatus === 'healthy'"
-          label="后端状态"
-          value="运行中"
+          :label="t('home.stats.backendStatus')"
+          :value="t('home.stats.running')"
           icon="material-symbols:check-circle-outline-rounded"
           color-variant="success"
         />
         <StatCard
           v-else
-          label="后端状态"
-          value="未连接"
+          :label="t('home.stats.backendStatus')"
+          :value="t('home.stats.disconnected')"
           icon="material-symbols:cancel-outline-rounded"
           color-variant="error"
         />
         
         <StatCard
-          label="今日消息"
+          :label="t('home.stats.todayMessages')"
           :value="dashboardData?.business.messages.today_total ?? '—'"
           icon="material-symbols:message-outline-rounded"
           color-variant="primary"
@@ -196,7 +211,7 @@ const quickLinks = [
         />
         
         <StatCard
-          label="运行时间"
+          :label="t('home.stats.uptime')"
           :value="formatUptime(dashboardData?.runtime.scheduler.uptime_seconds ?? 0)"
           icon="material-symbols:schedule-rounded"
           color-variant="secondary"
@@ -204,7 +219,7 @@ const quickLinks = [
         />
         
         <StatCard
-          label="注册组件"
+          :label="t('home.stats.registeredComponents')"
           :value="dashboardData?.business.components.total_count ?? '—'"
           icon="material-symbols:widgets-outline-rounded"
           color-variant="tertiary"
@@ -215,14 +230,14 @@ const quickLinks = [
       <!-- 小型数据卡片网格 -->
       <section class="mini-grid">
         <DataPanel
-          title="运行总览"
+          :title="t('home.runtime.title')"
           icon="material-symbols:memory-rounded"
           :items="runtimeItems"
           :loading="isLoading"
         />
         
         <DataPanel
-          title="LLM 数据"
+          :title="t('home.llm.title')"
           icon="material-symbols:smart-toy-outline-rounded"
           :items="llmItems"
           :loading="isLoading"
@@ -231,20 +246,18 @@ const quickLinks = [
         <div class="data-panel">
           <div class="panel-header">
             <Icon icon="material-symbols:hub-outline-rounded" width="24" height="24" />
-            <h3>连接统计</h3>
+            <h3>{{ t('home.plugins.title') }}</h3>
           </div>
           <div class="panel-content">
             <div class="data-item">
-              <span>活跃会话</span>
-              <strong>{{ dashboardData?.business.streams.active_count ?? '—' }}</strong>
-            </div>
-            <div class="data-item">
-              <span>活跃适配器</span>
-              <strong>{{ dashboardData?.runtime.adapter.active_count ?? '—' }}</strong>
-            </div>
-            <div class="data-item">
-              <span>已加载插件</span>
+              <span>{{ t('home.plugins.loaded') }}</span>
               <strong>{{ dashboardData?.business.plugins.loaded_count ?? '—' }}</strong>
+            </div>
+            <div class="data-item">
+              <span>{{ t('home.plugins.failed') }}</span>
+              <strong :class="{ 'status-error': (dashboardData?.business.plugins.failed_count ?? 0) > 0 }">
+                {{ dashboardData?.business.plugins.failed_count ?? 0 }}
+              </strong>
             </div>
           </div>
         </div>
@@ -252,23 +265,15 @@ const quickLinks = [
         <div class="data-panel">
           <div class="panel-header">
             <Icon icon="material-symbols:monitor-heart-outline-rounded" width="24" height="24" />
-            <h3>健康状态</h3>
+            <h3>{{ t('home.adapter.title') }}</h3>
           </div>
           <div class="panel-content">
             <div class="data-item">
-              <span>调度器运行</span>
-              <strong :class="{ 'status-ok': dashboardData?.runtime.scheduler.is_running }">
-                {{ dashboardData?.runtime.scheduler.is_running ? '正常' : '停止' }}
-              </strong>
+              <span>{{ t('home.adapter.status.online') }}</span>
+              <strong class="status-ok">{{ dashboardData?.runtime.adapter.active_count ?? '—' }}</strong>
             </div>
             <div class="data-item">
-              <span>进程池状态</span>
-              <strong :class="{ 'status-ok': dashboardData?.runtime.task.process_pool_running }">
-                {{ dashboardData?.runtime.task.process_pool_running ? '运行中' : '未运行' }}
-              </strong>
-            </div>
-            <div class="data-item">
-              <span>失败插件</span>
+              <span>{{ t('home.plugins.failed') }}</span>
               <strong :class="{ 'status-error': (dashboardData?.business.plugins.failed_count ?? 0) > 0 }">
                 {{ dashboardData?.business.plugins.failed_count ?? 0 }}
               </strong>
@@ -291,14 +296,14 @@ const quickLinks = [
       </section>
 
         <div class="update-time" v-if="lastUpdate">
-          最后更新时间：{{ lastUpdate }}
+          {{ t('home.update.lastUpdate') }}: {{ lastUpdate }}
         </div>
       </div>
 
-      <!-- 右侧快速入口 -->
-      <aside class="side-content">
+      <!-- 右侧快捷入口 -->
+      <aside class="sidebar-content">
         <section class="quick-section">
-          <h2 class="section-title">快速入口</h2>
+          <h2 class="section-title">{{ t('home.quickLinks.title') }}</h2>
           <div class="quick-grid">
             <button
               v-for="link in quickLinks"
@@ -324,16 +329,26 @@ const quickLinks = [
 
 <style scoped>
 .dashboard-layout {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 1.5rem;
   width: 100%;
   max-width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 1.5rem;
 }
 
-@media (min-width: 1280px) {
+@media (max-width: 1440px) {
   .dashboard-layout {
-    grid-template-columns: 1fr 320px;
+    grid-template-columns: 1fr 280px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .dashboard-layout {
+    grid-template-columns: 1fr;
+  }
+  
+  .sidebar-content {
+    order: -1; /* 在移动端将快捷入口移到顶部 */
   }
 }
 
@@ -343,6 +358,12 @@ const quickLinks = [
   gap: 1.5rem;
   min-width: 0;
   overflow: hidden;
+}
+
+.sidebar-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 /* 核心数据卡片网格 - 第一行固定4个 */
@@ -392,11 +413,11 @@ const quickLinks = [
 }
 
 .data-panel {
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-low) 86%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container) 88%, transparent);
   border-radius: 1.25rem;
   padding: 1.5rem;
   box-shadow: 0px 4px 16px rgba(24, 28, 32, 0.04);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(12px);
   transition: transform 0.2s, box-shadow 0.2s;
   display: flex;
   flex-direction: column;
@@ -484,17 +505,6 @@ const quickLinks = [
   padding-top: 0.5rem;
 }
 
-/* 快速入口 */
-.side-content {
-  min-width: 0;
-}
-
-@media (max-width: 1279px) {
-  .side-content {
-    grid-column: 1;
-  }
-}
-
 .section-title {
   margin: 0 0 1rem;
   font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
@@ -503,10 +513,27 @@ const quickLinks = [
   color: var(--md-sys-color-on-surface);
 }
 
+.quick-section {
+  position: sticky;
+  top: 5rem; /* 增加 top 的距离，避免被顶部的导航栏遮挡 */
+}
+
 .quick-grid {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.75rem;
+}
+
+@media (max-width: 1200px) {
+  .quick-section {
+    position: static;
+  }
+  
+  .quick-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+  }
 }
 
 .quick-card {
@@ -514,7 +541,7 @@ const quickLinks = [
   align-items: center;
   gap: 1rem;
   padding: 1rem 1.25rem;
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-low) 86%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container) 88%, transparent);
   border-radius: 1rem;
   border: none;
   cursor: pointer;
@@ -522,12 +549,12 @@ const quickLinks = [
   width: 100%;
   transition: background 0.15s, transform 0.15s;
   box-shadow: 0px 4px 16px rgba(24, 28, 32, 0.03);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(12px);
 }
 
 .quick-card:hover {
   background: color-mix(in srgb, var(--md-sys-color-surface-container-highest) 92%, transparent);
-  transform: translateX(4px);
+  transform: translateY(-2px);
 }
 
 .quick-icon {

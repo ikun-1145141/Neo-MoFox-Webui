@@ -3,9 +3,11 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { login } from '../api/modules/auth'
 import { useToastStore } from '../utils/toast'
+import { useI18n } from '../utils/i18n'
 
 const router = useRouter()
 const toast = useToastStore()
+const { t } = useI18n()
 
 const password = ref('')
 const loading = ref(false)
@@ -15,7 +17,7 @@ const IS_DEV = import.meta.env.DEV
 
 async function handleLogin() {
   if (!password.value.trim()) {
-    toast.show('请输入密码', 'error')
+    toast.show(t('login.toast.emptyPassword'), 'error')
     return
   }
   loading.value = true
@@ -26,7 +28,7 @@ async function handleLogin() {
   } catch (e: any) {
     // 开发模式：后端未启动时，任意密码可直接进入预览
     if (IS_DEV && (e?.code === 'ERR_NETWORK' || e?.message?.includes('Network'))) {
-      toast.show('[DEV] 后端未启动，已进入预览模式', 'info')
+      toast.show(t('login.toast.devMode'), 'info')
       sessionStorage.setItem('neo_token', 'dev-mock-token')
       await router.push({ name: 'home' })
     }
@@ -49,14 +51,14 @@ async function handleLogin() {
         <div class="brand-icon">
           <Icon icon="material-symbols:robot-2-outline-rounded" width="36" height="36" />
         </div>
-        <h1 class="brand-title">Neo-MoFox</h1>
-        <p class="brand-sub">WebUI 管理面板</p>
+        <h1 class="brand-title">{{ t('login.title') }}</h1>
+        <p class="brand-sub">{{ t('login.subtitle') }}</p>
       </div>
 
       <!-- 表单区 -->
       <form class="login-form" @submit.prevent="handleLogin">
         <div class="field-wrap">
-          <label class="field-label" for="pwd">管理员密码</label>
+          <label class="field-label" for="pwd">{{ t('login.passwordLabel') }}</label>
           <div class="field-input-wrap" :class="{ focused: showPwd }">
             <Icon
               class="field-icon"
@@ -69,14 +71,14 @@ async function handleLogin() {
               v-model="password"
               class="field-input"
               :type="showPwd ? 'text' : 'password'"
-              placeholder="请输入密码"
+              :placeholder="t('login.passwordPlaceholder')"
               autocomplete="current-password"
             />
             <button
               type="button"
               class="field-toggle"
               @click="showPwd = !showPwd"
-              :aria-label="showPwd ? '隐藏密码' : '显示密码'"
+              :aria-label="showPwd ? t('login.hidePassword') : t('login.showPassword')"
             >
               <Icon
                 :icon="showPwd ? 'material-symbols:visibility-off-outline-rounded' : 'material-symbols:visibility-outline-rounded'"
@@ -88,12 +90,13 @@ async function handleLogin() {
         </div>
 
         <button type="submit" class="btn-primary" :disabled="loading">
-          <span v-if="!loading">登录</span>
-          <Icon v-else icon="material-symbols:progress-activity" class="spin" width="20" height="20" />
+          <span v-if="!loading">{{ t('login.loginButton') }}</span>
+          <span v-else>{{ t('login.loggingIn') }}</span>
+          <Icon v-if="loading" icon="material-symbols:progress-activity" class="spin" width="20" height="20" />
         </button>
       </form>
 
-      <p class="login-footer">Neo-MoFox WebUI · 管理测试界面仅供内部使用</p>
+      <p class="login-footer">Neo-MoFox WebUI · Have a safe and nice day!</p>
     </div>
   </div>
 </template>
@@ -214,12 +217,14 @@ async function handleLogin() {
 }
 .field-input {
   flex: 1;
+  min-width: 0; /* 确保 flex 正常收缩 */
   border: none;
   background: transparent;
   font-size: 1rem;
   color: var(--md-sys-color-on-surface);
   outline: none;
   font-family: 'Inter', system-ui, sans-serif;
+  padding-right: 0.5rem; /* 给按钮留出空间，防止文字被遮挡 */
 }
 .field-input::placeholder {
   color: var(--md-sys-color-outline);
@@ -233,6 +238,7 @@ async function handleLogin() {
   align-items: center;
   padding: 0;
   transition: color 0.15s;
+  flex-shrink: 0; /* 确保按钮不会被压缩 */
 }
 .field-toggle:hover {
   color: var(--md-sys-color-on-surface);

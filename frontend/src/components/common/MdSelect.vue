@@ -117,7 +117,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import Icon from './Icon.vue'
-import { registerDropdown, unregisterDropdown, closeOtherDropdowns } from '@/composables/useDropdownManager'
+import { registerDropdown, unregisterDropdown, closeOtherDropdowns } from '@/utils/useDropdownManager'
 
 // Props
 interface Props {

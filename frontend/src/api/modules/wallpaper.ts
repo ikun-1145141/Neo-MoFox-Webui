@@ -1,7 +1,7 @@
 import http from '../base'
 import type { WallpaperStatus } from '../types/wallpaper'
 
-const BASE = "/api/wallpaper"
+const BASE = "/webui/api/wallpaper"
 
 /** POST /api/webui/wallpaper - 上传壁纸 */
 export function uploadWallpaper(file: File): Promise<WallpaperStatus> {

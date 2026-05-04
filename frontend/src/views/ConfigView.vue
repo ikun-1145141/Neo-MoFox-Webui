@@ -11,7 +11,7 @@
   <AppShell no-padding>
     <template #title>
       <Icon icon="material-symbols:settings-outline-rounded" :size="24" />
-      <span>配置管理</span>
+      <span>{{ t('config.title') }}</span>
     </template>
 
     <div class="config-view">
@@ -33,7 +33,7 @@
       <!-- 加载状态 -->
       <div v-if="isLoading" class="loading-container">
         <Icon icon="material-symbols:progress-activity" :size="48" class="spinning" />
-        <p>加载配置中...</p>
+        <p>{{ t('config.loading') }}</p>
       </div>
 
       <!-- 错误状态 -->
@@ -42,7 +42,7 @@
         <p>{{ errorMessage }}</p>
         <button type="button" class="retry-btn" @click="loadConfig">
           <Icon icon="material-symbols:refresh-rounded" :size="20" />
-          <span>重试</span>
+          <span>{{ t('config.retry') }}</span>
         </button>
       </div>
 
@@ -74,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import AppShell from '@/components/common/AppShell.vue'
 import Icon from '@/components/common/Icon.vue'
@@ -82,15 +82,18 @@ import ConfigEditor from '@/components/config/ConfigEditor.vue'
 import ModelConfigEditor from '@/components/config/ModelConfigEditor.vue'
 import { getConfig, fullWriteConfig } from '@/api/modules/config'
 import type { EnhancedConfigResponse } from '@/api/types/config'
+import { useI18n } from '@/utils/i18n'
+
+const { t } = useI18n()
 
 // 路由
 const router = useRouter()
 
 // Tab 定义
-const tabs = [
-  { value: 'bot' as const, label: '机器人配置', icon: 'material-symbols:smart-toy-outline-rounded' },
-  { value: 'model' as const, label: '模型配置', icon: 'material-symbols:model-training-outline-rounded' },
-]
+const tabs = computed(() => [
+  { value: 'bot' as const, label: t('config.tabs.bot'), icon: 'material-symbols:smart-toy-outline-rounded' },
+  { value: 'model' as const, label: t('config.tabs.model'), icon: 'material-symbols:model-training-outline-rounded' },
+])
 
 // 当前激活的 Tab
 const activeTab = ref<'bot' | 'model'>('bot')
@@ -188,7 +191,7 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   padding: 16px 20px;
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-low) 70%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 75%, transparent);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
   flex-shrink: 0;

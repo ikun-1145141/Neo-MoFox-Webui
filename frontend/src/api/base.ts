@@ -82,6 +82,7 @@ export function stopHealthCheck(): void {
 
 // 请求拦截器：注入 token 和检查系统状态
 instance.interceptors.request.use((config) => {
+  console.debug('Outgoing request:', config.method?.toUpperCase(), config.url)
   // 检查系统是否正在重启（除健康检查接口外）
   if (getIsRestarting() && !config.url?.includes('/api/webui/health')) {
     return Promise.reject(new Error('系统正在重启，请稍候...'))
@@ -106,6 +107,7 @@ instance.interceptors.response.use(
   (response) => {
     const res = response.data as BaseResponse
     if (res.code !== 200) {
+      console.error('API Error:', res)
       useToastStore().show(res.message ?? '操作失败', 'error')
       return Promise.reject(res)
     }

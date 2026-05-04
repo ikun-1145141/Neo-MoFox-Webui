@@ -45,6 +45,9 @@ frontend/dist/
 frontend/dist-ssr/
 frontend/.vite/
 
+# 插件静态文件（自动部署到 webui-static 分支）
+Plugin/static/
+
 # 日志
 *.log
 npm-debug.log*
