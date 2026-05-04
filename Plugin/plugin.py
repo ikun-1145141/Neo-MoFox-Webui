@@ -14,6 +14,7 @@ from .components.router.dashboard_router import DashboardRouter
 from .components.router.wallpaper_router import WallpaperRouter
 from .components.router.webui_router import WebuiSettingsRouter
 from .components.router.system_router import SystemRouter
+from .components.router.plugin_router import PluginRouter
 from .components.router.config import (
     MainConfigRouter,
     BotConfigRouter,
@@ -53,6 +54,7 @@ class WebuiPlugin(BasePlugin):
             WebuiSettingsRouter,
             WallpaperRouter,
             SystemRouter,
+            PluginRouter,
             # 配置管理路由
             MainConfigRouter,
             BotConfigRouter,
@@ -66,6 +68,7 @@ class WebuiPlugin(BasePlugin):
         logger.info(f"WebUI 插件 v{self.plugin_version} 已加载")
         logger.info("API 路径: /api/webui")
         logger.info("认证路径: /api/auth")
+        logger.info("插件管理路径: /api/plugin")
 
     async def on_plugin_unloaded(self) -> None:
         """插件卸载钩子。"""
