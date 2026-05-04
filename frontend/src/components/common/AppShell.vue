@@ -482,7 +482,6 @@ async function performShutdown() {
   flex-direction: column;
   min-width: 0;
   background: color-mix(in srgb, var(--md-sys-color-surface) calc(var(--wallpaper-mask-opacity, 0.88) * 100%), transparent);
-  backdrop-filter: blur(6px);
 }
 
 .top-bar {

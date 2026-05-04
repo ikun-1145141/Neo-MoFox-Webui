@@ -493,6 +493,8 @@ watch(codeContent, (newCode) => {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  background: color-mix(in srgb, var(--md-sys-color-surface) 80%, transparent);
+  backdrop-filter: blur(12px);
 }
 
 /* 错误提示 */
@@ -560,12 +562,6 @@ watch(codeContent, (newCode) => {
   .section-tab {
     padding: 8px 16px;
     font-size: 13px;
-  }
-
-  .editor-content {
-    padding: 0;
-    background: color-mix(in srgb, var(--md-sys-color-surface) 80%, transparent);
-    backdrop-filter: blur(12px);
   }
 }
 </style>
