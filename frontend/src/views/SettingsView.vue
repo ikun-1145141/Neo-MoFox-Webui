@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 import AppShell from '../components/common/AppShell.vue'
+import { useI18n } from '../utils/i18n'
 const route = useRoute()
+const { t } = useI18n()
 
 const tabs = [
-  { label: '主题', icon: 'material-symbols:format-paint-outline-rounded', to: '/settings/theme' },
-  { label: '通用', icon: 'material-symbols:tune-rounded', to: '/settings/general' },
-  { label: '数据', icon: 'material-symbols:storage-rounded', to: '/settings/data' },
+  { labelKey: 'settings.tabs.theme', icon: 'material-symbols:format-paint-outline-rounded', to: '/settings/theme' },
+  { labelKey: 'settings.tabs.general', icon: 'material-symbols:tune-rounded', to: '/settings/general' },
+  { labelKey: 'settings.tabs.data', icon: 'material-symbols:storage-rounded', to: '/settings/data' },
 ]
 </script>
 
@@ -15,7 +17,7 @@ const tabs = [
     <div class="settings-layout">
       <!-- 设置侧边选项卡 -->
       <aside class="settings-sidebar">
-        <h2 class="settings-sidebar-title">设置</h2>
+        <h2 class="settings-sidebar-title">{{ t('settings.title') }}</h2>
         <nav class="settings-tabs">
           <router-link
             v-for="tab in tabs"
@@ -25,7 +27,7 @@ const tabs = [
             :class="{ active: route.path === tab.to }"
           >
             <Icon :icon="tab.icon" width="20" height="20" />
-            <span>{{ tab.label }}</span>
+            <span>{{ t(tab.labelKey) }}</span>
           </router-link>
         </nav>
       </aside>
