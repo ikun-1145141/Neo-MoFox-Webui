@@ -84,18 +84,24 @@
                   :key="field.key"
                   class="form-field"
                 >
-                  <label :for="`${section.name}-${itemIndex}-${field.key}`" class="field-label">
-                    {{ field.label || field.key }}
-                  </label>
-                  <p v-if="field.description" class="field-description">{{ field.description }}</p>
+                  <div class="field-header">
+                    <label :for="`${section.name}-${itemIndex}-${field.key}`" class="field-label">
+                      <span class="field-title-zh">{{ getFieldTitle(field) }}</span>
+                      <span class="field-name-en">{{ field.key }}</span>
+                      <div v-if="getFieldDescriptionText(field)" class="field-tooltip">
+                        <Icon icon="material-symbols:help-outline-rounded" :size="16" class="help-icon" />
+                        <div class="tooltip-popup">{{ getFieldDescriptionText(field) }}</div>
+                      </div>
+                    </label>
+                  </div>
 
                   <!-- 根据 input_type 渲染不同的输入控件 -->
                   <component
-                    :is="getFieldComponent(field.input_type, field.type)"
+                    :is="getFieldComponent(getRenderableField(field).input_type, field.type)"
                     :id="`${section.name}-${itemIndex}-${field.key}`"
                     :model-value="item[field.key]"
                     @update:model-value="updateListItemField(section.name, itemIndex, field.key, $event)"
-                    :field="field"
+                    :field="getRenderableField(field)"
                     :readonly="readonly"
                   />
                 </div>
@@ -117,18 +123,24 @@
                 :key="field.key"
                 class="form-field"
               >
-                <label :for="`${section.name}-${field.key}`" class="field-label">
-                  {{ field.label || field.key }}
-                </label>
-                <p v-if="field.description" class="field-description">{{ field.description }}</p>
+                <div class="field-header">
+                  <label :for="`${section.name}-${field.key}`" class="field-label">
+                    <span class="field-title-zh">{{ getFieldTitle(field) }}</span>
+                    <span class="field-name-en">{{ field.key }}</span>
+                    <div v-if="getFieldDescriptionText(field)" class="field-tooltip">
+                      <Icon icon="material-symbols:help-outline-rounded" :size="16" class="help-icon" />
+                      <div class="tooltip-popup">{{ getFieldDescriptionText(field) }}</div>
+                    </div>
+                  </label>
+                </div>
 
                 <!-- 根据 input_type 渲染不同的输入控件 -->
                 <component
-                  :is="getFieldComponent(field.input_type, field.type)"
+                  :is="getFieldComponent(getRenderableField(field).input_type, field.type)"
                   :id="`${section.name}-${field.key}`"
                   :model-value="getSectionData(section.name)[field.key]"
                   @update:model-value="updateObjectField(section.name, field.key, $event)"
-                  :field="field"
+                  :field="getRenderableField(field)"
                   :readonly="readonly"
                 />
               </div>
@@ -173,6 +185,13 @@ const emit = defineEmits<{
 
 // 展开状态（默认全部展开）
 const expandedSections = ref<Set<number>>(new Set())
+
+type SelectOption = string | number | { label: string; value: string | number }
+
+interface ParsedFieldDescription {
+  description: string
+  choices: SelectOption[]
+}
 
 // 初始化展开第一个节（或单个节时总是展开）
 watch(
@@ -291,6 +310,128 @@ function updateObjectField(sectionName: string, fieldKey: string, value: any) {
       [fieldKey]: value
     },
   })
+}
+
+function getRenderableField(field: FieldSchema): FieldSchema {
+  const textToParse = field.description || (field.label !== field.key ? field.label : '') || ''
+  const parsed = parseFieldDescription({ ...field, description: textToParse })
+  const explicitChoices = normalizeChoices(field.choices)
+  const choices = explicitChoices.length > 0 ? explicitChoices : parsed.choices
+
+  if (!hasChoices(choices)) {
+    return {
+      ...field,
+      description: parsed.description,
+    }
+  }
+
+  return {
+    ...field,
+    description: parsed.description,
+    input_type: 'select',
+    choices,
+  }
+}
+
+function getFieldTitle(field: FieldSchema): string {
+  const textToParse = field.description || (field.label !== field.key ? field.label : '') || field.key
+
+  const parsed = parseFieldDescription({ ...field, description: textToParse })
+  if (!parsed.description) return field.key
+
+  const firstLine = parsed.description.split('\n')[0].trim()
+  const match = firstLine.match(/^([^。.：:，,]+)/)
+  
+  if (match && match[1]) {
+    return match[1].trim()
+  }
+
+  return field.key
+}
+
+function getFieldDescriptionText(field: FieldSchema): string {
+  const textToParse = field.description || (field.label !== field.key ? field.label : '') || ''
+  const parsed = parseFieldDescription({ ...field, description: textToParse })
+  const title = getFieldTitle(field)
+
+  if (parsed.description.trim() === title) {
+    return ''
+  }
+
+  if (parsed.description.startsWith(title)) {
+    return parsed.description.substring(title.length).replace(/^[。.：:，,\s\n]+/, '').trim()
+  }
+
+  return parsed.description
+}
+
+function hasChoices(value: unknown): value is SelectOption[] {
+  return Array.isArray(value) && value.length > 0
+}
+
+function normalizeChoices(choices: unknown): SelectOption[] {
+  if (!Array.isArray(choices)) return []
+
+  const normalized: SelectOption[] = []
+  choices.forEach((choice) => {
+    if (typeof choice === 'string' || typeof choice === 'number') {
+      normalized.push({
+        label: String(choice),
+        value: choice,
+      })
+      return
+    }
+
+    if (
+      choice &&
+      typeof choice === 'object' &&
+      'value' in choice &&
+      (typeof choice.value === 'string' || typeof choice.value === 'number')
+    ) {
+      const value = choice.value
+      const label = 'label' in choice && typeof choice.label === 'string'
+        ? choice.label
+        : String(value)
+
+      normalized.push({
+        label,
+        value,
+      })
+    }
+  })
+
+  return normalized
+}
+
+function parseFieldDescription(field: FieldSchema): ParsedFieldDescription {
+  const description = field.description?.trim() || ''
+  if (!description) return { description: '', choices: [] }
+
+  const explicitChoices = normalizeChoices(field.choices)
+  const optionMatch = description.match(/^(.*?)(?:[:：]\s*)?([A-Za-z0-9_.-]+(?:\s*[|/]\s*[A-Za-z0-9_.-]+)+)\s*$/)
+  if (!optionMatch) {
+    return { description, choices: explicitChoices }
+  }
+
+  const optionText = optionMatch[2]
+  const parsedChoices = optionText
+    .split(/[|/]/)
+    .map((option) => option.trim())
+    .filter(Boolean)
+    .map((option) => ({
+      label: option,
+      value: option,
+    }))
+
+  if (parsedChoices.length < 2) {
+    return { description, choices: explicitChoices }
+  }
+
+  const descriptionText = optionMatch[1].replace(/[:：]\s*$/, '').trim()
+  return {
+    description: descriptionText || description,
+    choices: explicitChoices.length > 0 ? explicitChoices : parsedChoices,
+  }
 }
 
 // 根据字段类型和 input_type 获取对应的字段组件
@@ -552,24 +693,82 @@ function getFieldComponent(inputType: string, fieldType?: string) {
   padding: 0;
 }
 
+.field-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
 .field-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--md-sys-color-on-surface);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.field-title-zh {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface);
+}
+
+.field-name-en {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 .required-mark {
   color: var(--md-sys-color-error);
 }
 
-.field-description {
-  font-size: 12px;
+.field-tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: help;
+  margin-left: 2px;
+}
+
+.help-icon {
   color: var(--md-sys-color-on-surface-variant);
-  margin: 0;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.field-tooltip:hover .help-icon {
+  opacity: 1;
+}
+
+.tooltip-popup {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  background: var(--md-sys-color-inverse-surface, #313033);
+  color: var(--md-sys-color-inverse-on-surface, #f4eff4);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
   line-height: 1.4;
+  width: max-content;
+  max-width: 260px;
+  white-space: normal;
+  z-index: 100;
+  transition: all 0.2s;
+  pointer-events: none;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  font-weight: normal;
+  text-align: left;
+}
+
+.field-tooltip:hover .tooltip-popup {
+  visibility: visible;
+  opacity: 1;
+  transform: translateX(-50%) translateY(-8px);
 }
 
 /* 对象节样式 */

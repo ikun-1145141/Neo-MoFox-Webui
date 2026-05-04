@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { ref, onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, ref, onBeforeUnmount, onMounted, watch } from 'vue'
 import { getSettings, updateSettings, resetSettings } from '../../api/modules/settings'
 import { useToastStore } from '../../utils/toast'
+import { useI18n } from '../../utils/i18n'
 import type { WebuiSettings } from '../../api/types/settings'
 
 const IS_DEV = import.meta.env.DEV
 const toast = useToastStore()
+const { setLocale, t } = useI18n()
 const loading = ref(true)
 const saving = ref(false)
 const autoSaveEnabled = ref(false)
@@ -14,11 +16,11 @@ const lastSavedSnapshot = ref('')
 let autoSaveTimer: number | null = null
 const AUTO_SAVE_DELAY_MS = 600
 
-const fontSizeOptions: { label: string; value: 'small' | 'medium' | 'large'; icon: string }[] = [
-  { label: '小', value: 'small', icon: 'material-symbols:format-size-rounded' },
-  { label: '中', value: 'medium', icon: 'material-symbols:format-size-rounded' },
-  { label: '大', value: 'large', icon: 'material-symbols:format-size-rounded' },
-]
+const fontSizeOptions = computed<{ label: string; value: 'small' | 'medium' | 'large'; icon: string }[]>(() => [
+  { label: t('settings.general.fontSmall'), value: 'small', icon: 'material-symbols:format-size-rounded' },
+  { label: t('settings.general.fontMedium'), value: 'medium', icon: 'material-symbols:format-size-rounded' },
+  { label: t('settings.general.fontLarge'), value: 'large', icon: 'material-symbols:format-size-rounded' },
+])
 
 const DEFAULT_SETTINGS: WebuiSettings = {
   theme: {
@@ -59,9 +61,10 @@ async function persistChanges() {
     const updated = await updateSettings({ ui: settings.value.ui, system: settings.value.system })
     settings.value.ui = updated.ui
     settings.value.system = updated.system
+    setLocale(updated.ui.language)
     lastSavedSnapshot.value = JSON.stringify({ ui: updated.ui, system: updated.system })
   } catch {
-    if (IS_DEV) toast.show('[DEV] 后端未启动，更改不会持久化', 'info')
+    if (IS_DEV) toast.show(t('settings.general.devBackendOfflineUnsaved'), 'info')
   } finally {
     saving.value = false
   }
@@ -81,8 +84,9 @@ async function fetchSettings() {
   clearAutoSaveTimer()
   try {
     settings.value = await getSettings()
+    setLocale(settings.value.ui.language)
   } catch {
-    if (IS_DEV) toast.show('[DEV] 后端未启动，使用默认配置', 'info')
+    if (IS_DEV) toast.show(t('settings.general.devBackendOfflineDefaults'), 'info')
   } finally {
     lastSavedSnapshot.value = getCurrentSnapshot()
     autoSaveEnabled.value = true
@@ -97,9 +101,10 @@ async function handleReset() {
   try {
     const data = await resetSettings()
     settings.value = data
-    toast.show('已重置为默认设置', 'success')
+    setLocale(data.ui.language)
+    toast.show(t('settings.general.resetDone'), 'success')
   } catch {
-    if (IS_DEV) toast.show('[DEV] 后端未启动', 'info')
+    if (IS_DEV) toast.show(t('settings.general.devBackendOffline'), 'info')
   } finally {
     lastSavedSnapshot.value = getCurrentSnapshot()
     autoSaveEnabled.value = true
@@ -115,6 +120,7 @@ watch(
     settings.value.system.check_update_on_startup,
   ],
   () => {
+    setLocale(settings.value.ui.language)
     scheduleAutoSave()
   }
 )
@@ -129,36 +135,36 @@ onMounted(fetchSettings)
 <template>
   <div class="general-view">
     <div class="view-header">
-      <h2 class="view-title">通用设置</h2>
-      <p class="view-sub">调整界面语言、字体与系统行为偏好</p>
+      <h2 class="view-title">{{ t('settings.general.title') }}</h2>
+      <p class="view-sub">{{ t('settings.general.subtitle') }}</p>
       <p class="autosave-hint">
         <Icon icon="material-symbols:cloud-done-outline-rounded" width="16" height="16" />
-        修改后自动保存
+        {{ t('settings.general.autosave') }}
       </p>
     </div>
 
     <div v-if="loading" class="loading-wrap">
       <Icon icon="material-symbols:progress-activity" class="spin" width="32" height="32" />
-      <span>加载配置中…</span>
+      <span>{{ t('settings.general.loading') }}</span>
     </div>
 
     <template v-else>
       <section class="setting-section">
         <div class="section-text">
-          <h3 class="section-heading">界面</h3>
-          <p class="section-desc">语言和字体大小等显示相关选项</p>
+          <h3 class="section-heading">{{ t('settings.general.interfaceTitle') }}</h3>
+          <p class="section-desc">{{ t('settings.general.interfaceDesc') }}</p>
         </div>
 
         <div class="field-row">
           <div class="field-label-wrap">
-            <span class="field-label">界面语言</span>
-            <span class="field-hint">选择 WebUI 的显示语言</span>
+            <span class="field-label">{{ t('settings.general.languageLabel') }}</span>
+            <span class="field-hint">{{ t('settings.general.languageHint') }}</span>
           </div>
           <div class="radio-group">
             <label class="radio-card" :class="{ active: settings.ui.language === 'zh-CN' }">
               <input type="radio" name="language" value="zh-CN" v-model="settings.ui.language" hidden />
               <Icon icon="material-symbols:translate-rounded" width="20" height="20" />
-              <span>简体中文</span>
+              <span>{{ t('settings.general.languageZh') }}</span>
               <div v-if="settings.ui.language === 'zh-CN'" class="radio-check">
                 <Icon icon="material-symbols:check-rounded" width="14" height="14" />
               </div>
@@ -166,7 +172,7 @@ onMounted(fetchSettings)
             <label class="radio-card" :class="{ active: settings.ui.language === 'en-US' }">
               <input type="radio" name="language" value="en-US" v-model="settings.ui.language" hidden />
               <Icon icon="material-symbols:translate-rounded" width="20" height="20" />
-              <span>English</span>
+              <span>{{ t('settings.general.languageEn') }}</span>
               <div v-if="settings.ui.language === 'en-US'" class="radio-check">
                 <Icon icon="material-symbols:check-rounded" width="14" height="14" />
               </div>
@@ -176,8 +182,8 @@ onMounted(fetchSettings)
 
         <div class="field-row">
           <div class="field-label-wrap">
-            <span class="field-label">字体大小</span>
-            <span class="field-hint">调整文字显示尺寸</span>
+            <span class="field-label">{{ t('settings.general.fontSizeLabel') }}</span>
+            <span class="field-hint">{{ t('settings.general.fontSizeHint') }}</span>
           </div>
           <div class="radio-group">
             <label
@@ -199,15 +205,15 @@ onMounted(fetchSettings)
 
       <section class="setting-section">
         <div class="section-text">
-          <h3 class="section-heading">系统</h3>
-          <p class="section-desc">更新检查等后台行为选项</p>
+          <h3 class="section-heading">{{ t('settings.general.systemTitle') }}</h3>
+          <p class="section-desc">{{ t('settings.general.systemDesc') }}</p>
         </div>
 
         <div class="toggle-list">
           <div class="toggle-row">
             <div class="toggle-label-wrap">
-              <span class="toggle-label">自动更新</span>
-              <span class="toggle-hint">发现新版本后自动下载并安装</span>
+              <span class="toggle-label">{{ t('settings.general.autoUpdate') }}</span>
+              <span class="toggle-hint">{{ t('settings.general.autoUpdateHint') }}</span>
             </div>
             <button
               class="toggle-btn"
@@ -222,8 +228,8 @@ onMounted(fetchSettings)
 
           <div class="toggle-row">
             <div class="toggle-label-wrap">
-              <span class="toggle-label">启动时检查更新</span>
-              <span class="toggle-hint">每次启动时自动检测是否有新版本</span>
+              <span class="toggle-label">{{ t('settings.general.checkUpdateOnStartup') }}</span>
+              <span class="toggle-hint">{{ t('settings.general.checkUpdateOnStartupHint') }}</span>
             </div>
             <button
               class="toggle-btn"
@@ -241,11 +247,11 @@ onMounted(fetchSettings)
       <div class="actions-row">
         <button class="btn-outlined" @click="fetchSettings" :disabled="saving">
           <Icon icon="material-symbols:refresh-rounded" width="18" height="18" />
-          重新获取
+          {{ t('settings.general.refetch') }}
         </button>
         <button class="btn-outlined btn-danger" @click="handleReset" :disabled="saving">
           <Icon icon="material-symbols:restart-alt-rounded" width="18" height="18" />
-          恢复默认
+          {{ t('settings.general.reset') }}
         </button>
       </div>
     </template>
