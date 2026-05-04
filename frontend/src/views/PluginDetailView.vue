@@ -23,7 +23,6 @@ const isLoadingPlugin = ref(false)
 const isUnloadingPlugin = ref(false)
 const selectedType = ref<string>('all')
 const isDescriptionExpanded = ref(false)
-const descriptionRef = ref<HTMLElement | null>(null)
 const isTextTruncated = ref(false)
 
 const checkTruncation = () => {
@@ -325,7 +324,7 @@ onMounted(async () => {
               </span>
             </div>
             <div class="plugin-description-wrapper" :class="{ expanded: isDescriptionExpanded }">
-              <p class="plugin-description" ref="descriptionRef">{{ plugin.plugin_description || t('plugins.noDescription') }}</p>
+              <p class="plugin-description">{{ plugin.plugin_description || t('plugins.noDescription') }}</p>
               <button 
                 class="description-toggle-btn" 
                 @click="isDescriptionExpanded = !isDescriptionExpanded"
