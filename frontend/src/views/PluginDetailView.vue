@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppShell from '../components/common/AppShell.vue'
 import Icon from '../components/common/Icon.vue'
@@ -22,6 +22,48 @@ const isReloading = ref(false)
 const isLoadingPlugin = ref(false)
 const isUnloadingPlugin = ref(false)
 const selectedType = ref<string>('all')
+const isDescriptionExpanded = ref(false)
+const descriptionRef = ref<HTMLElement | null>(null)
+const isTextTruncated = ref(false)
+
+const checkTruncation = () => {
+  if (!plugin.value?.plugin_description) {
+    isTextTruncated.value = false
+    return
+  }
+  
+  const isMobile = window.innerWidth <= 768
+  const description = plugin.value.plugin_description || ''
+  
+  if (isMobile) {
+    // 移动端：检查字数是否超过20字
+    isTextTruncated.value = description.length > 20
+  } else {
+    // 桌面端：不显示展开按钮
+    isTextTruncated.value = false
+  }
+}
+
+// 监听窗口大小变化以重新计算是否截断
+let resizeTimeout: number | null = null
+const handleResize = () => {
+  if (resizeTimeout) {
+    window.clearTimeout(resizeTimeout)
+  }
+  resizeTimeout = window.setTimeout(() => {
+    checkTruncation()
+  }, 150)
+}
+
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+})
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  if (resizeTimeout) {
+    window.clearTimeout(resizeTimeout)
+  }
+})
 
 // 翻译工具函数：替换带参数的文本
 const tr = (key: string, params?: Record<string, any>): string => {
@@ -39,6 +81,9 @@ const fetchPluginDetail = async () => {
   isLoading.value = true
   try {
     plugin.value = await getPluginDetail(pluginName.value)
+    nextTick(() => {
+      checkTruncation()
+    })
   } catch (error) {
     console.error('获取插件详情失败:', error)
     toastStore.show(t('plugins.detail.toast.fetchFailed'), 'error')
@@ -207,6 +252,43 @@ const getComponentTypeName = (type: string): string => {
   return translated !== key ? translated : type
 }
 
+// 获取平台图标
+const getPlatformIcon = (platform: string | undefined): string => {
+  if (!platform) return 'material-symbols:device-unknown'
+  const iconMap: Record<string, string> = {
+    'qq': 'material-symbols:chat-bubble-outline-rounded',
+    'wechat': 'material-symbols:wechat',
+    'discord': 'material-symbols:discord',
+    'telegram': 'material-symbols:send-outline-rounded',
+    'web': 'material-symbols:language-rounded',
+  }
+  return iconMap[platform.toLowerCase()] || 'material-symbols:hub-outline-rounded'
+}
+
+// 获取权限等级颜色
+const getPermissionLevelClass = (level: string | undefined): string => {
+  if (!level) return 'permission-user'
+  // 处理 "PermissionLevel.XXX" 格式
+  const levelStr = level.includes('.') ? level.split('.').pop() || level : level
+  const classMap: Record<string, string> = {
+    'OWNER': 'permission-owner',
+    'OPERATOR': 'permission-operator',
+    'USER': 'permission-user',
+    'GUEST': 'permission-guest',
+  }
+  return classMap[levelStr.toUpperCase()] || 'permission-user'
+}
+
+// 获取权限等级显示文本
+const getPermissionLevelText = (level: string | undefined): string => {
+  if (!level) return t('plugins.detail.metadata.permissions.user')
+  // 处理 "PermissionLevel.XXX" 格式
+  const levelStr = level.includes('.') ? level.split('.').pop() || level : level
+  const key = `plugins.detail.metadata.permissions.${levelStr.toLowerCase()}`
+  const translated = t(key)
+  return translated !== key ? translated : levelStr
+}
+
 onMounted(async () => {
   await fetchPluginDetail()
 })
@@ -242,7 +324,16 @@ onMounted(async () => {
                 {{ plugin.is_loaded ? t('plugins.detail.loaded') : t('plugins.detail.notLoaded') }}
               </span>
             </div>
-            <p class="plugin-description">{{ plugin.plugin_description || t('plugins.noDescription') }}</p>
+            <div class="plugin-description-wrapper" :class="{ expanded: isDescriptionExpanded }">
+              <p class="plugin-description" ref="descriptionRef">{{ plugin.plugin_description || t('plugins.noDescription') }}</p>
+              <button 
+                class="description-toggle-btn" 
+                @click="isDescriptionExpanded = !isDescriptionExpanded"
+                v-show="isTextTruncated || isDescriptionExpanded"
+              >
+                {{ isDescriptionExpanded ? t('plugins.detail.collapse') : t('plugins.detail.expand') }}
+              </button>
+            </div>
             <p class="plugin-path">
               <Icon icon="material-symbols:folder-outline-rounded" width="16" height="16" />
               {{ plugin.plugin_path }}
@@ -374,16 +465,71 @@ onMounted(async () => {
               <h3 class="component-name">{{ component.component_name }}</h3>
               <p class="component-description">{{ component.description || t('plugins.noDescription') }}</p>
               
-              <!-- 扩展属性 -->
-              <div v-if="component.extra && Object.keys(component.extra).length > 0" class="component-extra">
-                <div
-                  v-for="(value, key) in component.extra"
-                  :key="key"
-                  class="extra-item"
-                >
-                  <span class="extra-key">{{ key }}:</span>
-                  <span class="extra-value">{{ typeof value === 'object' ? JSON.stringify(value) : value }}</span>
-                </div>
+              <!-- 组件元数据标签 -->
+              <div v-if="component.extra && Object.keys(component.extra).length > 0" class="component-metadata">
+                <!-- Adapter 组件 -->
+                <template v-if="component.component_type === 'adapter'">
+                  <div v-if="component.extra.platform" class="metadata-tag metadata-platform">
+                    <Icon :icon="getPlatformIcon(component.extra.platform)" width="16" height="16" />
+                    <span>{{ component.extra.platform }}</span>
+                  </div>
+                </template>
+                
+                <!-- Router 组件 -->
+                <template v-if="component.component_type === 'router'">
+                  <div v-if="component.extra.custom_route_path" class="metadata-tag metadata-path">
+                    <Icon icon="material-symbols:route-rounded" width="16" height="16" />
+                    <span>{{ component.extra.custom_route_path }}</span>
+                  </div>
+                  <div v-if="component.extra.cors_origins && component.extra.cors_origins.length > 0" class="metadata-tag metadata-info">
+                    <Icon icon="material-symbols:shield-outline-rounded" width="16" height="16" />
+                    <span>CORS: {{ component.extra.cors_origins.length }} {{ t('plugins.detail.metadata.origins') }}</span>
+                  </div>
+                </template>
+                
+                <!-- Command 组件 -->
+                <template v-if="component.component_type === 'command'">
+                  <div v-if="component.extra.command_name" class="metadata-tag metadata-command">
+                    <Icon icon="material-symbols:terminal-rounded" width="16" height="16" />
+                    <span>/{{ component.extra.command_name }}</span>
+                  </div>
+                  <div v-if="component.extra.permission_level" class="metadata-tag metadata-permission" :class="getPermissionLevelClass(component.extra.permission_level)">
+                    <Icon icon="material-symbols:shield-person-outline-rounded" width="16" height="16" />
+                    <span>{{ getPermissionLevelText(component.extra.permission_level) }}</span>
+                  </div>
+                </template>
+                
+                <!-- Action 组件 -->
+                <template v-if="component.component_type === 'action'">
+                  <div v-if="component.extra.primary_action" class="metadata-tag metadata-primary">
+                    <Icon icon="material-symbols:star-outline-rounded" width="16" height="16" />
+                    <span>{{ t('plugins.detail.metadata.primaryAction') }}</span>
+                  </div>
+                </template>
+                
+                <!-- Agent 组件 -->
+                <template v-if="component.component_type === 'agent'">
+                  <div v-if="component.extra.usables && component.extra.usables.length > 0" class="metadata-tag metadata-info">
+                    <Icon icon="material-symbols:extension-outline-rounded" width="16" height="16" />
+                    <span>{{ component.extra.usables.length }} {{ t('plugins.detail.metadata.usables') }}</span>
+                  </div>
+                </template>
+                
+                <!-- Tool 组件 -->
+                <template v-if="component.component_type === 'tool'">
+                  <div class="metadata-tag metadata-tool">
+                    <Icon icon="material-symbols:build-rounded" width="16" height="16" />
+                    <span>{{ t('plugins.detail.metadata.toolComponent') }}</span>
+                  </div>
+                </template>
+                
+                <!-- Chatter 组件 -->
+                <template v-if="component.component_type === 'chatter'">
+                  <div class="metadata-tag metadata-chatter">
+                    <Icon icon="material-symbols:chat-outline-rounded" width="16" height="16" />
+                    <span>{{ t('plugins.detail.metadata.chatterComponent') }}</span>
+                  </div>
+                </template>
               </div>
             </div>
 
@@ -493,6 +639,8 @@ onMounted(async () => {
   color: var(--md-sys-color-on-surface);
   margin: 0 0 0.5rem;
   letter-spacing: -0.02em;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .plugin-meta {
@@ -526,11 +674,97 @@ onMounted(async () => {
   color: var(--md-sys-color-on-tertiary-container);
 }
 
+.plugin-description-wrapper {
+  margin: 0 0 0.75rem;
+  position: relative;
+}
+
 .plugin-description {
   font-size: 1rem;
   line-height: 1.6;
   color: var(--md-sys-color-on-surface-variant);
-  margin: 0 0 0.75rem;
+  margin: 0;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-line;
+}
+
+.description-toggle-btn {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--md-sys-color-primary);
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0;
+  margin-top: 0.25rem;
+  cursor: pointer;
+}
+
+.description-toggle-btn:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  .plugin-header-card {
+    flex-direction: column;
+    padding: 1.5rem;
+    gap: 1.5rem;
+  }
+
+  .plugin-header-main {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 1rem;
+    width: 100%;
+  }
+
+  .plugin-meta {
+    justify-content: center;
+  }
+
+  .plugin-path {
+    justify-content: center;
+    word-break: break-all;
+  }
+
+  .plugin-actions {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .action-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .plugin-title {
+    font-size: 1.5rem;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .plugin-description-wrapper:not(.expanded) .plugin-description {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: pre-line;
+    max-height: 3.2em;
+    line-height: 1.6em;
+  }
+
+  .plugin-description-wrapper.expanded .plugin-description {
+    max-height: none;
+  }
+
+  .plugin-description-wrapper .description-toggle-btn {
+    display: inline-block;
+  }
 }
 
 .plugin-path {
@@ -721,7 +955,7 @@ onMounted(async () => {
 /* ====== 组件卡片网格 ====== */
 .component-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 1rem;
 }
 
@@ -827,32 +1061,128 @@ onMounted(async () => {
   margin: 0 0 0.5rem;
 }
 
-/* ====== 扩展属性 ====== */
-.component-extra {
+/* ====== 组件元数据标签 ====== */
+.component-metadata {
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  margin-top: 0.5rem;
-  padding: 0.5rem;
-  border-radius: 8px;
-  background: var(--md-sys-color-surface-container);
-}
-
-.extra-item {
-  display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
-  font-size: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.metadata-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.81rem;
+  font-weight: 500;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.metadata-tag:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 平台标签 */
+.metadata-platform {
+  background: linear-gradient(135deg, var(--md-sys-color-primary-container) 0%, color-mix(in srgb, var(--md-sys-color-primary-container) 80%, var(--md-sys-color-tertiary-container)) 100%);
+  color: var(--md-sys-color-on-primary-container);
+  border: 1px solid var(--md-sys-color-primary);
+}
+
+/* 路径标签 */
+.metadata-path {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
   font-family: 'Consolas', 'Monaco', monospace;
+  border: 1px solid var(--md-sys-color-secondary);
 }
 
-.extra-key {
+/* 命令标签 */
+.metadata-command {
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+  font-family: 'Consolas', 'Monaco', monospace;
+  border: 1px solid var(--md-sys-color-tertiary);
+}
+
+/* 权限标签 */
+.metadata-permission {
+  border: 1px solid;
   font-weight: 600;
-  color: var(--md-sys-color-primary);
 }
 
-.extra-value {
+.metadata-permission.permission-owner {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+  color: white;
+  border-color: #ff6b6b;
+  box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+}
+
+.metadata-permission.permission-operator {
+  background: linear-gradient(135deg, #ffa94d 0%, #ff8c42 100%);
+  color: white;
+  border-color: #ffa94d;
+  box-shadow: 0 2px 8px rgba(255, 169, 77, 0.3);
+}
+
+.metadata-permission.permission-user {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  border-color: var(--md-sys-color-primary);
+}
+
+.metadata-permission.permission-guest {
+  background: var(--md-sys-color-surface-container-highest);
   color: var(--md-sys-color-on-surface-variant);
-  word-break: break-all;
+  border-color: var(--md-sys-color-outline);
+}
+
+/* 动作标签 */
+.metadata-action {
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+  border: 1px solid var(--md-sys-color-tertiary);
+}
+
+/* 主动作标签 */
+.metadata-primary {
+  background: linear-gradient(135deg, #ffd93d 0%, #ffb33d 100%);
+  color: #1a1a1a;
+  border: 1px solid #ffd93d;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(255, 217, 61, 0.3);
+}
+
+/* Agent 标签 */
+.metadata-agent {
+  background: linear-gradient(135deg, var(--md-sys-color-tertiary-container) 0%, color-mix(in srgb, var(--md-sys-color-tertiary-container) 80%, var(--md-sys-color-primary-container)) 100%);
+  color: var(--md-sys-color-on-tertiary-container);
+  border: 1px solid var(--md-sys-color-tertiary);
+}
+
+/* Tool 标签 */
+.metadata-tool {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  border: 1px solid var(--md-sys-color-secondary);
+}
+
+/* Chatter 标签 */
+.metadata-chatter {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  border: 1px solid var(--md-sys-color-primary);
+}
+
+/* 通用信息标签 */
+.metadata-info {
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  border: 1px solid var(--md-sys-color-outline-variant);
 }
 
 /* ====== 组件卡片底部 ====== */

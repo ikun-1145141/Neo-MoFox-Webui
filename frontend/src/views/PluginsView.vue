@@ -142,50 +142,57 @@ const handleSearch = () => {
 </script>
 
 <template>
-  <AppShell>
-    <PageHeader 
-      :title="t('plugins.title')" 
-      icon="material-symbols:extension-outline-rounded"
-      :subtitle="t('plugins.subtitle')"
-    >
-      <template #actions>
-        <button class="icon-btn" @click="fetchPlugins" :disabled="isLoading" :title="t('plugins.refresh')">
-          <Icon icon="material-symbols:refresh-rounded" width="20" height="20" />
-        </button>
-      </template>
-    </PageHeader>
+  <AppShell no-padding>
+    <div class="plugins-view">
+      <div class="plugins-header-area">
+        <PageHeader 
+          :title="t('plugins.title')" 
+          icon="material-symbols:extension-outline-rounded"
+          :subtitle="t('plugins.subtitle')"
+        >
+          <template #actions>
+            <button class="icon-btn" @click="fetchPlugins" :disabled="isLoading" :title="t('plugins.refresh')">
+              <Icon icon="material-symbols:refresh-rounded" width="20" height="20" />
+            </button>
+          </template>
+        </PageHeader>
 
-    <!-- 搜索栏 -->
-    <div class="search-bar">
-      <div class="search-input-wrapper">
-        <Icon icon="material-symbols:search-rounded" width="20" height="20" class="search-icon" />
-        <input
-          v-model="searchQuery"
-          @input="handleSearch"
-          type="text"
-          :placeholder="t('plugins.searchPlaceholder')"
-          class="search-input"
-        />
+        <!-- 搜索栏 -->
+        <div class="search-bar">
+          <div class="search-input-wrapper">
+            <Icon icon="material-symbols:search-rounded" width="20" height="20" class="search-icon" />
+            <input
+              v-model="searchQuery"
+              @input="handleSearch"
+              type="text"
+              :placeholder="t('plugins.searchPlaceholder')"
+              class="search-input"
+            />
+          </div>
+          <div class="plugin-count" v-if="filteredPlugins.length !== plugins.length">
+            {{ tr('plugins.pluginCount', { count: filteredPlugins.length }) }}
+          </div>
+          <div class="plugin-count" v-else>
+            {{ tr('plugins.pluginCount', { count: plugins.length }) }}
+          </div>
+        </div>
       </div>
-      <div class="plugin-count">
-        {{ tr('plugins.pluginCount', { count: filteredPlugins.length }) }}
-      </div>
-    </div>
 
-    <!-- 加载状态 -->
-    <div v-if="isLoading" class="loading-state">
-      <Icon icon="material-symbols:progress-activity" width="48" height="48" class="loading-spinner" />
-      <p>{{ t('plugins.loading') }}</p>
-    </div>
+      <div class="plugins-content">
+        <!-- 加载状态 -->
+        <div v-if="isLoading" class="loading-state">
+          <Icon icon="material-symbols:progress-activity" width="48" height="48" class="loading-spinner" />
+          <p>{{ t('plugins.loading') }}</p>
+        </div>
 
-    <!-- 空状态 -->
-    <div v-else-if="filteredPlugins.length === 0" class="empty-state">
-      <Icon icon="material-symbols:extension-off-outline-rounded" width="64" height="64" />
-      <p>{{ searchQuery ? t('plugins.noMatch') : t('plugins.empty') }}</p>
-    </div>
+        <!-- 空状态 -->
+        <div v-else-if="filteredPlugins.length === 0" class="empty-state">
+          <Icon icon="material-symbols:extension-off-outline-rounded" width="64" height="64" />
+          <p>{{ searchQuery ? t('plugins.noMatch') : t('plugins.empty') }}</p>
+        </div>
 
-    <!-- 插件卡片网格 -->
-    <div v-else class="plugin-lists">
+        <!-- 插件卡片网格 -->
+        <div v-else class="plugin-lists">
       <!-- 已加载的插件 -->
       <div v-if="loadedPlugins.length > 0" class="plugin-section">
         <h3 class="section-title">
@@ -314,10 +321,37 @@ const handleSearch = () => {
         </div>
       </div>
     </div>
+      </div>
+    </div>
   </AppShell>
 </template>
 
 <style scoped>
+/* ====== 布局 ====== */
+.plugins-view {
+  height: calc(100dvh - 64px);
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+}
+
+.plugins-header-area {
+  flex-shrink: 0;
+  padding: 1.5rem 1.5rem 0 1.5rem;
+  background: color-mix(in srgb, var(--md-sys-color-surface) 75%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  z-index: 10;
+}
+
+.plugins-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1.5rem;
+}
 /* ====== 搜索栏 ====== */
 .search-bar {
   display: flex;
@@ -585,8 +619,11 @@ const handleSearch = () => {
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
+  /*! autoprefixer: ignore next */
+  -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
+  word-break: break-word;
   height: 2.64rem; /* 固定两行高度保持卡片底部对齐 */
 }
 
@@ -656,13 +693,57 @@ const handleSearch = () => {
 
 /* ====== 响应式 ====== */
 @media (max-width: 640px) {
+  .plugins-header-area {
+    padding: 1rem 1rem 0 1rem;
+  }
+  .plugins-content {
+    padding: 1rem;
+  }
   .plugin-grid {
     grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .plugin-card {
+    padding: 1rem;
+    min-width: 0; /* 防止子元素撑开卡片导致出界 */
+  }
+
+  .plugin-card-header {
+    margin-bottom: 0.75rem;
+    padding-right: 2.25rem; /* 给右上角绝对定位的设置图标留出空间，防止重叠 */
+  }
+
+  .config-indicator {
+    top: 0.75rem;
+    right: 0.75rem;
+    width: 24px;
+    height: 24px;
+  }
+
+  .plugin-icon {
+    width: 48px;
+    height: 48px;
+  }
+
+  .plugin-name {
+    font-size: 1.125rem;
+  }
+
+  .plugin-card-footer {
+    flex-wrap: wrap; /* 允许在空间极小时折行 */
+    gap: 0.5rem;
+  }
+
+  .component-badges {
+    flex-wrap: wrap;
+    min-height: auto;
   }
   
   .search-bar {
     flex-direction: column;
     align-items: stretch;
+    gap: 0.75rem; /* 减小间距 */
   }
   
   .search-input-wrapper {
