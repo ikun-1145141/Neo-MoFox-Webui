@@ -484,13 +484,15 @@ const handleSearch = () => {
     rgba(0, 0, 0, 0.02) 0px 0.8px 2.925px;
 }
 
-.plugin-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 
-    rgba(0, 0, 0, 0.06) 0px 8px 24px,
-    rgba(0, 0, 0, 0.04) 0px 4px 12px;
-  border-color: var(--md-sys-color-primary);
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-highest) 92%, transparent);
+@media (hover: hover) {
+  .plugin-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 
+      rgba(0, 0, 0, 0.08) 0px 8px 24px,
+      rgba(0, 0, 0, 0.05) 0px 4px 12px;
+    border-color: var(--md-sys-color-primary);
+    background: color-mix(in srgb, var(--md-sys-color-surface-container-highest) 95%, transparent);
+  }
 }
 
 .plugin-card-unloaded {
@@ -498,14 +500,16 @@ const handleSearch = () => {
   cursor: default;
 }
 
-.plugin-card-unloaded:hover {
-  opacity: 1;
-  transform: translateY(-4px);
-  box-shadow: 
-    rgba(0, 0, 0, 0.06) 0px 8px 24px,
-    rgba(0, 0, 0, 0.04) 0px 4px 12px;
-  border-color: var(--md-sys-color-outline-variant);
-  background: color-mix(in srgb, var(--md-sys-color-surface-container) 88%, transparent);
+@media (hover: hover) {
+  .plugin-card-unloaded:hover {
+    opacity: 1;
+    transform: translateY(-4px);
+    box-shadow: 
+      rgba(0, 0, 0, 0.08) 0px 8px 24px,
+      rgba(0, 0, 0, 0.05) 0px 4px 12px;
+    border-color: var(--md-sys-color-outline-variant);
+    background: color-mix(in srgb, var(--md-sys-color-surface-container) 92%, transparent);
+  }
 }
 
 /* ====== 卡片头部 ====== */
@@ -571,10 +575,13 @@ const handleSearch = () => {
   color: var(--md-sys-color-on-primary);
 }
 
-.action-btn-primary:hover {
-  background: var(--md-sys-color-primary-container);
-  color: var(--md-sys-color-on-primary-container);
-  transform: scale(1.02);
+@media (hover: hover) {
+  .action-btn-primary:hover:not(:disabled) {
+    background: var(--md-sys-color-primary-container);
+    color: var(--md-sys-color-on-primary-container);
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
 }
 
 .action-btn:disabled {
@@ -684,11 +691,16 @@ const handleSearch = () => {
   border-radius: 50%;
   background: var(--md-sys-color-secondary-container);
   color: var(--md-sys-color-on-secondary-container);
-  transition: transform 0.2s;
+  transition: all 0.2s;
 }
 
-.plugin-card:hover .config-indicator {
-  transform: scale(1.1);
+@media (hover: hover) {
+  .plugin-card:hover .config-indicator {
+    transform: scale(1.15) rotate(90deg);
+    background: var(--md-sys-color-tertiary-container);
+    color: var(--md-sys-color-on-tertiary-container);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  }
 }
 
 /* ====== 响应式 ====== */

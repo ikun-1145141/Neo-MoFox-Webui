@@ -392,9 +392,11 @@ watch(codeContent, (newCode) => {
   flex-shrink: 0;
 }
 
-.section-tab:hover {
-  background: var(--md-sys-color-surface-container-high);
-  color: var(--md-sys-color-on-surface);
+@media (hover: hover) {
+  .section-tab:hover {
+    background: var(--md-sys-color-surface-container-high);
+    color: var(--md-sys-color-on-surface);
+  }
 }
 
 .section-tab.active {
@@ -403,9 +405,11 @@ watch(codeContent, (newCode) => {
   font-weight: 600;
 }
 
-.section-tab.active:hover {
-  background: var(--md-sys-color-primary);
-  color: var(--md-sys-color-on-primary);
+@media (hover: hover) {
+  .section-tab.active:hover {
+    background: var(--md-sys-color-primary);
+    color: var(--md-sys-color-on-primary);
+  }
 }
 
 .toolbar-left {
@@ -454,10 +458,12 @@ watch(codeContent, (newCode) => {
   color: var(--md-sys-color-on-secondary-container);
 }
 
-.mode-toggle-btn:hover {
-  background: var(--md-sys-color-secondary);
-  color: var(--md-sys-color-on-secondary);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+@media (hover: hover) {
+  .mode-toggle-btn:hover {
+    background: var(--md-sys-color-secondary);
+    color: var(--md-sys-color-on-secondary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
 }
 
 .save-btn {
@@ -465,10 +471,12 @@ watch(codeContent, (newCode) => {
   color: var(--md-sys-color-on-primary);
 }
 
-.save-btn:hover:not(:disabled) {
-  background: var(--md-sys-color-primary);
-  box-shadow: 0 2px 8px rgba(0, 88, 189, 0.3);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .save-btn:hover:not(:disabled) {
+    background: var(--md-sys-color-primary);
+    box-shadow: 0 2px 8px rgba(0, 88, 189, 0.3);
+    transform: translateY(-1px);
+  }
 }
 
 .save-btn:disabled {
@@ -526,8 +534,10 @@ watch(codeContent, (newCode) => {
   justify-content: center;
 }
 
-.error-banner .close-btn:hover {
-  background: color-mix(in srgb, var(--md-sys-color-surface-container) 85%, transparent);
+@media (hover: hover) {
+  .error-banner .close-btn:hover {
+    background: color-mix(in srgb, var(--md-sys-color-surface-container) 85%, transparent);
+  }
 }
 
 /* ===== 移动端适配 ===== */

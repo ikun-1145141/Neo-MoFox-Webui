@@ -588,9 +588,13 @@ onMounted(async () => {
   transition: all 0.2s;
 }
 
-.back-btn:hover {
-  background: var(--md-sys-color-surface-container-high);
-  transform: translateX(-4px);
+@media (hover: hover) {
+  .back-btn:hover {
+    background: var(--md-sys-color-surface-container-highest);
+    color: var(--md-sys-color-primary);
+    transform: translateX(-4px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
 }
 
 /* ====== 插件头部卡片 ====== */
@@ -804,10 +808,13 @@ onMounted(async () => {
   color: var(--md-sys-color-on-primary);
 }
 
-.action-btn-primary:hover {
-  background: var(--md-sys-color-primary-container);
-  color: var(--md-sys-color-on-primary-container);
-  transform: scale(1.02);
+@media (hover: hover) {
+  .action-btn-primary:hover:not(:disabled) {
+    background: var(--md-sys-color-primary-container);
+    color: var(--md-sys-color-on-primary-container);
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
 }
 
 .action-btn-secondary {
@@ -815,9 +822,13 @@ onMounted(async () => {
   color: var(--md-sys-color-on-surface);
 }
 
-.action-btn-secondary:hover {
-  background: var(--md-sys-color-surface-container-highest);
-  transform: scale(1.02);
+@media (hover: hover) {
+  .action-btn-secondary:hover:not(:disabled) {
+    background: var(--md-sys-color-tertiary-container);
+    color: var(--md-sys-color-on-tertiary-container);
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  }
 }
 
 .action-btn-danger {
@@ -825,10 +836,13 @@ onMounted(async () => {
   color: var(--md-sys-color-on-error-container);
 }
 
-.action-btn-danger:hover {
-  background: var(--md-sys-color-error);
-  color: var(--md-sys-color-on-error);
-  transform: scale(1.02);
+@media (hover: hover) {
+  .action-btn-danger:hover:not(:disabled) {
+    background: var(--md-sys-color-error);
+    color: var(--md-sys-color-on-error);
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(211, 47, 47, 0.3);
+  }
 }
 
 .action-btn:disabled {
@@ -854,6 +868,16 @@ onMounted(async () => {
   background: color-mix(in srgb, var(--md-sys-color-surface-container) 88%, transparent);
   backdrop-filter: blur(12px);
   border: 1px solid var(--md-sys-color-outline-variant);
+  transition: all 0.2s;
+}
+
+@media (hover: hover) {
+  .stat-card:hover {
+    background: color-mix(in srgb, var(--md-sys-color-surface-container-high) 92%, transparent);
+    border-color: var(--md-sys-color-outline);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
 }
 
 .stat-icon {
@@ -943,13 +967,19 @@ onMounted(async () => {
   transition: all 0.2s;
 }
 
-.filter-btn:hover {
-  background: var(--md-sys-color-surface-container-high);
+@media (hover: hover) {
+  .filter-btn:hover:not(.active) {
+    background: var(--md-sys-color-surface-container-highest);
+    color: var(--md-sys-color-on-surface);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  }
 }
 
 .filter-btn.active {
   background: var(--md-sys-color-primary);
   color: var(--md-sys-color-on-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
 /* ====== 组件卡片网格 ====== */
@@ -970,11 +1000,15 @@ onMounted(async () => {
   transition: all 0.2s;
 }
 
-.component-card:hover {
-  border-color: var(--md-sys-color-primary);
-  box-shadow: 
-    rgba(0, 0, 0, 0.04) 0px 4px 12px,
-    rgba(0, 0, 0, 0.02) 0px 2px 6px;
+@media (hover: hover) {
+  .component-card:hover:not(.disabled) {
+    border-color: var(--md-sys-color-primary);
+    background: color-mix(in srgb, var(--md-sys-color-surface-container) 92%, transparent);
+    transform: translateY(-2px);
+    box-shadow: 
+      rgba(0, 0, 0, 0.06) 0px 4px 12px,
+      rgba(0, 0, 0, 0.03) 0px 2px 6px;
+  }
 }
 
 .component-card.disabled {
@@ -982,9 +1016,12 @@ onMounted(async () => {
   cursor: not-allowed;
 }
 
-.component-card.disabled:hover {
-  border-color: var(--md-sys-color-outline-variant);
-  box-shadow: none;
+@media (hover: hover) {
+  .component-card.disabled:hover {
+    border-color: var(--md-sys-color-outline-variant);
+    box-shadow: none;
+    transform: none;
+  }
 }
 
 /* ====== 组件卡片头部 ====== */
@@ -1081,9 +1118,12 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
-.metadata-tag:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+@media (hover: hover) {
+  .metadata-tag:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+    filter: brightness(1.05);
+  }
 }
 
 /* 平台标签 */
