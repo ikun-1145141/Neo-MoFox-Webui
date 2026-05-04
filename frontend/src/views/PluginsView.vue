@@ -246,8 +246,8 @@ const handleSearch = () => {
           </div>
         </div>
 
-        <!-- 配置标识 -->
-        <div v-if="plugin.has_config" class="config-indicator">
+        <!-- 配置/详情入口标识 -->
+        <div class="config-indicator" title="查看详情">
           <Icon icon="material-symbols:settings-outline-rounded" width="16" height="16" />
         </div>
       </div>
@@ -457,8 +457,11 @@ const handleSearch = () => {
   font-weight: 600;
   color: var(--md-sys-color-on-surface);
   margin: 0;
-  padding-bottom: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: color-mix(in srgb, var(--md-sys-color-surface-container) 88%, transparent);
+  backdrop-filter: blur(12px);
   border-bottom: 2px solid var(--md-sys-color-outline-variant);
+  border-radius: 12px;
 }
 
 .plugin-grid {
@@ -532,6 +535,10 @@ const handleSearch = () => {
 }
 
 .plugin-status {
+  position: absolute;
+  top: 3.5rem; /* 在配置图标正下方 */
+  right: calc(1rem + 14px); /* 对齐配置图标中心 (right: 1rem + width/2: 14px) */
+  transform: translateX(50%); /* 圆点自身居中 */
   display: flex;
   align-items: center;
 }
@@ -697,8 +704,8 @@ const handleSearch = () => {
 @media (hover: hover) {
   .plugin-card:hover .config-indicator {
     transform: scale(1.15) rotate(90deg);
-    background: var(--md-sys-color-tertiary-container);
-    color: var(--md-sys-color-on-tertiary-container);
+    background: var(--md-sys-color-primary-container);
+    color: var(--md-sys-color-on-primary-container);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
   }
 }
@@ -733,6 +740,11 @@ const handleSearch = () => {
     height: 24px;
   }
 
+  .plugin-status {
+    top: 3rem;
+    right: calc(0.75rem + 12px);
+  }
+
   .plugin-icon {
     width: 48px;
     height: 48px;
@@ -743,13 +755,19 @@ const handleSearch = () => {
   }
 
   .plugin-card-footer {
-    flex-wrap: wrap; /* 允许在空间极小时折行 */
+    flex-wrap: nowrap; /* 不允许截断折行 */
     gap: 0.5rem;
   }
 
   .component-badges {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none; /* Firefox */
     min-height: auto;
+  }
+  
+  .component-badges::-webkit-scrollbar {
+    display: none; /* Chrome/Safari */
   }
   
   .search-bar {

@@ -204,11 +204,6 @@ async function performShutdown() {
           <span class="rail-item-label">{{ t('app.actions.logout') }}</span>
         </button>
       </div>
-
-      <!-- 移动端关闭按钮 -->
-      <button class="rail-close-mobile" @click="drawerOpen = false" :aria-label="t('app.aria.closeNav')">
-        <Icon icon="material-symbols:close-rounded" width="24" height="24" />
-      </button>
     </aside>
 
     <!-- 遮罩层（移动端） -->
@@ -281,7 +276,6 @@ async function performShutdown() {
     box-shadow: none;
   }
   .menu-btn { display: none !important; }
-  .rail-close-mobile { display: none !important; }
 }
 
 /* 移动端打开状态 */
@@ -444,33 +438,6 @@ async function performShutdown() {
   color: var(--md-sys-color-on-error-container);
 }
 
-/* ====== 移动端关闭按钮 ====== */
-.rail-close-mobile {
-  display: none;
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: var(--md-sys-color-surface-container-high);
-  border: none;
-  cursor: pointer;
-  color: var(--md-sys-color-on-surface);
-  align-items: center;
-  justify-content: center;
-  transition: background 0.2s;
-}
-
-.rail-close-mobile:hover {
-  background: var(--md-sys-color-surface-container-highest);
-}
-
-@media (max-width: 899px) {
-  .nav-rail.open .rail-close-mobile {
-    display: flex;
-  }
-}
 .drawer-footer {
   padding-top: 0.5rem;
   border-top: 1px solid transparent;
