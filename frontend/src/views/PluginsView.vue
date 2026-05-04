@@ -288,7 +288,7 @@ const handleSearch = () => {
   flex-direction: column;
   padding: 1.5rem;
   border-radius: 16px;
-  background: color-mix(in srgb, var(--md-sys-color-surface-container) 95%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container) 88%, transparent);
   backdrop-filter: blur(12px);
   border: 1px solid var(--md-sys-color-outline-variant);
   cursor: pointer;
@@ -305,7 +305,7 @@ const handleSearch = () => {
     rgba(0, 0, 0, 0.06) 0px 8px 24px,
     rgba(0, 0, 0, 0.04) 0px 4px 12px;
   border-color: var(--md-sys-color-primary);
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-highest) 98%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-highest) 92%, transparent);
 }
 
 /* ====== 卡片头部 ====== */

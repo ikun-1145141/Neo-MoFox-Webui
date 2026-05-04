@@ -381,7 +381,7 @@ const quickLinks = [
 }
 
 .data-panel {
-  background: color-mix(in srgb, var(--md-sys-color-surface-container) 95%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container) 88%, transparent);
   border-radius: 1.25rem;
   padding: 1.5rem;
   box-shadow: 0px 4px 16px rgba(24, 28, 32, 0.04);
@@ -498,7 +498,7 @@ const quickLinks = [
   align-items: center;
   gap: 1rem;
   padding: 1rem 1.25rem;
-  background: color-mix(in srgb, var(--md-sys-color-surface-container) 95%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container) 88%, transparent);
   border-radius: 1rem;
   border: none;
   cursor: pointer;
@@ -510,7 +510,7 @@ const quickLinks = [
 }
 
 .quick-card:hover {
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-highest) 98%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-highest) 92%, transparent);
   transform: translateY(-2px);
 }
 

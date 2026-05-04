@@ -350,7 +350,7 @@ onMounted(async () => {
   padding: 2rem;
   margin-bottom: 1.5rem;
   border-radius: 20px;
-  background: color-mix(in srgb, var(--md-sys-color-surface-container) 95%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container) 88%, transparent);
   backdrop-filter: blur(12px);
   border: 1px solid var(--md-sys-color-outline-variant);
   box-shadow: 
@@ -500,7 +500,7 @@ onMounted(async () => {
   gap: 1rem;
   padding: 1.25rem;
   border-radius: 16px;
-  background: color-mix(in srgb, var(--md-sys-color-surface-container) 95%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container) 88%, transparent);
   backdrop-filter: blur(12px);
   border: 1px solid var(--md-sys-color-outline-variant);
 }
@@ -600,7 +600,7 @@ onMounted(async () => {
   flex-direction: column;
   padding: 1.25rem;
   border-radius: 16px;
-  background: color-mix(in srgb, var(--md-sys-color-surface-container) 92%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container) 85%, transparent);
   backdrop-filter: blur(12px);
   border: 1px solid var(--md-sys-color-outline-variant);
   transition: all 0.2s;

@@ -223,7 +223,7 @@ watch(selectedDays, (newDays) => {
 
 <style scoped>
 .chart-container {
-  background: color-mix(in srgb, var(--md-sys-color-surface-container) 95%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container) 88%, transparent);
   border-radius: 1.25rem;
   padding: 1.5rem;
   box-shadow: 0px 4px 16px rgba(24, 28, 32, 0.04);

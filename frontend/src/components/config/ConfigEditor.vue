@@ -341,7 +341,7 @@ watch(codeContent, (newCode) => {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  background: color-mix(in srgb, var(--md-sys-color-surface) 92%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 78%, transparent);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
   flex-shrink: 0;
@@ -352,7 +352,7 @@ watch(codeContent, (newCode) => {
   display: flex;
   gap: 4px;
   padding: 8px 16px;
-  background: color-mix(in srgb, var(--md-sys-color-surface) 88%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 72%, transparent);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
   flex-shrink: 0;
@@ -493,7 +493,7 @@ watch(codeContent, (newCode) => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: color-mix(in srgb, var(--md-sys-color-surface) 95%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 80%, transparent);
   backdrop-filter: blur(16px);
 }
 

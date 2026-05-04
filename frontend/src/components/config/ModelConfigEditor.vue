@@ -750,7 +750,7 @@ function handleDialogSubmit(data: Record<string, any>) {
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  background: color-mix(in srgb, var(--md-sys-color-surface) 90%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 75%, transparent);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
 }
@@ -840,7 +840,7 @@ function handleDialogSubmit(data: Record<string, any>) {
 
 .tab-bar {
   display: flex;
-  background: color-mix(in srgb, var(--md-sys-color-surface) 90%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 75%, transparent);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
   padding: 0 24px;

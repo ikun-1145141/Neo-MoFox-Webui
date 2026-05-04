@@ -238,7 +238,7 @@ onMounted(() => {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: color-mix(in srgb, var(--md-sys-color-surface) 90%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 75%, transparent);
   backdrop-filter: blur(12px);
   border-right: 1px solid var(--md-sys-color-outline-variant);
   height: 100%;
@@ -437,7 +437,7 @@ onMounted(() => {
 .mobile-top-selector {
   display: none;
   padding: 16px;
-  background: color-mix(in srgb, var(--md-sys-color-surface) 90%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 75%, transparent);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
 }
