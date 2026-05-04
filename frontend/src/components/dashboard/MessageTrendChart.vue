@@ -62,6 +62,7 @@ const chartOption = computed<EChartsOption>(() => {
   const surfaceColor = getComputedStyle(root).getPropertyValue('--md-sys-color-surface-container').trim()
   const onSurfaceColor = getComputedStyle(root).getPropertyValue('--md-sys-color-on-surface').trim()
   const onSurfaceVariantColor = getComputedStyle(root).getPropertyValue('--md-sys-color-on-surface-variant').trim()
+  console.log('[MessageTrendChart] 计算图表配置，主题颜色：', { primaryColor, secondaryColor, tertiaryColor, surfaceColor, onSurfaceColor, onSurfaceVariantColor })
 
   return {
     backgroundColor: 'transparent',

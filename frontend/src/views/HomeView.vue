@@ -286,8 +286,10 @@ const quickLinks = computed(() => [
         <div class="update-time" v-if="lastUpdate">
           {{ t('home.update.lastUpdate') }}: {{ lastUpdate }}
         </div>
+      </div>
 
-        <!-- 底部快速入口 -->
+      <!-- 右侧快捷入口 -->
+      <aside class="sidebar-content">
         <section class="quick-section">
           <h2 class="section-title">{{ t('home.quickLinks.title') }}</h2>
           <div class="quick-grid">
@@ -308,7 +310,7 @@ const quickLinks = computed(() => [
             </button>
           </div>
         </section>
-      </div>
+      </aside>
     </div>
   </AppShell>
 </template>
@@ -317,6 +319,25 @@ const quickLinks = computed(() => [
 .dashboard-layout {
   width: 100%;
   max-width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 1.5rem;
+}
+
+@media (max-width: 1440px) {
+  .dashboard-layout {
+    grid-template-columns: 1fr 280px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .dashboard-layout {
+    grid-template-columns: 1fr;
+  }
+  
+  .sidebar-content {
+    order: -1; /* 在移动端将快捷入口移到顶部 */
+  }
 }
 
 .main-content {
@@ -325,6 +346,12 @@ const quickLinks = computed(() => [
   gap: 1.5rem;
   min-width: 0;
   overflow: hidden;
+}
+
+.sidebar-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 /* 核心数据卡片网格 - 第一行固定4个 */
@@ -474,15 +501,26 @@ const quickLinks = computed(() => [
   color: var(--md-sys-color-on-surface);
 }
 
-.quick-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
+.quick-section {
+  position: sticky;
+  top: 1rem;
 }
 
-@media (max-width: 1024px) {
+.quick-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (max-width: 1200px) {
+  .quick-section {
+    position: static;
+  }
+  
   .quick-grid {
-    grid-template-columns: 1fr;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
   }
 }
 
