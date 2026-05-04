@@ -164,6 +164,8 @@ import BooleanField from './fields/BooleanField.vue'
 import SelectField from './fields/SelectField.vue'
 import TextareaField from './fields/TextareaField.vue'
 import ListField from './fields/ListField.vue'
+import DictField from './fields/DictField.vue'
+import SliderField from './fields/SliderField.vue'
 
 // Props
 interface Props {
@@ -322,32 +324,13 @@ function getRenderableField(field: FieldSchema): FieldSchema {
 }
 
 function getFieldTitle(field: FieldSchema): string {
-  const description = field.description || (field.label !== field.key ? field.label : '') || field.key
-  if (!description) return field.key
-
-  const firstLine = description.split('\n')[0].trim()
-  const match = firstLine.match(/^([^。.：:，,]+)/)
-  
-  if (match && match[1]) {
-    return match[1].trim()
-  }
-
-  return field.key
+  // 优先使用 label，如果 label 等于 key 则返回 key
+  return field.label && field.label !== field.key ? field.label : field.key
 }
 
 function getFieldDescriptionText(field: FieldSchema): string {
-  const description = field.description || (field.label !== field.key ? field.label : '') || ''
-  const title = getFieldTitle(field)
-
-  if (description.trim() === title) {
-    return ''
-  }
-
-  if (description.startsWith(title)) {
-    return description.substring(title.length).replace(/^[。.：:，,\s\n]+/, '').trim()
-  }
-
-  return description
+  // 直接返回 hint 字段
+  return field.hint || ''
 }
 
 function hasChoices(value: unknown): value is SelectOption[] {
@@ -399,8 +382,9 @@ function getFieldComponent(inputType: string, fieldType?: string) {
     case 'textarea':
       return TextareaField
     case 'number':
-    case 'slider':
       return NumberField
+    case 'slider':
+      return SliderField
     case 'switch':
     case 'boolean':
       return BooleanField
@@ -409,12 +393,17 @@ function getFieldComponent(inputType: string, fieldType?: string) {
       return SelectField
     case 'list':
       return ListField
+    case 'dict':
+    case 'object':
+    case 'json':
+      return DictField
     case 'text':
       // text 类型时，根据字段类型推断
       if (fieldType) {
         if (fieldType === 'bool') return BooleanField
         if (fieldType.includes('int') || fieldType.includes('float')) return NumberField
         if (fieldType.includes('list') || fieldType.includes('array')) return ListField
+        if (fieldType.includes('dict') || fieldType.includes('object')) return DictField
       }
       return TextField
     default:
@@ -423,6 +412,7 @@ function getFieldComponent(inputType: string, fieldType?: string) {
         if (fieldType === 'bool') return BooleanField
         if (fieldType.includes('int') || fieldType.includes('float')) return NumberField
         if (fieldType.includes('list') || fieldType.includes('array')) return ListField
+        if (fieldType.includes('dict') || fieldType.includes('object')) return DictField
       }
       return TextField
   }
@@ -455,7 +445,7 @@ function getFieldComponent(inputType: string, fieldType?: string) {
   background: var(--md-sys-color-surface-container-low);
   border: 1px solid var(--md-sys-color-outline-variant);
   border-radius: 12px;
-  overflow: hidden;
+  overflow: visible;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -482,6 +472,12 @@ function getFieldComponent(inputType: string, fieldType?: string) {
   cursor: pointer;
   user-select: none;
   transition: background 0.2s;
+  border-radius: inherit;
+}
+
+.section-accordion.expanded .section-header {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .section-header:hover {
