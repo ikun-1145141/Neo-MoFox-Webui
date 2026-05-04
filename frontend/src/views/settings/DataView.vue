@@ -2,10 +2,12 @@
 import { ref } from 'vue'
 import { getSettings, replaceSettings } from '../../api/modules/settings'
 import { useToastStore } from '../../utils/toast'
+import { useI18n } from '../../utils/i18n'
 import type { WebuiSettings } from '../../api/types/settings'
 
 const IS_DEV = import.meta.env.DEV
 const toast = useToastStore()
+const { t } = useI18n()
 
 const exporting = ref(false)
 const importing = ref(false)
@@ -25,9 +27,9 @@ async function handleExport() {
     a.download = `neo-mofox-settings-${new Date().toISOString().slice(0, 10)}.json`
     a.click()
     URL.revokeObjectURL(url)
-    toast.show('配置已导出', 'success')
+    toast.show(t('data.export.success'), 'success')
   } catch {
-    if (IS_DEV) toast.show('[DEV] 后端未启动，导出失败', 'info')
+    if (IS_DEV) toast.show(t('data.devBackendOffline'), 'info')
   } finally {
     exporting.value = false
   }
@@ -52,23 +54,23 @@ async function handleImport() {
   try {
     parsed = JSON.parse(importJson.value)
   } catch {
-    importError.value = 'JSON 格式错误，请检查输入内容'
+    importError.value = t('data.import.errors.invalidJson')
     return
   }
 
   // 基本字段校验
   if (!parsed.theme || !parsed.ui || !parsed.system) {
-    importError.value = '缺少必要字段（theme / ui / system）'
+    importError.value = t('data.import.errors.missingFields')
     return
   }
 
   importing.value = true
   try {
     await replaceSettings(parsed)
-    toast.show('配置已导入并保存', 'success')
+    toast.show(t('data.import.success'), 'success')
     importJson.value = ''
   } catch {
-    if (IS_DEV) toast.show('[DEV] 后端未启动，导入失败', 'info')
+    if (IS_DEV) toast.show(t('data.devBackendOffline'), 'info')
   } finally {
     importing.value = false
   }
@@ -83,22 +85,20 @@ function clearImport() {
 <template>
   <div class="data-view">
     <div class="view-header">
-      <h2 class="view-title">数据管理</h2>
-      <p class="view-sub">备份或还原 WebUI 全量配置，使用 JSON 文件进行导出与导入</p>
+      <h2 class="view-title">{{ t('data.title') }}</h2>
+      <p class="view-sub">{{ t('data.subtitle') }}</p>
     </div>
 
     <!-- 导出 -->
     <section class="setting-section">
       <div class="section-text">
-        <h3 class="section-heading">导出配置</h3>
-        <p class="section-desc">
-          将当前所有设置（主题、界面、系统）导出为 JSON 文件，可用于备份或迁移
-        </p>
+        <h3 class="section-heading">{{ t('data.export.title') }}</h3>
+        <p class="section-desc" v-html="t('data.export.desc')"></p>
       </div>
       <div class="export-row">
         <div class="export-hint">
           <Icon icon="material-symbols:info-outline-rounded" width="16" height="16" />
-          <span>导出内容包含：主题颜色、外观模式、语言、字体、系统更新选项</span>
+          <span>{{ t('data.export.hint') }}</span>
         </div>
         <button class="btn-primary" @click="handleExport" :disabled="exporting">
           <Icon
@@ -109,7 +109,7 @@ function clearImport() {
             height="18"
           />
           <Icon v-else icon="material-symbols:download-rounded" width="18" height="18" />
-          <span>{{ exporting ? '导出中…' : '导出配置文件' }}</span>
+          <span>{{ exporting ? t('data.export.exporting') : t('data.export.button') }}</span>
         </button>
       </div>
     </section>
@@ -117,26 +117,24 @@ function clearImport() {
     <!-- 导入 -->
     <section class="setting-section">
       <div class="section-text">
-        <h3 class="section-heading">导入配置</h3>
-        <p class="section-desc">
-          上传或粘贴 JSON 配置文件内容，将<strong>完全替换</strong>当前所有设置
-        </p>
+        <h3 class="section-heading">{{ t('data.import.title') }}</h3>
+        <p class="section-desc" v-html="t('data.import.desc')"></p>
       </div>
 
       <div class="import-file-row">
         <label class="file-btn">
           <Icon icon="material-symbols:upload-file-outline-rounded" width="18" height="18" />
-          从文件选择
+          {{ t('data.import.fileButton') }}
           <input type="file" accept=".json,application/json" hidden @change="handleFileSelect" />
         </label>
-        <span class="file-hint">或直接在下方粘贴 JSON 内容</span>
+        <span class="file-hint">{{ t('data.import.fileHint') }}</span>
       </div>
 
       <div class="textarea-wrap" :class="{ error: importError }">
         <textarea
           v-model="importJson"
           class="json-textarea"
-          placeholder='粘贴配置 JSON，例如：{"theme": {...}, "ui": {...}, "system": {...}}'
+          :placeholder="t('data.import.placeholder')"
           spellcheck="false"
           rows="10"
         />
@@ -150,7 +148,7 @@ function clearImport() {
       <div class="import-actions">
         <button class="btn-outlined" @click="clearImport" :disabled="importing || !importJson">
           <Icon icon="material-symbols:close-rounded" width="18" height="18" />
-          清空
+          {{ t('data.import.clear') }}
         </button>
         <button
           class="btn-primary btn-warning"
@@ -165,13 +163,13 @@ function clearImport() {
             height="18"
           />
           <Icon v-else icon="material-symbols:upload-rounded" width="18" height="18" />
-          <span>{{ importing ? '导入中…' : '应用并覆盖当前配置' }}</span>
+          <span>{{ importing ? t('data.import.applying') : t('data.import.apply') }}</span>
         </button>
       </div>
 
       <div class="warning-banner">
         <Icon icon="material-symbols:warning-outline-rounded" width="18" height="18" />
-        <span>导入操作将<strong>完全覆盖</strong>当前配置，请确认 JSON 内容正确后再执行</span>
+        <span v-html="t('data.import.warning')"></span>
       </div>
     </section>
   </div>

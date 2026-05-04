@@ -23,34 +23,34 @@
           <!-- 供应商表单 -->
           <form v-if="type === 'provider'" class="edit-form" @submit.prevent="handleSubmit">
             <div class="form-field">
-              <label for="provider-name">提供商名称 *</label>
+              <label for="provider-name">{{ t('modelEditDialog.provider.nameLabel') }} *</label>
               <input
                 id="provider-name"
                 v-model="formData.name"
                 type="text"
-                placeholder="例如: OpenAI, SiliconFlow"
+                :placeholder="t('modelEditDialog.provider.namePlaceholder')"
                 required
               />
             </div>
 
             <div class="form-field">
-              <label for="provider-base-url">Base URL *</label>
+              <label for="provider-base-url">{{ t('modelEditDialog.provider.baseUrlLabel') }} *</label>
               <input
                 id="provider-base-url"
                 v-model="formData.base_url"
                 type="url"
-                placeholder="https://api.example.com/v1"
+                :placeholder="t('modelEditDialog.provider.baseUrlPlaceholder')"
                 required
               />
             </div>
 
             <div class="form-field">
-              <label for="provider-api-key">API Key *</label>
+              <label for="provider-api-key">{{ t('modelEditDialog.provider.apiKeyLabel') }} *</label>
               <input
                 id="provider-api-key"
                 v-model="formData.api_key"
                 type="password"
-                placeholder="your-api-key"
+                :placeholder="t('modelEditDialog.provider.apiKeyPlaceholder')"
                 required
               />
             </div>
@@ -58,7 +58,7 @@
             <div class="form-field">
               <MdSelect
                 v-model="formData.client_type"
-                label="客户端类型"
+                :label="t('modelEditDialog.provider.clientTypeLabel')"
                 :options="[
                   { label: 'OpenAI', value: 'openai' },
                   { label: 'Gemini', value: 'gemini' },
@@ -69,7 +69,7 @@
 
             <div class="form-row">
               <div class="form-field">
-                <label for="provider-max-retry">最大重试次数</label>
+                <label for="provider-max-retry">{{ t('modelEditDialog.provider.maxRetryLabel') }}</label>
                 <input
                   id="provider-max-retry"
                   v-model.number="formData.max_retry"
@@ -80,7 +80,7 @@
               </div>
 
               <div class="form-field">
-                <label for="provider-timeout">超时时间（秒）</label>
+                <label for="provider-timeout">{{ t('modelEditDialog.provider.timeoutLabel') }}</label>
                 <input
                   id="provider-timeout"
                   v-model.number="formData.timeout"
@@ -91,7 +91,7 @@
               </div>
 
               <div class="form-field">
-                <label for="provider-retry-interval">重试间隔（秒）</label>
+                <label for="provider-retry-interval">{{ t('modelEditDialog.provider.retryIntervalLabel') }}</label>
                 <input
                   id="provider-retry-interval"
                   v-model.number="formData.retry_interval"
@@ -106,40 +106,40 @@
           <!-- 模型表单 -->
           <form v-else-if="type === 'model'" class="edit-form" @submit.prevent="handleSubmit">
             <div class="form-field">
-              <label for="model-name">模型名称 *</label>
+              <label for="model-name">{{ t('modelEditDialog.model.nameLabel') }} *</label>
               <input
                 id="model-name"
                 v-model="formData.name"
                 type="text"
-                placeholder="例如: gpt-4, deepseek-v3"
+                :placeholder="t('modelEditDialog.model.namePlaceholder')"
                 required
               />
             </div>
 
             <div class="form-field">
-              <label for="model-identifier">模型标识符 *</label>
+              <label for="model-identifier">{{ t('modelEditDialog.model.identifierLabel') }} *</label>
               <input
                 id="model-identifier"
                 v-model="formData.model_identifier"
                 type="text"
-                placeholder="例如: openai/gpt-4"
+                :placeholder="t('modelEditDialog.model.identifierPlaceholder')"
                 required
               />
             </div>
 
             <div class="form-field">
-              <label>所属提供商 *</label>
-              <p class="field-description">选择此模型所属的 API 提供商（需先在"供应商配置"中添加）</p>
+              <label>{{ t('modelEditDialog.model.providerLabel') }} *</label>
+              <p class="field-description">{{ t('modelEditDialog.model.providerDesc') }}</p>
               <MdSelect
                 v-model="formData.api_provider"
                 :options="providers"
-                :error="!formData.api_provider ? '请选择一个提供商' : ''"
+                :error="!formData.api_provider ? t('modelEditDialog.model.providerError') : ''"
               />
             </div>
 
             <div class="form-row">
               <div class="form-field">
-                <label for="model-price-in">输入价格（¥/M tokens）</label>
+                <label for="model-price-in">{{ t('modelEditDialog.model.priceInLabel') }}</label>
                 <input
                   id="model-price-in"
                   v-model.number="formData.price_in"
@@ -150,7 +150,7 @@
               </div>
 
               <div class="form-field">
-                <label for="model-price-out">输出价格（¥/M tokens）</label>
+                <label for="model-price-out">{{ t('modelEditDialog.model.priceOutLabel') }}</label>
                 <input
                   id="model-price-out"
                   v-model.number="formData.price_out"
@@ -162,7 +162,7 @@
             </div>
 
             <div class="form-field">
-              <label for="model-max-context">最大上下文长度</label>
+              <label for="model-max-context">{{ t('modelEditDialog.model.maxContextLabel') }}</label>
               <input
                 id="model-max-context"
                 v-model.number="formData.max_context"
@@ -182,7 +182,7 @@
                 <span class="checkbox-box">
                   <Icon v-show="formData.force_stream_mode" icon="material-symbols:check-rounded" :size="16" />
                 </span>
-                <span class="checkbox-label">强制流式输出模式</span>
+                <span class="checkbox-label">{{ t('modelEditDialog.model.forceStreamLabel') }}</span>
               </label>
             </div>
 
@@ -196,7 +196,7 @@
                 <span class="checkbox-box">
                   <Icon v-show="formData.tool_call_compat" icon="material-symbols:check-rounded" :size="16" />
                 </span>
-                <span class="checkbox-label">Tool Call 兼容模式</span>
+                <span class="checkbox-label">{{ t('modelEditDialog.model.toolCallCompatLabel') }}</span>
               </label>
             </div>
 
@@ -210,7 +210,7 @@
                 <span class="checkbox-box">
                   <Icon v-show="formData.anti_truncation" icon="material-symbols:check-rounded" :size="16" />
                 </span>
-                <span class="checkbox-label">启用反截断</span>
+                <span class="checkbox-label">{{ t('modelEditDialog.model.antiTruncLabel') }}</span>
               </label>
             </div>
           </form>
@@ -255,7 +255,7 @@
                 </div>
                 <button type="button" class="add-model-btn" @click="addModel">
                   <Icon icon="material-symbols:add-rounded" :size="18" />
-                  <span>添加模型</span>
+                  <span>{{ t('modelEditDialog.task.addModelButton') }}</span>
                 </button>
               </div>
             </div>
@@ -302,9 +302,14 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from '@/utils/i18n'
+import { useDialogStore } from '@/utils/dialog'
 import Icon from '../common/Icon.vue'
 import MdSelect from '../common/MdSelect.vue'
 import { closeAllDropdowns } from '@/composables/useDropdownManager'
+
+const { t } = useI18n()
+const dialogStore = useDialogStore()
 
 // Props
 interface Props {
@@ -351,11 +356,11 @@ watch(
 function initForm() {
   // 设置标题
   if (props.type === 'provider') {
-    title.value = props.mode === 'add' ? '添加供应商' : '编辑供应商'
+    title.value = props.mode === 'add' ? t('modelEditDialog.provider.add') : t('modelEditDialog.provider.edit')
   } else if (props.type === 'model') {
-    title.value = props.mode === 'add' ? '添加模型' : '编辑模型'
+    title.value = props.mode === 'add' ? t('modelEditDialog.model.add') : t('modelEditDialog.model.edit')
   } else {
-    title.value = props.mode === 'add' ? '添加任务' : '编辑任务'
+    title.value = props.mode === 'add' ? t('modelEditDialog.task.add') : t('modelEditDialog.task.edit')
   }
 
   // 初始化表单数据
@@ -431,27 +436,27 @@ function handleOverlayClick() {
 }
 
 // 处理提交
-function handleSubmit() {
+async function handleSubmit() {
   // 简单验证
   if (props.type === 'provider') {
     if (!formData.value.name || !formData.value.base_url || !formData.value.api_key) {
-      alert('请填写必填字段')
+      await dialogStore.alert(t('modelEditDialog.errors.requiredFields'))
       return
     }
   } else if (props.type === 'model') {
     if (!formData.value.name || !formData.value.model_identifier || !formData.value.api_provider) {
-      alert('请填写必填字段')
+      await dialogStore.alert(t('modelEditDialog.errors.requiredFields'))
       return
     }
   } else if (props.type === 'task') {
     if (!formData.value.name || !formData.value.model_list || formData.value.model_list.length === 0) {
-      alert('请填写必填字段')
+      await dialogStore.alert(t('modelEditDialog.errors.requiredFields'))
       return
     }
     // 移除空的模型名称
     formData.value.model_list = formData.value.model_list.filter((m: string) => m.trim())
     if (formData.value.model_list.length === 0) {
-      alert('至少需要一个模型')
+      await dialogStore.alert(t('modelEditDialog.errors.needOneModel'))
       return
     }
   }

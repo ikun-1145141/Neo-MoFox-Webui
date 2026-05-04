@@ -9,6 +9,7 @@ import {
 } from '../../api/modules/wallpaper'
 import { applyMd3Theme } from '../../utils/md3theme'
 import { useToastStore } from '../../utils/toast'
+import { useI18n } from '../../utils/i18n'
 import type { WebuiSettings } from '../../api/types/settings'
 import {
   extractColorsFromImage,
@@ -24,6 +25,7 @@ import {
 
 const IS_DEV = import.meta.env.DEV
 const toast = useToastStore()
+const { t } = useI18n()
 const loading = ref(true)
 const saving = ref(false)
 const uploading = ref(false)
@@ -52,21 +54,21 @@ const DEFAULT_SETTINGS: WebuiSettings = {
 
 const settings = ref<WebuiSettings>(structuredClone(DEFAULT_SETTINGS))
 
-const presetColors = [
-  { label: '深空蓝', hex: '#0058bd' },
-  { label: '翡翠绿', hex: '#1b8f6e' },
-  { label: '珊瑚橙', hex: '#e8591a' },
-  { label: '薰衣草', hex: '#7c4dff' },
-  { label: '玫瑰红', hex: '#c2185b' },
-  { label: '金黄色', hex: '#f9a825' },
-]
+const presetColors = computed(() => [
+  { label: t('theme.colors.presets.deepBlue'), hex: '#0058bd' },
+  { label: t('theme.colors.presets.emeraldGreen'), hex: '#1b8f6e' },
+  { label: t('theme.colors.presets.coralOrange'), hex: '#e8591a' },
+  { label: t('theme.colors.presets.lavender'), hex: '#7c4dff' },
+  { label: t('theme.colors.presets.rose'), hex: '#c2185b' },
+  { label: t('theme.colors.presets.golden'), hex: '#f9a825' },
+])
 
 // 判断颜色来源
 const colorSource = computed(() => {
   const currentColor = settings.value.theme.primary_color
   
   // 检查是否是预设颜色
-  if (presetColors.some(c => c.hex === currentColor)) {
+  if (presetColors.value.some(c => c.hex === currentColor)) {
     return 'preset'
   }
   
@@ -79,11 +81,11 @@ const colorSource = computed(() => {
   return 'custom'
 })
 
-const themeModes: { label: string; value: WebuiSettings['theme']['mode']; icon: string }[] = [
-  { label: '跟随系统', value: 'auto', icon: 'material-symbols:brightness-auto-outline-rounded' },
-  { label: '浅色', value: 'light', icon: 'material-symbols:light-mode-outline-rounded' },
-  { label: '深色', value: 'dark', icon: 'material-symbols:dark-mode-outline-rounded' },
-]
+const themeModes = computed<{ label: string; value: WebuiSettings['theme']['mode']; icon: string }[]>(() => [
+  { label: t('theme.appearance.modes.auto'), value: 'auto', icon: 'material-symbols:brightness-auto-outline-rounded' },
+  { label: t('theme.appearance.modes.light'), value: 'light', icon: 'material-symbols:light-mode-outline-rounded' },
+  { label: t('theme.appearance.modes.dark'), value: 'dark', icon: 'material-symbols:dark-mode-outline-rounded' },
+])
 
 function getCurrentThemeSnapshot(): string {
   return JSON.stringify(settings.value.theme)
@@ -120,7 +122,7 @@ async function persistThemeChanges() {
     settings.value.theme = updated.theme
     lastSavedThemeSnapshot.value = JSON.stringify(updated.theme)
   } catch {
-    if (IS_DEV) toast.show('[DEV] 后端未启动，更改不会持久化', 'info')
+    if (IS_DEV) toast.show(t('theme.devBackendOfflineUnsaved'), 'info')
   } finally {
     saving.value = false
   }
@@ -215,7 +217,7 @@ async function handleWallpaperFileChange(event: Event) {
   const isVideo = isVideoFile(file)
   
   if (!isImage && !isVideo) {
-    toast.show('仅支持 JPG、PNG、WEBP、MP4、WEBM 格式', 'error')
+    toast.show(t('theme.wallpaper.toast.invalidType'), 'error')
     input.value = ''
     return
   }
@@ -225,7 +227,7 @@ async function handleWallpaperFileChange(event: Event) {
   const maxSizeMB = maxSize / (1024 * 1024)
   
   if (file.size > maxSize) {
-    toast.show(`${isImage ? '图片' : '视频'}壁纸文件不能超过 ${maxSizeMB}MB`, 'error')
+    toast.show(t('theme.wallpaper.toast.tooLarge', { size: maxSizeMB.toString() }), 'error')
     input.value = ''
     return
   }
@@ -266,10 +268,10 @@ async function handleWallpaperFileChange(event: Event) {
       applyCurrentTheme()
     }
     
-    toast.show(`${isImage ? '图片' : '视频'}壁纸上传成功`, 'success')
+    toast.show(isImage ? t('theme.wallpaper.toast.imageUploadSuccess') : t('theme.wallpaper.toast.videoUploadSuccess'), 'success')
   } catch (error) {
     console.error('上传壁纸失败:', error)
-    toast.show(`上传壁纸失败: ${error instanceof Error ? error.message : '未知错误'}`, 'error')
+    toast.show(t('theme.wallpaper.toast.uploadFailed') + `: ${error instanceof Error ? error.message : '未知错误'}`, 'error')
   } finally {
     uploading.value = false
     extractingColors.value = false
@@ -289,7 +291,7 @@ async function handleDeleteWallpaper() {
     wallpaperColors.value = []
     clearWallpaperColors()
     
-    toast.show('壁纸已删除', 'success')
+    toast.show(t('theme.wallpaper.toast.deleteSuccess'), 'success')
   } catch {
     // 错误提示由全局拦截器处理
   } finally {
@@ -305,9 +307,9 @@ async function handleReset() {
     const data = await resetSettings()
     settings.value = data
     applyCurrentTheme()
-    toast.show('已重置为默认设置', 'success')
+    toast.show(t('theme.actions.resetSuccess'), 'success')
   } catch {
-    if (IS_DEV) toast.show('[DEV] 后端未启动', 'info')
+    if (IS_DEV) toast.show(t('theme.devBackendOffline'), 'info')
   } finally {
     lastSavedThemeSnapshot.value = getCurrentThemeSnapshot()
     autoSaveEnabled.value = true
@@ -332,24 +334,24 @@ onMounted(() => {
 <template>
   <div class="theme-view">
     <div class="view-header">
-      <h2 class="view-title">主题设置</h2>
-      <p class="view-sub">自定义颜色方案与外观偏好，所有设置同步至后端持久化</p>
+      <h2 class="view-title">{{ t('theme.title') }}</h2>
+      <p class="view-sub">{{ t('theme.subtitle') }}</p>
       <p class="autosave-hint">
         <Icon icon="material-symbols:cloud-done-outline-rounded" width="16" height="16" />
-        修改后自动保存
+        {{ t('theme.autosave') }}
       </p>
     </div>
 
     <div v-if="loading" class="loading-wrap">
       <Icon icon="material-symbols:progress-activity" class="spin" width="32" height="32" />
-      <span>加载配置中…</span>
+      <span>{{ t('theme.loading') }}</span>
     </div>
 
     <template v-else>
       <section class="setting-section">
         <div class="section-text">
-          <h3 class="section-heading">外观模式</h3>
-          <p class="section-desc">选择界面的亮暗主题，或设置随系统自动切换</p>
+          <h3 class="section-heading">{{ t('theme.appearance.title') }}</h3>
+          <p class="section-desc">{{ t('theme.appearance.desc') }}</p>
         </div>
         <div class="mode-grid">
           <button
@@ -370,8 +372,8 @@ onMounted(() => {
 
       <section class="setting-section theme-layout-section">
         <div class="section-text">
-          <h3 class="section-heading">主题与壁纸</h3>
-          <p class="section-desc">配置个性化背景壁纸，选择或自动提取界面主色彩</p>
+          <h3 class="section-heading">{{ t('theme.colors.title') }}</h3>
+          <p class="section-desc">{{ t('theme.colors.desc') }}</p>
         </div>
 
         <div class="theme-layout">
@@ -380,7 +382,7 @@ onMounted(() => {
             <div class="card-header">
               <div class="card-title">
                 <Icon icon="material-symbols:image-outline" width="20" height="20" />
-                <span>界面壁纸</span>
+                <span>{{ t('theme.wallpaper.title') }}</span>
               </div>
               <div class="card-actions">
                 <button
@@ -388,7 +390,7 @@ onMounted(() => {
                   v-if="settings.theme.has_wallpaper"
                   :disabled="uploading"
                   @click="handleDeleteWallpaper"
-                  title="删除壁纸"
+                  :title="t('theme.wallpaper.delete')"
                 >
                   <Icon icon="material-symbols:delete-outline-rounded" width="16" height="16" />
                 </button>
@@ -398,7 +400,7 @@ onMounted(() => {
                   @click="wallpaperInputRef?.click()"
                 >
                   <Icon icon="material-symbols:upload-rounded" width="16" height="16" />
-                  {{ settings.theme.has_wallpaper ? '更换' : '上传' }}
+                  {{ uploading ? t('theme.wallpaper.uploading') : (settings.theme.has_wallpaper ? '更换' : t('theme.wallpaper.upload')) }}
                 </button>
               </div>
             </div>
@@ -427,13 +429,13 @@ onMounted(() => {
               <!-- 无壁纸提示 -->
               <div v-else class="wallpaper-empty">
                 <Icon icon="material-symbols:wallpaper-rounded" width="32" height="32" class="wallpaper-empty-icon" />
-                <span>当前未设置壁纸</span>
+                <span>{{ t('theme.wallpaper.empty') }}</span>
               </div>
             </div>
 
             <div class="slider-grid" :class="{ 'disabled': !settings.theme.has_wallpaper }">
               <label class="slider-row">
-                <span class="slider-label">模糊强度</span>
+                <span class="slider-label">{{ t('theme.wallpaper.blur') }}</span>
                 <input
                   v-model.number="settings.theme.wallpaper_blur"
                   type="range" min="0" max="20" step="1"
@@ -443,7 +445,7 @@ onMounted(() => {
               </label>
 
               <label class="slider-row">
-                <span class="slider-label">遮罩透明度</span>
+                <span class="slider-label">{{ t('theme.wallpaper.opacity') }}</span>
                 <input
                   v-model.number="settings.theme.wallpaper_opacity"
                   type="range" min="0" max="1" step="0.05"
@@ -467,7 +469,7 @@ onMounted(() => {
             <div class="card-header">
               <div class="card-title">
                 <Icon icon="material-symbols:palette-outline" width="20" height="20" />
-                <span>主题色彩</span>
+                <span>{{ t('theme.colors.title') }}</span>
               </div>
             </div>
 
@@ -475,8 +477,8 @@ onMounted(() => {
               <!-- 壁纸取色 -->
               <div class="color-group" v-if="wallpaperColors.length > 0">
                 <div class="color-group-title">
-                  <span>壁纸取色</span>
-                  <span v-if="colorSource === 'wallpaper'" class="active-badge">使用中</span>
+                  <span>{{ t('theme.colors.wallpaperColors') }}</span>
+                  <span v-if="colorSource === 'wallpaper'" class="active-badge">{{ t('theme.colors.source.wallpaper') }}</span>
                 </div>
                 <div class="color-presets">
                   <button
@@ -496,8 +498,8 @@ onMounted(() => {
               <!-- 预设颜色 -->
               <div class="color-group">
                 <div class="color-group-title">
-                  <span>推荐预设</span>
-                  <span v-if="colorSource === 'preset'" class="active-badge">使用中</span>
+                  <span>{{ t('theme.colors.presets.title') }}</span>
+                  <span v-if="colorSource === 'preset'" class="active-badge">{{ t('theme.colors.source.preset') }}</span>
                 </div>
                 <div class="color-presets">
                   <button
@@ -517,8 +519,8 @@ onMounted(() => {
               <!-- 自定义颜色 -->
               <div class="color-group">
                 <div class="color-group-title">
-                  <span>自定义颜色</span>
-                  <span v-if="colorSource === 'custom'" class="active-badge">使用中</span>
+                  <span>{{ t('theme.colors.customColor') }}</span>
+                  <span v-if="colorSource === 'custom'" class="active-badge">{{ t('theme.colors.source.custom') }}</span>
                 </div>
                 <div class="custom-color-inline">
                   <input
@@ -538,11 +540,11 @@ onMounted(() => {
       <div class="actions-row">
         <button class="btn-outlined" @click="fetchSettings" :disabled="saving">
           <Icon icon="material-symbols:refresh-rounded" width="18" height="18" />
-          重新获取
+          {{ t('settings.general.refetch') }}
         </button>
         <button class="btn-outlined btn-danger" @click="handleReset" :disabled="saving">
           <Icon icon="material-symbols:restart-alt-rounded" width="18" height="18" />
-          恢复默认
+          {{ t('theme.actions.reset') }}
         </button>
       </div>
     </template>

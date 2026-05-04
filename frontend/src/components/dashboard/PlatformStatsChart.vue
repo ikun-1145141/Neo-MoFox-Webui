@@ -11,6 +11,9 @@ import {
 } from 'echarts/components'
 import type { EChartsOption } from 'echarts'
 import type { PlatformStatistics } from '../../api/types/dashboard'
+import { useI18n } from '../../utils/i18n'
+
+const { t } = useI18n()
 
 use([
   CanvasRenderer,
@@ -33,7 +36,7 @@ const chartOption = computed<EChartsOption>(() => {
   if (!props.data || props.data.platforms.length === 0) {
     return {
       title: { 
-        text: props.loading ? '加载中...' : '暂无数据', 
+        text: props.loading ? t('home.charts.platformStats.loading') : t('home.charts.platformStats.noData'), 
         left: 'center', 
         top: 'middle' 
       }
@@ -89,7 +92,7 @@ const chartOption = computed<EChartsOption>(() => {
     color: colorPalette,
     series: [
       {
-        name: '平台消息',
+        name: t('home.charts.platformStats.platformMessages'),
         type: 'pie',
         radius: ['45%', '70%'],
         center: ['50%', '45%'],
@@ -133,18 +136,18 @@ const chartOption = computed<EChartsOption>(() => {
 <template>
   <div class="chart-container">
     <div class="chart-header">
-      <h3>平台消息统计</h3>
+      <h3>{{ t('home.charts.platformStats.title') }}</h3>
       <div class="total-badge" v-if="data">
-        总计: {{ data.total }} 条
+        {{ t('home.charts.platformStats.total') }}: {{ data.total }} {{ t('home.charts.platformStats.messages') }}
       </div>
     </div>
     <div class="chart-content">
       <div v-if="loading" class="loading-state">
         <div class="spinner"></div>
-        <p>加载中...</p>
+        <p>{{ t('home.charts.platformStats.loading') }}</p>
       </div>
       <div v-else-if="!data || data.platforms.length === 0" class="empty-state">
-        <p>暂无平台数据</p>
+        <p>{{ t('home.charts.platformStats.noPlatformData') }}</p>
       </div>
       <VChart v-else :option="chartOption" :autoresize="true" style="width: 100%; height: 100%;" />
     </div>

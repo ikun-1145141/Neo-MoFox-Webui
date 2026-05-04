@@ -2,23 +2,35 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppShell from '../components/common/AppShell.vue'
-import PageHeader from '../components/common/PageHeader.vue'
 import Icon from '../components/common/Icon.vue'
 import { getPluginDetail, reloadPlugin } from '../api/modules/plugin'
 import type { PluginDetail, PluginComponentInfo } from '../api/types/plugin'
 import { useDialogStore } from '../utils/dialog'
 import { useToastStore } from '../utils/toast'
+import { useI18n } from '../utils/i18n'
 
 const route = useRoute()
 const router = useRouter()
 const dialogStore = useDialogStore()
 const toastStore = useToastStore()
+const { t } = useI18n()
 
 const pluginName = computed(() => route.params.name as string)
 const plugin = ref<PluginDetail | null>(null)
 const isLoading = ref(true)
 const isReloading = ref(false)
 const selectedType = ref<string>('all')
+
+// 翻译工具函数：替换带参数的文本
+const tr = (key: string, params?: Record<string, any>): string => {
+  let text = t(key)
+  if (params) {
+    Object.entries(params).forEach(([k, v]) => {
+      text = text.replace(`{${k}}`, String(v))
+    })
+  }
+  return text
+}
 
 // 获取插件详情
 const fetchPluginDetail = async () => {
@@ -27,7 +39,7 @@ const fetchPluginDetail = async () => {
     plugin.value = await getPluginDetail(pluginName.value)
   } catch (error) {
     console.error('获取插件详情失败:', error)
-    toastStore.error('获取插件详情失败')
+    toastStore.show(t('plugins.detail.toast.fetchFailed'), 'error')
     router.push({ name: 'plugins' })
   } finally {
     isLoading.value = false
@@ -65,9 +77,10 @@ const componentTypes = computed(() => {
 // 重载插件
 const handleReload = async () => {
   const confirmed = await dialogStore.confirm(
-    '确认重载插件',
-    `是否重载插件 "${pluginName.value}"？这将卸载并重新加载该插件。`,
-    { confirmText: '重载', cancelText: '取消' }
+    tr('plugins.detail.dialogs.reloadMessage', { name: pluginName.value }),
+    t('plugins.detail.dialogs.reloadTitle'),
+    t('plugins.detail.dialogs.reloadConfirm'),
+    t('plugins.detail.dialogs.cancel')
   )
   
   if (!confirmed) return
@@ -76,10 +89,10 @@ const handleReload = async () => {
   try {
     const result = await reloadPlugin(pluginName.value)
     if (result.success) {
-      toastStore.success(`插件 "${pluginName.value}" 重载成功`)
+      toastStore.show(tr('plugins.detail.toast.reloadSuccess', { name: pluginName.value }), 'success')
       await fetchPluginDetail()
     } else {
-      toastStore.error(`插件重载失败: ${result.error_message}`)
+      toastStore.show(tr('plugins.detail.toast.reloadFailed', { error: result.error_message }), 'error')
     }
   } catch (error) {
     console.error('重载插件失败:', error)
@@ -128,6 +141,13 @@ const getComponentTypeIcon = (type: string): string => {
   return iconMap[type.toLowerCase()] || 'material-symbols:extension-outline-rounded'
 }
 
+// 获取组件类型显示名称
+const getComponentTypeName = (type: string): string => {
+  const key = `plugins.detail.componentTypes.${type.toLowerCase()}`
+  const translated = t(key)
+  return translated !== key ? translated : type
+}
+
 onMounted(async () => {
   await fetchPluginDetail()
 })
@@ -138,7 +158,7 @@ onMounted(async () => {
     <!-- 加载状态 -->
     <div v-if="isLoading" class="loading-state">
       <Icon icon="material-symbols:progress-activity" width="48" height="48" class="loading-spinner" />
-      <p>加载插件详情...</p>
+      <p>{{ t('plugins.loading') }}</p>
     </div>
 
     <!-- 插件详情 -->
@@ -146,7 +166,7 @@ onMounted(async () => {
       <!-- 返回按钮 -->
       <button class="back-btn" @click="goBack">
         <Icon icon="material-symbols:arrow-back-rounded" width="20" height="20" />
-        <span>返回列表</span>
+        <span>{{ t('plugins.detail.backToList') }}</span>
       </button>
 
       <!-- 插件头部信息卡片 -->
@@ -158,12 +178,12 @@ onMounted(async () => {
           <div class="plugin-header-info">
             <h1 class="plugin-title">{{ plugin.plugin_name }}</h1>
             <div class="plugin-meta">
-              <span class="plugin-version">v{{ plugin.plugin_version }}</span>
+              <span class="plugin-version">{{ tr('plugins.version', { version: plugin.plugin_version }) }}</span>
               <span class="plugin-status-badge" :class="{ loaded: plugin.is_loaded }">
-                {{ plugin.is_loaded ? '已加载' : '未加载' }}
+                {{ plugin.is_loaded ? t('plugins.detail.loaded') : t('plugins.detail.notLoaded') }}
               </span>
             </div>
-            <p class="plugin-description">{{ plugin.plugin_description || '暂无描述' }}</p>
+            <p class="plugin-description">{{ plugin.plugin_description || t('plugins.noDescription') }}</p>
             <p class="plugin-path">
               <Icon icon="material-symbols:folder-outline-rounded" width="16" height="16" />
               {{ plugin.plugin_path }}
@@ -179,7 +199,7 @@ onMounted(async () => {
             @click="goToConfig"
           >
             <Icon icon="material-symbols:settings-outline-rounded" width="20" height="20" />
-            <span>配置</span>
+            <span>{{ t('plugins.detail.actions.config') }}</span>
           </button>
           <button
             class="action-btn action-btn-secondary"
@@ -187,7 +207,7 @@ onMounted(async () => {
             :disabled="isReloading"
           >
             <Icon icon="material-symbols:refresh-rounded" width="20" height="20" />
-            <span>{{ isReloading ? '重载中...' : '重载' }}</span>
+            <span>{{ isReloading ? t('plugins.detail.actions.reloading') : t('plugins.detail.actions.reload') }}</span>
           </button>
         </div>
       </div>
@@ -200,7 +220,7 @@ onMounted(async () => {
           </div>
           <div class="stat-content">
             <div class="stat-value">{{ plugin.component_count }}</div>
-            <div class="stat-label">组件总数</div>
+            <div class="stat-label">{{ t('plugins.detail.stats.totalComponents') }}</div>
           </div>
         </div>
         <div class="stat-card">
@@ -209,7 +229,7 @@ onMounted(async () => {
           </div>
           <div class="stat-content">
             <div class="stat-value">{{ componentTypes.length }}</div>
-            <div class="stat-label">组件类型</div>
+            <div class="stat-label">{{ t('plugins.detail.stats.componentTypes') }}</div>
           </div>
         </div>
         <div class="stat-card">
@@ -218,7 +238,7 @@ onMounted(async () => {
           </div>
           <div class="stat-content">
             <div class="stat-value">{{ plugin.dependencies.length }}</div>
-            <div class="stat-label">依赖数量</div>
+            <div class="stat-label">{{ t('plugins.detail.stats.dependencies') }}</div>
           </div>
         </div>
       </div>
@@ -226,7 +246,7 @@ onMounted(async () => {
       <!-- 组件列表 -->
       <div class="components-section">
         <div class="section-header">
-          <h2 class="section-title">组件列表</h2>
+          <h2 class="section-title">{{ t('plugins.detail.components.title') }}</h2>
           
           <!-- 类型筛选 -->
           <div class="type-filter">
@@ -235,7 +255,7 @@ onMounted(async () => {
               :class="{ active: selectedType === 'all' }"
               @click="selectedType = 'all'"
             >
-              全部 ({{ plugin.components.length }})
+              {{ t('plugins.detail.components.all') }} ({{ plugin.components.length }})
             </button>
             <button
               v-for="type in componentTypes"
@@ -244,7 +264,7 @@ onMounted(async () => {
               :class="{ active: selectedType === type }"
               @click="selectedType = type"
             >
-              {{ type }} ({{ componentsByType[type].length }})
+              {{ getComponentTypeName(type) }} ({{ componentsByType[type].length }})
             </button>
           </div>
         </div>
@@ -264,9 +284,9 @@ onMounted(async () => {
             </div>
             
             <div class="component-card-body">
-              <div class="component-type-badge">{{ component.component_type }}</div>
+              <div class="component-type-badge">{{ getComponentTypeName(component.component_type) }}</div>
               <h3 class="component-name">{{ component.component_name }}</h3>
-              <p class="component-description">{{ component.description || '暂无描述' }}</p>
+              <p class="component-description">{{ component.description || t('plugins.noDescription') }}</p>
               
               <!-- 扩展属性 -->
               <div v-if="component.extra && Object.keys(component.extra).length > 0" class="component-extra">
@@ -290,7 +310,7 @@ onMounted(async () => {
         <!-- 空状态 -->
         <div v-if="filteredComponents.length === 0" class="empty-components">
           <Icon icon="material-symbols:filter-list-off-rounded" width="48" height="48" />
-          <p>该类型下暂无组件</p>
+          <p>{{ t('plugins.detail.components.empty') }}</p>
         </div>
       </div>
     </div>

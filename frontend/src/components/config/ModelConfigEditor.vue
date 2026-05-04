@@ -24,13 +24,13 @@
           type="button"
           class="mode-toggle-btn"
           @click="toggleEditMode"
-          :title="isCodeMode ? '切换到表单模式' : '切换到代码模式'"
+          :title="isCodeMode ? t('configEditor.modeToggle.toForm') : t('configEditor.modeToggle.toCode')"
         >
           <Icon
             :icon="isCodeMode ? 'material-symbols:edit-note-rounded' : 'material-symbols:code-rounded'"
             :size="20"
           />
-          <span>{{ isCodeMode ? '表单模式' : '代码模式' }}</span>
+          <span>{{ isCodeMode ? t('configEditor.modeToggle.formLabel') : t('configEditor.modeToggle.codeLabel') }}</span>
         </button>
 
         <!-- 保存按钮 -->
@@ -39,7 +39,7 @@
           class="save-btn"
           @click="handleSave"
           :disabled="isSaving || !hasChanges"
-          :title="hasChanges ? '保存更改' : '无更改'"
+          :title="hasChanges ? t('configEditor.save.hasChanges') : t('configEditor.save.noChanges')"
         >
           <Icon
             v-if="!isSaving"
@@ -52,7 +52,7 @@
             :size="20"
             class="spinning"
           />
-          <span>{{ isSaving ? '保存中...' : '保存' }}</span>
+          <span>{{ isSaving ? t('configEditor.save.saving') : t('configEditor.save.button') }}</span>
         </button>
       </div>
     </div>
@@ -88,10 +88,10 @@
           <!-- 供应商配置 -->
           <div v-if="activeTab === 'providers'" class="config-section">
             <div class="section-header">
-              <h3>API 提供商列表</h3>
+              <h3>{{ t('modelConfigEditor.providers.title') }}</h3>
               <button type="button" class="add-btn" @click="addProvider">
                 <Icon icon="material-symbols:add-rounded" :size="20" />
-                <span>添加供应商</span>
+                <span>{{ t('modelConfigEditor.actions.add') }}</span>
               </button>
             </div>
 
@@ -104,17 +104,17 @@
                 <div class="card-header">
                   <div class="card-title">
                     <Icon icon="material-symbols:cloud-rounded" :size="24" />
-                    <span>{{ provider.name || '未命名供应商' }}</span>
+                    <span>{{ provider.name || t('modelConfigEditor.providers.name') }}</span>
                   </div>
                   <div class="card-actions">
-                    <button type="button" class="icon-btn" @click="testProvider(provider, String(idx))" :disabled="testingProviders.has(String(idx))" :title="'测试连通性'">
+                    <button type="button" class="icon-btn" @click="testProvider(provider, String(idx))" :disabled="testingProviders.has(String(idx))" :title="t('modelConfigEditor.actions.test')">
                       <Icon v-if="!testingProviders.has(String(idx))" icon="material-symbols:play-arrow-rounded" :size="20" />
                       <Icon v-else icon="material-symbols:progress-activity" :size="20" class="spinning" />
                     </button>
-                    <button type="button" class="icon-btn" @click="editProvider(idx)" :title="'编辑'">
+                    <button type="button" class="icon-btn" @click="editProvider(idx)" :title="t('modelConfigEditor.actions.edit')">
                       <Icon icon="material-symbols:edit-outline-rounded" :size="20" />
                     </button>
-                    <button type="button" class="icon-btn danger" @click="deleteProvider(idx)" :title="'删除'">
+                    <button type="button" class="icon-btn danger" @click="deleteProvider(idx)" :title="t('modelConfigEditor.actions.delete')">
                       <Icon icon="material-symbols:delete-outline-rounded" :size="20" />
                     </button>
                   </div>
@@ -123,19 +123,19 @@
                 <div class="card-body">
                   <div class="info-grid">
                     <div class="info-item">
-                      <span class="label">Base URL:</span>
+                      <span class="label">{{ t('modelConfigEditor.providers.baseUrl') }}:</span>
                       <span class="value">{{ provider.base_url }}</span>
                     </div>
                     <div class="info-item">
-                      <span class="label">客户端类型:</span>
+                      <span class="label">Client Type:</span>
                       <span class="value">{{ provider.client_type }}</span>
                     </div>
                     <div class="info-item">
-                      <span class="label">超时:</span>
+                      <span class="label">Timeout:</span>
                       <span class="value">{{ provider.timeout }}s</span>
                     </div>
                     <div class="info-item">
-                      <span class="label">重试次数:</span>
+                      <span class="label">Max Retry:</span>
                       <span class="value">{{ provider.max_retry }}</span>
                     </div>
                   </div>
@@ -153,10 +153,10 @@
           <!-- 模型配置 -->
           <div v-if="activeTab === 'models'" class="config-section">
             <div class="section-header">
-              <h3>模型列表</h3>
+              <h3>{{ t('modelConfigEditor.models.title') }}</h3>
               <button type="button" class="add-btn" @click="addModel">
                 <Icon icon="material-symbols:add-rounded" :size="20" />
-                <span>添加模型</span>
+                <span>{{ t('modelConfigEditor.actions.add') }}</span>
               </button>
             </div>
 
@@ -169,17 +169,17 @@
                 <div class="card-header">
                   <div class="card-title">
                     <Icon icon="material-symbols:smart-toy-outline-rounded" :size="24" />
-                    <span>{{ model.name || '未命名模型' }}</span>
+                    <span>{{ model.name || t('modelConfigEditor.models.name') }}</span>
                   </div>
                   <div class="card-actions">
-                    <button type="button" class="icon-btn" @click="testModel(model, String(idx))" :disabled="testingModels.has(String(idx))" :title="'测试连通性'">
+                    <button type="button" class="icon-btn" @click="testModel(model, String(idx))" :disabled="testingModels.has(String(idx))" :title="t('modelConfigEditor.actions.test')">
                       <Icon v-if="!testingModels.has(String(idx))" icon="material-symbols:play-arrow-rounded" :size="20" />
                       <Icon v-else icon="material-symbols:progress-activity" :size="20" class="spinning" />
                     </button>
-                    <button type="button" class="icon-btn" @click="editModel(idx)" :title="'编辑'">
+                    <button type="button" class="icon-btn" @click="editModel(idx)" :title="t('modelConfigEditor.actions.edit')">
                       <Icon icon="material-symbols:edit-outline-rounded" :size="20" />
                     </button>
-                    <button type="button" class="icon-btn danger" @click="deleteModel(idx)" :title="'删除'">
+                    <button type="button" class="icon-btn danger" @click="deleteModel(idx)" :title="t('modelConfigEditor.actions.delete')">
                       <Icon icon="material-symbols:delete-outline-rounded" :size="20" />
                     </button>
                   </div>
@@ -188,23 +188,23 @@
                 <div class="card-body">
                   <div class="info-grid">
                     <div class="info-item">
-                      <span class="label">标识符:</span>
+                      <span class="label">{{ t('modelConfigEditor.models.modelName') }}:</span>
                       <span class="value">{{ model.model_identifier }}</span>
                     </div>
                     <div class="info-item">
-                      <span class="label">提供商:</span>
+                      <span class="label">{{ t('modelConfigEditor.models.provider') }}:</span>
                       <span class="value">{{ model.api_provider }}</span>
                     </div>
                     <div class="info-item">
-                      <span class="label">输入价格:</span>
+                      <span class="label">Input Price:</span>
                       <span class="value">¥{{ model.price_in }}/M tokens</span>
                     </div>
                     <div class="info-item">
-                      <span class="label">输出价格:</span>
+                      <span class="label">Output Price:</span>
                       <span class="value">¥{{ model.price_out }}/M tokens</span>
                     </div>
                     <div class="info-item">
-                      <span class="label">上下文长度:</span>
+                      <span class="label">Context Length:</span>
                       <span class="value">{{ model.max_context }} tokens</span>
                     </div>
                   </div>
@@ -214,10 +214,12 @@
                     <Icon :icon="testResults.models.get(String(idx))!.success ? 'material-symbols:check-circle-outline-rounded' : 'material-symbols:error-outline-rounded'" :size="18" />
                     <div class="result-content">
                       <p class="result-message">
-                        {{ testResults.models.get(String(idx))!.success ? `连接成功！延迟：${testResults.models.get(String(idx))!.latency_ms?.toFixed(0)} ms` : `连接失败：${testResults.models.get(String(idx))!.error_message}` }}
+                        {{ testResults.models.get(String(idx))!.success 
+                          ? t('modelConfigEditor.test.success') + `! Latency: ${testResults.models.get(String(idx))!.latency_ms?.toFixed(0)} ms` 
+                          : t('modelConfigEditor.test.failed') + `: ${testResults.models.get(String(idx))!.error_message}` }}
                       </p>
                       <p v-if="testResults.models.get(String(idx))!.response_text" class="result-response">
-                        响应：{{ testResults.models.get(String(idx))!.response_text }}
+                        {{ t('modelConfigEditor.test.modelResponse', { response: testResults.models.get(String(idx))!.response_text || '' }) }}
                       </p>
                     </div>
                   </div>
@@ -229,7 +231,7 @@
           <!-- 任务配置 -->
           <div v-if="activeTab === 'tasks'" class="config-section">
             <div class="section-header">
-              <h3>任务配置列表</h3>
+              <h3>{{ t('modelConfigEditor.tasks.title') }}</h3>
             </div>
 
             <div class="config-list">
@@ -244,10 +246,10 @@
                     <span>{{ tname }}</span>
                   </div>
                   <div class="card-actions">
-                    <button type="button" class="icon-btn" @click="editTask(String(tname))" :title="'编辑'">
+                    <button type="button" class="icon-btn" @click="editTask(String(tname))" :title="t('modelConfigEditor.actions.edit')">
                       <Icon icon="material-symbols:edit-outline-rounded" :size="20" />
                     </button>
-                    <button type="button" class="icon-btn danger" @click="deleteTask(String(tname))" :title="'删除'">
+                    <button type="button" class="icon-btn danger" @click="deleteTask(String(tname))" :title="t('modelConfigEditor.actions.delete')">
                       <Icon icon="material-symbols:delete-outline-rounded" :size="20" />
                     </button>
                   </div>
@@ -256,15 +258,15 @@
                 <div class="card-body">
                   <div class="info-grid">
                     <div class="info-item">
-                      <span class="label">模型列表:</span>
+                      <span class="label">Model List:</span>
                       <span class="value">{{ (task as any).model_list?.join(', ') || '-' }}</span>
                     </div>
                     <div class="info-item">
-                      <span class="label">最大 Tokens:</span>
+                      <span class="label">Max Tokens:</span>
                       <span class="value">{{ (task as any).max_tokens || '-' }}</span>
                     </div>
                     <div class="info-item">
-                      <span class="label">温度:</span>
+                      <span class="label">Temperature:</span>
                       <span class="value">{{ (task as any).temperature || '-' }}</span>
                     </div>
                   </div>
@@ -302,11 +304,16 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { parse as parseToml } from 'toml'
+import { useI18n } from '@/utils/i18n'
+import { useDialogStore } from '@/utils/dialog'
 import Icon from '../common/Icon.vue'
 import TomlEditor from './TomlEditor.vue'
 import ModelEditDialog from './ModelEditDialog.vue'
 import { testModel as apiTestModel, getRawConfig } from '@/api/modules/config'
 import type { SectionSchema, ModelTestResult } from '@/api/types/config'
+
+const { t } = useI18n()
+const dialogStore = useDialogStore()
 
 // Props
 interface Props {
@@ -336,11 +343,11 @@ const isCodeMode = ref(false)
 const activeTab = ref<'providers' | 'models' | 'tasks'>('providers')
 
 // 标签定义
-const tabs = [
-  { key: 'providers' as const, label: '供应商配置', icon: 'material-symbols:cloud-rounded' },
-  { key: 'models' as const, label: '模型配置', icon: 'material-symbols:smart-toy-outline-rounded' },
-  { key: 'tasks' as const, label: '任务配置', icon: 'material-symbols:task-alt-rounded' },
-]
+const tabs = computed(() => [
+  { key: 'providers' as const, label: t('modelConfigEditor.tabs.providers'), icon: 'material-symbols:cloud-rounded' },
+  { key: 'models' as const, label: t('modelConfigEditor.tabs.models'), icon: 'material-symbols:smart-toy-outline-rounded' },
+  { key: 'tasks' as const, label: t('modelConfigEditor.tabs.tasks'), icon: 'material-symbols:task-alt-rounded' },
+])
 
 // 本地数据（表单数据）
 const localData = ref<Record<string, any>>({
@@ -559,8 +566,9 @@ function editProvider(index: string | number) {
   }
 }
 
-function deleteProvider(index: string | number) {
-  if (confirm('确定要删除此供应商吗？')) {
+async function deleteProvider(index: string | number) {
+  const confirmed = await dialogStore.confirm(t('modelConfigEditor.providers.deleteConfirm'))
+  if (confirmed) {
     localData.value.api_providers.splice(Number(index), 1)
   }
 }
@@ -579,18 +587,18 @@ async function testProvider(provider: any, index: string | number) {
     if (!hasModels) {
       testResults.value.providers.set(idx, {
         success: false,
-        message: '该供应商下没有配置模型',
+        message: t('modelConfigEditor.test.providerNoModels'),
       })
     } else {
       testResults.value.providers.set(idx, {
         success: true,
-        message: '配置验证通过',
+        message: t('modelConfigEditor.test.providerHasModels', { count: localData.value.models.filter((m: any) => m.api_provider === provider.name).length.toString() }),
       })
     }
   } catch (error: any) {
     testResults.value.providers.set(idx, {
       success: false,
-      message: error.message || '测试失败',
+      message: error.message || t('modelConfigEditor.test.failed'),
     })
   } finally {
     testingProviders.value.delete(idx)
@@ -619,8 +627,9 @@ function editModel(index: string | number) {
   }
 }
 
-function deleteModel(index: string | number) {
-  if (confirm('确定要删除此模型吗？')) {
+async function deleteModel(index: string | number) {
+  const confirmed = await dialogStore.confirm(t('modelConfigEditor.models.deleteConfirm'))
+  if (confirmed) {
     localData.value.models.splice(Number(index), 1)
   }
 }
@@ -638,7 +647,7 @@ async function testModel(model: any, index: string | number) {
     if (!provider) {
       testResults.value.models.set(idx, {
         success: false,
-        error_message: `未找到提供商: ${model.api_provider}`,
+        error_message: t('modelConfigEditor.test.providerNotFound') + `: ${model.api_provider}`,
         model_identifier: model.model_identifier,
         provider_base_url: '',
       })
@@ -656,7 +665,7 @@ async function testModel(model: any, index: string | number) {
   } catch (error: any) {
     testResults.value.models.set(idx, {
       success: false,
-      error_message: error.message || '测试请求失败',
+      error_message: error.message || t('modelConfigEditor.test.failed'),
       model_identifier: model.model_identifier,
       provider_base_url: '',
     })
@@ -678,8 +687,9 @@ function editTask(taskName: string) {
   }
 }
 
-function deleteTask(taskName: string) {
-  if (confirm(`确定要删除任务 ${taskName} 吗？`)) {
+async function deleteTask(taskName: string) {
+  const confirmed = await dialogStore.confirm(t('modelConfigEditor.tasks.deleteConfirm', { name: taskName }))
+  if (confirmed) {
     delete localData.value.model_tasks[taskName]
   }
 }

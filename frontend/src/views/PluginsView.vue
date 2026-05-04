@@ -6,10 +6,10 @@ import PageHeader from '../components/common/PageHeader.vue'
 import Icon from '../components/common/Icon.vue'
 import { getPluginList } from '../api/modules/plugin'
 import type { PluginSummary } from '../api/types/plugin'
-import { useToastStore } from '../utils/toast'
+import { useI18n } from '../utils/i18n'
 
 const router = useRouter()
-const toastStore = useToastStore()
+const { t } = useI18n()
 
 const plugins = ref<PluginSummary[]>([])
 const isLoading = ref(true)
@@ -65,18 +65,20 @@ const getComponentTypeIcon = (type: string): string => {
 
 // 获取组件类型显示名称
 const getComponentTypeName = (type: string): string => {
-  const nameMap: Record<string, string> = {
-    'action': '动作',
-    'adapter': '适配器',
-    'command': '命令',
-    'router': '路由',
-    'agent': '代理',
-    'tool': '工具',
-    'chatter': '对话器',
-    'config': '配置',
-    'service': '服务',
+  const key = `plugins.detail.componentTypes.${type.toLowerCase()}`
+  const translated = t(key)
+  return translated !== key ? translated : type
+}
+
+// 翻译工具函数：替换带参数的文本
+const tr = (key: string, params?: Record<string, any>): string => {
+  let text = t(key)
+  if (params) {
+    Object.entries(params).forEach(([k, v]) => {
+      text = text.replace(`{${k}}`, String(v))
+    })
   }
-  return nameMap[type.toLowerCase()] || type
+  return text
 }
 
 onMounted(async () => {
@@ -93,12 +95,12 @@ const handleSearch = () => {
 <template>
   <AppShell>
     <PageHeader 
-      title="插件管理" 
+      :title="t('plugins.title')" 
       icon="material-symbols:extension-outline-rounded"
-      subtitle="查看和管理已加载的插件"
+      :subtitle="t('plugins.subtitle')"
     >
       <template #actions>
-        <button class="icon-btn" @click="fetchPlugins" :disabled="isLoading" title="刷新">
+        <button class="icon-btn" @click="fetchPlugins" :disabled="isLoading" :title="t('plugins.refresh')">
           <Icon icon="material-symbols:refresh-rounded" width="20" height="20" />
         </button>
       </template>
@@ -112,25 +114,25 @@ const handleSearch = () => {
           v-model="searchQuery"
           @input="handleSearch"
           type="text"
-          placeholder="搜索插件名称或描述..."
+          :placeholder="t('plugins.searchPlaceholder')"
           class="search-input"
         />
       </div>
       <div class="plugin-count">
-        共 {{ filteredPlugins.length }} 个插件
+        {{ tr('plugins.pluginCount', { count: filteredPlugins.length }) }}
       </div>
     </div>
 
     <!-- 加载状态 -->
     <div v-if="isLoading" class="loading-state">
       <Icon icon="material-symbols:progress-activity" width="48" height="48" class="loading-spinner" />
-      <p>加载插件列表...</p>
+      <p>{{ t('plugins.loading') }}</p>
     </div>
 
     <!-- 空状态 -->
     <div v-else-if="filteredPlugins.length === 0" class="empty-state">
       <Icon icon="material-symbols:extension-off-outline-rounded" width="64" height="64" />
-      <p>{{ searchQuery ? '未找到匹配的插件' : '暂无已加载的插件' }}</p>
+      <p>{{ searchQuery ? t('plugins.noMatch') : t('plugins.empty') }}</p>
     </div>
 
     <!-- 插件卡片网格 -->
@@ -154,9 +156,9 @@ const handleSearch = () => {
         <!-- 插件信息 -->
         <div class="plugin-card-body">
           <h3 class="plugin-name">{{ plugin.plugin_name }}</h3>
-          <p class="plugin-version">v{{ plugin.plugin_version }}</p>
+          <p class="plugin-version">{{ tr('plugins.version', { version: plugin.plugin_version }) }}</p>
           <p class="plugin-description">
-            {{ plugin.plugin_description || '暂无描述' }}
+            {{ plugin.plugin_description || t('plugins.noDescription') }}
           </p>
         </div>
 
@@ -177,7 +179,7 @@ const handleSearch = () => {
             </div>
           </div>
           <div class="component-count">
-            {{ plugin.component_count }} 个组件
+            {{ plugin.component_count }} {{ t('plugins.components') }}
           </div>
         </div>
 
@@ -376,6 +378,7 @@ const handleSearch = () => {
   margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;

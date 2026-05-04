@@ -21,7 +21,8 @@ const { t } = useI18n()
 const navItems = [
   { labelKey: 'app.nav.home', icon: 'material-symbols:home-outline-rounded', name: 'home', path: '/' },
   { labelKey: 'app.nav.config', icon: 'material-symbols:tune-rounded', name: 'config', path: '/config' },
-  { labelKey: 'app.nav.plugins', icon: 'material-symbols:extension-outline-rounded', name: 'config-plugins', path: '/config/plugins' },
+  { labelKey: 'app.nav.plugins', icon: 'material-symbols:extension-outline-rounded', name: 'plugins', path: '/plugins' },
+  { labelKey: 'app.nav.config-plugins', icon: 'material-symbols:settings-outline-rounded', name: 'config-plugins', path: '/config/plugins' },
   { labelKey: 'app.nav.settings', icon: 'material-symbols:setting-outline-rounded', name: 'settings-theme', path: '/settings' },
 ]
 

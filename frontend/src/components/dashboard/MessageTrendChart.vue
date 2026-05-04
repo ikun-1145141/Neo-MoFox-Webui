@@ -13,6 +13,9 @@ import {
 } from 'echarts/components'
 import type { EChartsOption } from 'echarts'
 import type { MessageTrend } from '../../api/types/dashboard'
+import { useI18n } from '../../utils/i18n'
+
+const { t } = useI18n()
 
 use([
   CanvasRenderer,
@@ -42,7 +45,7 @@ const selectedDays = ref(7)
 const chartOption = computed<EChartsOption>(() => {
   if (!props.data) {
     return {
-      title: { text: '加载中...', left: 'center', top: 'middle' }
+      title: { text: t('home.charts.messageTrend.loading'), left: 'center', top: 'middle' }
     }
   }
 
@@ -88,7 +91,11 @@ const chartOption = computed<EChartsOption>(() => {
       borderRadius: 8
     },
     legend: {
-      data: ['总消息数', '入站消息', '出站消息'],
+      data: [
+        t('home.charts.messageTrend.totalMessages'),
+        t('home.charts.messageTrend.inbound'),
+        t('home.charts.messageTrend.outbound')
+      ],
       top: 10,
       textStyle: {
         color: onSurfaceColor || '#000'
@@ -109,7 +116,7 @@ const chartOption = computed<EChartsOption>(() => {
     },
     yAxis: {
       type: 'value',
-      name: '消息数量',
+      name: t('home.charts.messageTrend.messageCount'),
       nameTextStyle: {
         color: onSurfaceVariantColor || '#666'
       },
@@ -130,7 +137,7 @@ const chartOption = computed<EChartsOption>(() => {
     },
     series: [
       {
-        name: '总消息数',
+        name: t('home.charts.messageTrend.totalMessages'),
         type: 'line',
         data: totalData,
         smooth: true,
@@ -155,7 +162,7 @@ const chartOption = computed<EChartsOption>(() => {
         }
       },
       {
-        name: '入站消息',
+        name: t('home.charts.messageTrend.inbound'),
         type: 'line',
         data: inboundData,
         smooth: true,
@@ -167,7 +174,7 @@ const chartOption = computed<EChartsOption>(() => {
         }
       },
       {
-        name: '出站消息',
+        name: t('home.charts.messageTrend.outbound'),
         type: 'line',
         data: outboundData,
         smooth: true,
@@ -191,30 +198,40 @@ watch(selectedDays, (newDays) => {
   <div class="chart-container">
     <div class="chart-header">
       <div class="header-left">
-        <h3>消息趋势分析</h3>
+        <h3>{{ t('home.charts.messageTrend.title') }}</h3>
         <div class="summary-tags" v-if="data">
-          <span class="tag">总计: {{ data.summary.total_messages }}</span>
-          <span class="tag">日均: {{ data.summary.avg_per_day }}</span>
+          <span class="tag">{{ t('home.charts.messageTrend.total') }}: {{ data.summary.total_messages }}</span>
+          <span class="tag">{{ t('home.charts.messageTrend.avgPerDay') }}: {{ data.summary.avg_per_day }}</span>
           <span class="tag" :class="{ positive: data.summary.growth_rate > 0, negative: data.summary.growth_rate < 0 }">
-            增长率: {{ data.summary.growth_rate > 0 ? '+' : '' }}{{ data.summary.growth_rate }}%
+            {{ t('home.charts.messageTrend.growthRate') }}: {{ data.summary.growth_rate > 0 ? '+' : '' }}{{ data.summary.growth_rate }}%
           </span>
         </div>
       </div>
       <div class="time-selector">
         <button
-          v-for="days in [7, 30, 90]"
-          :key="days"
-          :class="{ active: selectedDays === days }"
-          @click="selectedDays = days"
+          :class="{ active: selectedDays === 7 }"
+          @click="selectedDays = 7"
         >
-          过去{{ days }}天
+          {{ t('home.charts.messageTrend.days7') }}
+        </button>
+        <button
+          :class="{ active: selectedDays === 30 }"
+          @click="selectedDays = 30"
+        >
+          {{ t('home.charts.messageTrend.days30') }}
+        </button>
+        <button
+          :class="{ active: selectedDays === 90 }"
+          @click="selectedDays = 90"
+        >
+          {{ t('home.charts.messageTrend.days90') }}
         </button>
       </div>
     </div>
     <div class="chart-content">
       <div v-if="loading" class="loading-state">
         <div class="spinner"></div>
-        <p>加载中...</p>
+        <p>{{ t('home.charts.messageTrend.loading') }}</p>
       </div>
       <VChart v-else :option="chartOption" :autoresize="true" style="width: 100%; height: 100%;" />
     </div>

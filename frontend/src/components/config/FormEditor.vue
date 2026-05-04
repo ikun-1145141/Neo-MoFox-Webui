@@ -188,11 +188,6 @@ const expandedSections = ref<Set<number>>(new Set())
 
 type SelectOption = string | number | { label: string; value: string | number }
 
-interface ParsedFieldDescription {
-  description: string
-  choices: SelectOption[]
-}
-
 // 初始化展开第一个节（或单个节时总是展开）
 watch(
   () => props.schema,
@@ -313,33 +308,24 @@ function updateObjectField(sectionName: string, fieldKey: string, value: any) {
 }
 
 function getRenderableField(field: FieldSchema): FieldSchema {
-  const textToParse = field.description || (field.label !== field.key ? field.label : '') || ''
-  const parsed = parseFieldDescription({ ...field, description: textToParse })
   const explicitChoices = normalizeChoices(field.choices)
-  const choices = explicitChoices.length > 0 ? explicitChoices : parsed.choices
-
-  if (!hasChoices(choices)) {
-    return {
-      ...field,
-      description: parsed.description,
-    }
+  
+  if (!hasChoices(explicitChoices)) {
+    return field
   }
 
   return {
     ...field,
-    description: parsed.description,
     input_type: 'select',
-    choices,
+    choices: explicitChoices,
   }
 }
 
 function getFieldTitle(field: FieldSchema): string {
-  const textToParse = field.description || (field.label !== field.key ? field.label : '') || field.key
+  const description = field.description || (field.label !== field.key ? field.label : '') || field.key
+  if (!description) return field.key
 
-  const parsed = parseFieldDescription({ ...field, description: textToParse })
-  if (!parsed.description) return field.key
-
-  const firstLine = parsed.description.split('\n')[0].trim()
+  const firstLine = description.split('\n')[0].trim()
   const match = firstLine.match(/^([^。.：:，,]+)/)
   
   if (match && match[1]) {
@@ -350,19 +336,18 @@ function getFieldTitle(field: FieldSchema): string {
 }
 
 function getFieldDescriptionText(field: FieldSchema): string {
-  const textToParse = field.description || (field.label !== field.key ? field.label : '') || ''
-  const parsed = parseFieldDescription({ ...field, description: textToParse })
+  const description = field.description || (field.label !== field.key ? field.label : '') || ''
   const title = getFieldTitle(field)
 
-  if (parsed.description.trim() === title) {
+  if (description.trim() === title) {
     return ''
   }
 
-  if (parsed.description.startsWith(title)) {
-    return parsed.description.substring(title.length).replace(/^[。.：:，,\s\n]+/, '').trim()
+  if (description.startsWith(title)) {
+    return description.substring(title.length).replace(/^[。.：:，,\s\n]+/, '').trim()
   }
 
-  return parsed.description
+  return description
 }
 
 function hasChoices(value: unknown): value is SelectOption[] {
@@ -401,37 +386,6 @@ function normalizeChoices(choices: unknown): SelectOption[] {
   })
 
   return normalized
-}
-
-function parseFieldDescription(field: FieldSchema): ParsedFieldDescription {
-  const description = field.description?.trim() || ''
-  if (!description) return { description: '', choices: [] }
-
-  const explicitChoices = normalizeChoices(field.choices)
-  const optionMatch = description.match(/^(.*?)(?:[:：]\s*)?([A-Za-z0-9_.-]+(?:\s*[|/]\s*[A-Za-z0-9_.-]+)+)\s*$/)
-  if (!optionMatch) {
-    return { description, choices: explicitChoices }
-  }
-
-  const optionText = optionMatch[2]
-  const parsedChoices = optionText
-    .split(/[|/]/)
-    .map((option) => option.trim())
-    .filter(Boolean)
-    .map((option) => ({
-      label: option,
-      value: option,
-    }))
-
-  if (parsedChoices.length < 2) {
-    return { description, choices: explicitChoices }
-  }
-
-  const descriptionText = optionMatch[1].replace(/[:：]\s*$/, '').trim()
-  return {
-    description: descriptionText || description,
-    choices: explicitChoices.length > 0 ? explicitChoices : parsedChoices,
-  }
 }
 
 // 根据字段类型和 input_type 获取对应的字段组件

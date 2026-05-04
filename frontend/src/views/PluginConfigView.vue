@@ -15,7 +15,7 @@
         <MdSelect
           v-model="selectedPluginName"
           :options="pluginOptions"
-          placeholder="选择要配置的插件..."
+          :placeholder="t('pluginConfig.selectPlaceholder')"
         />
       </div>
 
@@ -27,7 +27,7 @@
           <input
             type="text"
             v-model="searchQuery"
-            placeholder="搜索插件..."
+            :placeholder="t('pluginConfig.searchPlaceholder')"
             class="search-input"
           />
         </div>
@@ -35,12 +35,12 @@
         <!-- 插件列表 -->
         <div v-if="isLoadingList" class="list-loading">
           <Icon icon="material-symbols:progress-activity" :size="32" class="spinning" />
-          <p>加载插件列表...</p>
+          <p>{{ t('pluginConfig.loading') }}</p>
         </div>
 
         <div v-else-if="filteredPlugins.length === 0" class="list-empty">
           <Icon icon="material-symbols:inbox-outline-rounded" :size="48" />
-          <p>{{ searchQuery ? '未找到匹配的插件' : '暂无可配置的插件' }}</p>
+          <p>{{ searchQuery ? t('pluginConfig.noMatch') : t('pluginConfig.empty') }}</p>
         </div>
 
         <div v-else class="list-items">
@@ -72,14 +72,14 @@
         <!-- 未选择插件 -->
         <div v-if="!selectedPlugin" class="editor-empty">
           <Icon icon="material-symbols:settings-outline-rounded" :size="64" />
-          <p class="empty-text-desktop">请从左侧选择一个插件以编辑配置</p>
-          <p class="empty-text-mobile">请从上方选择一个插件以编辑配置</p>
+          <p class="empty-text-desktop">{{ t('pluginConfig.selectPlugin') }}</p>
+          <p class="empty-text-mobile">{{ t('pluginConfig.selectPluginMobile') }}</p>
         </div>
 
         <!-- 加载配置 -->
         <div v-else-if="isLoadingConfig" class="editor-loading">
           <Icon icon="material-symbols:progress-activity" :size="48" class="spinning" />
-          <p>加载配置中...</p>
+          <p>{{ t('pluginConfig.loadingConfig') }}</p>
         </div>
 
         <!-- 配置编辑器 -->
@@ -100,7 +100,7 @@
           <p>{{ configErrorMessage }}</p>
           <button type="button" class="retry-btn" @click="loadPluginConfig(selectedPlugin!)">
             <Icon icon="material-symbols:refresh-rounded" :size="20" />
-            <span>重试</span>
+            <span>{{ t('pluginConfig.retry') }}</span>
           </button>
         </div>
       </div>
@@ -110,6 +110,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from '@/utils/i18n'
+import { useToastStore } from '@/utils/toast'
 import AppShell from '@/components/common/AppShell.vue'
 import Icon from '@/components/common/Icon.vue'
 import MdSelect from '@/components/common/MdSelect.vue'
@@ -120,6 +122,9 @@ import {
   fullWriteConfig,
 } from '@/api/modules/config'
 import type { PluginConfigEntry, EnhancedConfigResponse } from '@/api/types/config'
+
+const { t } = useI18n()
+const toast = useToastStore()
 
 // 插件列表
 const plugins = ref<PluginConfigEntry[]>([])
@@ -211,9 +216,9 @@ async function handleSave(data: Record<string, any>) {
     )
 
     currentPluginConfig.value = response
-    alert('保存成功！')
+    toast.show(t('pluginConfig.saveSuccess'), 'success')
   } catch (error: any) {
-    alert(`保存失败: ${error.message}`)
+    toast.show(t('pluginConfig.saveFailed', { error: error.message }), 'error')
   }
 }
 
