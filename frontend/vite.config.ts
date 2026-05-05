@@ -5,6 +5,8 @@ import { fileURLToPath, URL } from 'node:url'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [vue()],
+  // 设置基础路径，使打包后的资源路径正确
+  base: '/webui/frontend/',
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
