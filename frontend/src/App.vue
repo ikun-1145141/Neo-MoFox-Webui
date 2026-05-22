@@ -140,6 +140,8 @@ html, body {
   padding: 0;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* 禁用移动端橡皮筋效果 */
+  overscroll-behavior: none;
 }
 
 html {
