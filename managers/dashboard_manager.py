@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 
 from src.core.components.registry import get_global_registry  # type: ignore
 from src.core.components.types import ComponentType  # type: ignore
@@ -120,33 +120,51 @@ class DashboardManager:
         now = datetime.now()
         start_date = now - timedelta(days=days - 1)
         start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        start_timestamp = start_date.timestamp()
 
-        # 获取所有消息数据
-        messages = await QueryBuilder(Messages).filter(
-            time__gte=start_date.timestamp()
-        ).all(as_dict=True)
+        # 使用数据库聚合查询，避免加载所有数据到内存
+        async with get_db_session() as session:
+            # 按日期统计消息数（总数、入站、出站）
+            # 使用 CASE WHEN 在数据库层面区分入站/出站
+            # 计算日期（从时间戳转换为日期字符串）
+            # SQLite: strftime('%Y-%m-%d', time, 'unixepoch')
+            
+            stmt = select(
+                func.strftime('%Y-%m-%d', func.datetime(Messages.time, 'unixepoch')).label('date'),
+                func.count(Messages.id).label('total'),
+                func.sum(case((Messages.person_id.isnot(None), 1), else_=0)).label('inbound'),
+                func.sum(case((Messages.person_id.is_(None), 1), else_=0)).label('outbound'),
+            ).where(
+                Messages.time >= start_timestamp
+            ).group_by('date')
+            
+            result = await session.execute(stmt)
+            daily_rows = result.all()
+            
+            # 按平台统计
+            platform_stmt = select(
+                Messages.platform,
+                func.count(Messages.id).label('count')
+            ).where(
+                Messages.time >= start_timestamp
+            ).group_by(Messages.platform)
+            
+            platform_result = await session.execute(platform_stmt)
+            platform_rows = platform_result.all()
 
-        # 按日期和平台分组统计
+        # 构建每日统计字典
         daily_stats: dict[str, dict[str, int]] = {}
+        for row in daily_rows:
+            daily_stats[row.date] = {
+                "total": int(row.total),
+                "inbound": int(row.inbound),
+                "outbound": int(row.outbound),
+            }
+
+        # 构建平台统计字典
         platform_totals: dict[str, int] = {}
-
-        for msg in messages:
-            msg_date = datetime.fromtimestamp(msg["time"]).strftime("%Y-%m-%d")
-            platform = msg.get("platform", "unknown")
-
-            if msg_date not in daily_stats:
-                daily_stats[msg_date] = {"total": 0, "inbound": 0, "outbound": 0}
-
-            daily_stats[msg_date]["total"] += 1
-
-            # 区分入站/出站消息（person_id 存在表示入站）
-            if msg.get("person_id"):
-                daily_stats[msg_date]["inbound"] += 1
-            else:
-                daily_stats[msg_date]["outbound"] += 1
-
-            # 平台统计
-            platform_totals[platform] = platform_totals.get(platform, 0) + 1
+        for row in platform_rows:
+            platform_totals[row.platform or "unknown"] = int(row.count)
 
         # 填充缺失日期（确保所有日期都有数据）
         date_range = []
