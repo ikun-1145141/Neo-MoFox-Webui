@@ -44,7 +44,8 @@ const tabs = [
 .settings-layout {
   display: flex;
   align-items: stretch;
-  min-height: calc(100dvh - 64px); /* 视口高度减去 top-bar 高度，保持内容区撑满 */
+  /* 视口高度减去 top-bar 与移动端底栏 */
+  min-height: calc(100dvh - var(--app-top-bar-height, 64px) - var(--app-bottom-nav-height, 0px));
 }
 
 /* 侧边选项卡 */
@@ -57,8 +58,8 @@ const tabs = [
   backdrop-filter: blur(12px);
   overflow-y: auto;
   position: sticky;
-  top: 64px; /* 设置吸顶，保持在 top-bar 下方 */
-  height: calc(100dvh - 64px); /* 视口高度减去 top-bar 高度 */
+  top: var(--app-top-bar-height, 64px); /* 吸顶，保持在 top-bar 下方 */
+  height: calc(100dvh - var(--app-top-bar-height, 64px) - var(--app-bottom-nav-height, 0px));
   z-index: 5;
 }
 
@@ -70,7 +71,7 @@ const tabs = [
   .settings-sidebar {
     width: 100%;
     position: sticky;
-    top: 64px;
+    top: var(--app-top-bar-height, 64px);
     height: auto;
     border-right: none;
     border-bottom: 1px solid var(--md-sys-color-outline-variant);

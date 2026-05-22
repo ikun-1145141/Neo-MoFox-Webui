@@ -147,6 +147,19 @@ html {
   color: var(--md-sys-color-on-surface, #1b1b1f);
 }
 
+/* 全局布局变量：移动端底栏 + 顶栏高度 */
+:root {
+  --app-top-bar-height: 64px;
+  --app-bottom-nav-height: 80px;
+}
+
+/* 桌面端无底栏 */
+@media (min-width: 900px) {
+  :root {
+    --app-bottom-nav-height: 0px;
+  }
+}
+
 #app {
   min-height: 100dvh;
 }

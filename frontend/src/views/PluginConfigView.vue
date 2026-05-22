@@ -245,7 +245,7 @@ onMounted(() => {
 .plugin-config-view {
   display: flex;
   align-items: stretch;
-  height: calc(100dvh - 64px);
+  height: calc(100dvh - var(--app-top-bar-height, 64px) - var(--app-bottom-nav-height, 0px));
   min-height: 0;
   overflow: hidden;
 }
@@ -475,7 +475,7 @@ onMounted(() => {
   }
   
   .plugin-editor {
-    min-height: calc(100dvh - 180px);
+    min-height: calc(100dvh - 180px - var(--app-bottom-nav-height, 0px));
   }
 
   .empty-text-desktop {

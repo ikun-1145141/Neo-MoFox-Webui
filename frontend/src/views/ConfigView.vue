@@ -178,7 +178,7 @@ onMounted(() => {
 
 <style scoped>
 .config-view {
-  height: calc(100dvh - 64px);
+  height: calc(100dvh - var(--app-top-bar-height, 64px) - var(--app-bottom-nav-height, 0px));
   min-height: 0;
   overflow: hidden;
   display: flex;

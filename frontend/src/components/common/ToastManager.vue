@@ -32,7 +32,8 @@ const iconMap: Record<ToastType, string> = {
 <style scoped>
 .toast-container {
   position: fixed;
-  bottom: 1.5rem;
+  /* 移动端在底栏上方显示，桌面端按原位 */
+  bottom: calc(1.5rem + var(--app-bottom-nav-height, 0px));
   left: 50%;
   transform: translateX(-50%);
   z-index: 9999;

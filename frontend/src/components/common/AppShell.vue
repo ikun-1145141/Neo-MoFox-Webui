@@ -8,6 +8,8 @@ import { useDialogStore } from '../../utils/dialog'
 import { useToastStore } from '../../utils/toast'
 import { useI18n } from '../../utils/i18n'
 
+const showSystemMenu = ref(false)
+
 const props = defineProps<{
   noPadding?: boolean
 }>()
@@ -26,8 +28,6 @@ const navItems = [
   { labelKey: 'app.nav.settings', icon: 'material-symbols:setting-outline-rounded', name: 'settings-theme', path: '/settings' },
 ]
 
-const drawerOpen = ref(false)
-const railMode = ref(false) // Rail 模式:仅显示图标
 const pageTitle = computed(() => {
   const routeName = typeof route.name === 'string' ? route.name : ''
   return routeName ? t(`routes.${routeName}`) : 'Neo-MoFox WebUI'
@@ -140,12 +140,36 @@ async function performShutdown() {
     toastStore.show(t('app.toast.shutdownFailed'), 'error')
   }
 }
+
+function toggleSystemMenu() {
+  showSystemMenu.value = !showSystemMenu.value
+}
+
+function closeSystemMenu() {
+  showSystemMenu.value = false
+}
+
+async function handleSystemAction(action: 'restart' | 'shutdown' | 'logout') {
+  closeSystemMenu()
+  
+  switch (action) {
+    case 'restart':
+      await handleRestart()
+      break
+    case 'shutdown':
+      await handleShutdown()
+      break
+    case 'logout':
+      await handleLogout()
+      break
+  }
+}
 </script>
 
 <template>
   <div class="layout">
-    <!-- M3 Navigation Rail (侧边导航栏) -->
-    <aside class="nav-rail" :class="{ open: drawerOpen, rail: railMode }">
+    <!-- M3 Navigation Rail (桌面端侧边导航栏) -->
+    <aside class="nav-rail">
       <!-- Logo / 品牌区 -->
       <div class="rail-header">
         <button class="rail-fab" @click="router.push('/')" :aria-label="t('app.aria.goHome')">
@@ -161,7 +185,6 @@ async function performShutdown() {
           :to="item.path"
           class="rail-item"
           :class="{ active: isActive(item.path) }"
-          @click="drawerOpen = false"
           :aria-label="t(item.labelKey)"
         >
           <div class="rail-item-indicator"></div>
@@ -206,16 +229,10 @@ async function performShutdown() {
       </div>
     </aside>
 
-    <!-- 遮罩层（移动端） -->
-    <div v-if="drawerOpen" class="drawer-overlay" @click="drawerOpen = false" />
-
     <!-- 主体内容区 -->
     <main class="main-content">
       <!-- 顶栏 -->
       <header class="top-bar">
-        <button class="menu-btn" @click="drawerOpen = !drawerOpen" :aria-label="t('app.aria.openMenu')">
-          <Icon icon="material-symbols:menu-rounded" width="24" height="24" />
-        </button>
         <h2 class="page-title">
           <Icon
             v-if="typeof route.meta?.icon === 'string'"
@@ -238,6 +255,69 @@ async function performShutdown() {
         <slot />
       </div>
     </main>
+
+    <!-- M3 Bottom Navigation Bar (移动端底部导航栏) -->
+    <nav class="bottom-nav" :aria-label="t('app.aria.openMenu')">
+      <div class="bottom-nav-scroll">
+        <router-link
+          v-for="item in navItems"
+          :key="item.name"
+          :to="item.path"
+          class="bottom-nav-item"
+          :class="{ active: isActive(item.path) }"
+          :aria-label="t(item.labelKey)"
+        >
+          <span class="bottom-nav-indicator">
+            <Icon :icon="item.icon" width="24" height="24" class="bottom-nav-icon" />
+          </span>
+          <span class="bottom-nav-label">{{ t(item.labelKey) }}</span>
+        </router-link>
+        
+        <!-- 系统操作按钮 -->
+        <div class="bottom-nav-item system-menu-wrapper">
+          <button
+            class="system-menu-button"
+            @click="toggleSystemMenu"
+            :aria-label="t('app.aria.systemActions')"
+          >
+            <span class="bottom-nav-indicator">
+              <Icon icon="material-symbols:more-vert-rounded" width="24" height="24" class="bottom-nav-icon" />
+            </span>
+            <span class="bottom-nav-label">{{ t('app.actions.system') }}</span>
+          </button>
+          
+          <!-- 下拉菜单 -->
+          <Transition name="menu-fade">
+            <div v-if="showSystemMenu" class="system-menu" @click.stop>
+              <div class="system-menu-backdrop" @click="closeSystemMenu"></div>
+              <div class="system-menu-content">
+                <button
+                  class="system-menu-item restart"
+                  @click="handleSystemAction('restart')"
+                >
+                  <Icon icon="material-symbols:restart-alt-rounded" width="20" height="20" />
+                  <span>{{ t('app.actions.restart') }}</span>
+                </button>
+                <button
+                  class="system-menu-item shutdown"
+                  @click="handleSystemAction('shutdown')"
+                >
+                  <Icon icon="material-symbols:power-settings-new-rounded" width="20" height="20" />
+                  <span>{{ t('app.actions.shutdown') }}</span>
+                </button>
+                <button
+                  class="system-menu-item logout"
+                  @click="handleSystemAction('logout')"
+                >
+                  <Icon icon="material-symbols:logout-rounded" width="20" height="20" />
+                  <span>{{ t('app.actions.logout') }}</span>
+                </button>
+              </div>
+            </div>
+          </Transition>
+        </div>
+      </div>
+    </nav>
   </div>
 </template>
 
@@ -246,49 +326,38 @@ async function performShutdown() {
 .layout {
   display: flex;
   min-height: 100dvh;
+  flex-direction: column;
 }
 
-/* ====== M3 Navigation Rail (仿 Material Design 3 官网) ====== */
+/* 桌面端布局 */
+@media (min-width: 900px) {
+  .layout {
+    flex-direction: row;
+  }
+}
+
+/* ====== M3 Navigation Rail (桌面端侧边导航栏) ====== */
 .nav-rail {
   width: 80px;
   flex-shrink: 0;
   background: var(--md-sys-color-surface-container-low);
-  display: flex;
   flex-direction: column;
   align-items: center;
   padding: 0.75rem 0;
   gap: 0.5rem;
-  position: fixed;
-  inset: 0;
+  position: sticky;
+  top: 0;
+  height: 100dvh;
   z-index: 200;
-  transform: translateX(-100%);
-  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), width 0.28s;
-  box-shadow: 0px 8px 24px rgba(0, 0, 0, 0.15);
+  /* 移动端不显示侧边栏，使用底栏代替 */
+  display: none;
 }
 
-/* 桌面端始终显示 */
+/* 桌面端显示侧边栏 */
 @media (min-width: 900px) {
   .nav-rail {
-    position: sticky;
-    top: 0;
-    height: 100dvh;
-    transform: none;
-    box-shadow: none;
+    display: flex;
   }
-  .menu-btn { display: none !important; }
-}
-
-/* 移动端打开状态 */
-.nav-rail.open {
-  transform: translateX(0);
-}
-
-.drawer-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 199;
-  background: color-mix(in srgb, var(--md-sys-color-surface) 40%, transparent);
-  backdrop-filter: blur(4px);
 }
 
 /* ====== Rail 头部 - FAB 样式 Logo ====== */
@@ -438,18 +507,6 @@ async function performShutdown() {
   color: var(--md-sys-color-on-error-container);
 }
 
-.drawer-footer {
-  padding-top: 0.5rem;
-  border-top: 1px solid transparent;
-}
-.nav-logout {
-  color: var(--md-sys-color-error);
-}
-.nav-logout:hover {
-  background: var(--md-sys-color-error-container);
-  color: var(--md-sys-color-on-error-container);
-}
-
 /* ====== 主内容区 ====== */
 .main-content {
   flex: 1;
@@ -457,6 +514,8 @@ async function performShutdown() {
   flex-direction: column;
   min-width: 0;
   background: color-mix(in srgb, var(--md-sys-color-surface) calc(var(--wallpaper-mask-opacity, 0.88) * 100%), transparent);
+  /* 为移动端底部导航栏留出空间（桌面端为 0） */
+  padding-bottom: var(--app-bottom-nav-height, 80px);
 }
 
 .top-bar {
@@ -470,19 +529,6 @@ async function performShutdown() {
   z-index: 10;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
-
-.menu-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--md-sys-color-on-surface);
-  display: flex;
-  align-items: center;
-  padding: 0.375rem;
-  border-radius: 9999px;
-  transition: background 0.15s;
-}
-.menu-btn:hover { background: var(--md-sys-color-surface-container); }
 
 .page-title {
   flex: 1;
@@ -543,5 +589,252 @@ async function performShutdown() {
   margin: 0;
   display: flex;
   flex-direction: column;
+}
+
+/* ====== M3 Bottom Navigation Bar (移动端底栏) ====== */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--app-bottom-nav-height, 80px);
+  background: var(--md-sys-color-surface-container);
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+  z-index: 150;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 关键：min-width: max-content 让滚动容器至少能容纳所有内容
+   width: 100% 让其在内容较少时填满外部容器
+   两者结合：内容少时按钮均匀分布充满，内容多时自动触发横向滚动 */
+.bottom-nav-scroll {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  width: 100%;
+  min-width: max-content;
+  height: 100%;
+  padding: 0 0.5rem;
+  gap: 0.25rem;
+  box-sizing: border-box;
+}
+
+/* 桌面端隐藏底栏 */
+@media (min-width: 900px) {
+  .bottom-nav {
+    display: none;
+  }
+}
+
+/* 默认状态：可增长不可收缩，让按钮均匀分布 */
+.bottom-nav-item {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  text-decoration: none;
+  color: var(--md-sys-color-on-surface-variant);
+  padding: 0.5rem 0.5rem;
+  min-width: 72px;
+  max-width: 140px;
+  position: relative;
+  transition: color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-sizing: border-box;
+}
+
+/* 中等屏幕（如平板）：按钮更宽松，更充满底栏 */
+@media (min-width: 600px) and (max-width: 899px) {
+  .bottom-nav-item {
+    min-width: 96px;
+    max-width: 180px;
+    padding: 0.5rem 0.75rem;
+  }
+  .bottom-nav-scroll {
+    gap: 0.5rem;
+    padding: 0 1rem;
+  }
+}
+
+/* 小屏幕（窄手机）：紧凑显示 */
+@media (max-width: 360px) {
+  .bottom-nav-item {
+    min-width: 64px;
+    padding: 0.5rem 0.25rem;
+  }
+}
+
+.bottom-nav-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 32px;
+  border-radius: 16px;
+  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+
+.bottom-nav-item.active .bottom-nav-indicator {
+  background: var(--md-sys-color-secondary-container);
+}
+
+.bottom-nav-item.active {
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+.bottom-nav-icon {
+  transition: transform 0.2s;
+}
+
+.bottom-nav-item:active .bottom-nav-icon {
+  transform: scale(0.92);
+}
+
+.bottom-nav-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-align: center;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bottom-nav-item.active .bottom-nav-label {
+  font-weight: 600;
+}
+
+/* ====== 系统菜单 ====== */
+.system-menu-wrapper {
+  position: relative;
+  /* 由内部 button 处理 padding，避免重复 */
+  padding: 0 !important;
+}
+
+.system-menu-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  color: inherit;
+  font: inherit;
+  padding: 0.5rem 0.5rem;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  transition: color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.system-menu-button:hover .bottom-nav-indicator {
+  background: var(--md-sys-color-surface-container-high);
+}
+
+.system-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+}
+
+.system-menu-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(2px);
+}
+
+.system-menu-content {
+  position: absolute;
+  bottom: calc(var(--app-bottom-nav-height, 80px) + 0.5rem);
+  right: 0.5rem;
+  background: var(--md-sys-color-surface-container-high);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  min-width: 160px;
+}
+
+.system-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.875rem 1rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--md-sys-color-on-surface);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: left;
+  transition: background 0.15s;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.system-menu-item:last-child {
+  border-bottom: none;
+}
+
+.system-menu-item:hover {
+  background: var(--md-sys-color-surface-container-highest);
+}
+
+.system-menu-item:active {
+  background: var(--md-sys-color-surface-container);
+}
+
+.system-menu-item.restart {
+  color: var(--md-sys-color-primary);
+}
+
+.system-menu-item.shutdown {
+  color: var(--md-sys-color-tertiary);
+}
+
+.system-menu-item.logout {
+  color: var(--md-sys-color-error);
+}
+
+/* 菜单动画 */
+.menu-fade-enter-active,
+.menu-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.menu-fade-enter-active .system-menu-content,
+.menu-fade-leave-active .system-menu-content {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
+}
+
+.menu-fade-enter-from,
+.menu-fade-leave-to {
+  opacity: 0;
+}
+
+.menu-fade-enter-from .system-menu-content,
+.menu-fade-leave-to .system-menu-content {
+  transform: translateY(8px);
+  opacity: 0;
+}
+
+/* 隐藏滚动条但保持滚动功能 */
+.bottom-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.bottom-nav {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 </style>

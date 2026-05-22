@@ -20,6 +20,7 @@ const messages = {
         restart: '重启',
         shutdown: '关闭',
         logout: '退出',
+        system: '系统',
       },
       aria: {
         goHome: '导航到主页',
@@ -28,6 +29,7 @@ const messages = {
         logout: '退出登录',
         closeNav: '关闭导航',
         openMenu: '打开菜单',
+        systemActions: '系统操作',
       },
       dialogs: {
         restartTitle: '确认重启',
@@ -563,6 +565,7 @@ const messages = {
         restart: 'Restart',
         shutdown: 'Shutdown',
         logout: 'Logout',
+        system: 'System',
       },
       aria: {
         goHome: 'Go to home',
@@ -571,6 +574,7 @@ const messages = {
         logout: 'Log out',
         closeNav: 'Close navigation',
         openMenu: 'Open menu',
+        systemActions: 'System actions',
       },
       dialogs: {
         restartTitle: 'Confirm Restart',
