@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, cast, func, select, Date
 
 from src.core.components.registry import get_global_registry  # type: ignore
 from src.core.components.types import ComponentType  # type: ignore
@@ -20,6 +20,7 @@ from src.core.managers.stream_manager import get_stream_manager  # type: ignore
 from src.core.models.sql_alchemy import Messages  # type: ignore
 from src.kernel.concurrency import get_task_manager  # type: ignore
 from src.kernel.db.api.query import QueryBuilder  # type: ignore
+from src.kernel.db.core.engine import get_configured_db_type  # type: ignore
 from src.kernel.db.core.session import get_db_session  # type: ignore
 from src.kernel.scheduler import get_unified_scheduler  # type: ignore
 
@@ -122,15 +123,23 @@ class DashboardManager:
         start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
         start_timestamp = start_date.timestamp()
 
+        # 获取数据库类型以构建兼容的日期表达式
+        db_type = get_configured_db_type()
+        
         # 使用数据库聚合查询，避免加载所有数据到内存
         async with get_db_session() as session:
             # 按日期统计消息数（总数、入站、出站）
             # 使用 CASE WHEN 在数据库层面区分入站/出站
-            # 计算日期（从时间戳转换为日期字符串）
-            # SQLite: strftime('%Y-%m-%d', time, 'unixepoch')
+            # 根据数据库类型构建日期转换表达式
+            if db_type == "postgresql":
+                # PostgreSQL: to_char(to_timestamp(time), 'YYYY-MM-DD')
+                date_expr = func.to_char(func.to_timestamp(Messages.time), 'YYYY-MM-DD')
+            else:
+                # SQLite: strftime('%Y-%m-%d', datetime(time, 'unixepoch'))
+                date_expr = func.strftime('%Y-%m-%d', func.datetime(Messages.time, 'unixepoch'))
             
             stmt = select(
-                func.strftime('%Y-%m-%d', func.datetime(Messages.time, 'unixepoch')).label('date'),
+                date_expr.label('date'),
                 func.count(Messages.id).label('total'),
                 func.sum(case((Messages.person_id.isnot(None), 1), else_=0)).label('inbound'),
                 func.sum(case((Messages.person_id.is_(None), 1), else_=0)).label('outbound'),
@@ -199,16 +208,24 @@ class DashboardManager:
         }
 
     async def get_platform_statistics(self) -> dict[str, Any]:
-        """获取平台消息统计。
+        """获取平台消息统计（近30天）。
 
         Returns:
             包含各平台消息分布的字典
         """
-        # 统计所有消息的平台分布
+        # 计算30天前的时间戳
+        now = datetime.now()
+        start_date = now - timedelta(days=30)
+        start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        start_timestamp = start_date.timestamp()
+        
+        # 统计近30天消息的平台分布
         async with get_db_session() as session:
             stmt = select(
                 Messages.platform,
                 func.count(Messages.id).label("count")
+            ).where(
+                Messages.time >= start_timestamp
             ).group_by(Messages.platform)
 
             result = await session.execute(stmt)
