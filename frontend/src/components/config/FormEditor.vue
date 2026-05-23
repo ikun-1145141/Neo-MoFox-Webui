@@ -354,8 +354,8 @@ function getFieldTitle(field: FieldSchema): string {
 }
 
 function getFieldDescriptionText(field: FieldSchema): string {
-  // 直接返回 hint 字段
-  return field.hint || ''
+  // 优先使用 hint，没有则使用 description 作为帮助提示
+  return field.hint || field.description || ''
 }
 
 function hasChoices(value: unknown): value is SelectOption[] {
