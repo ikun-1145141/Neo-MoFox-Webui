@@ -4,12 +4,15 @@
 """
 
 from .config_manager import ConfigManager
-from .wallpaper_manager import WallpaperManager
 from .dashboard_manager import DashboardManager, get_dashboard_manager
+from .plugin_market_manager import PluginMarketManager, get_plugin_market_manager
+from .wallpaper_manager import WallpaperManager
 
 __all__ = [
-	"ConfigManager",
-	"WallpaperManager",
-	"DashboardManager",
-	"get_dashboard_manager",
+    "ConfigManager",
+    "DashboardManager",
+    "PluginMarketManager",
+    "WallpaperManager",
+    "get_dashboard_manager",
+    "get_plugin_market_manager",
 ]

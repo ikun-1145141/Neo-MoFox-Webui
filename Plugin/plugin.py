@@ -15,6 +15,7 @@ from .components.router.wallpaper_router import WallpaperRouter
 from .components.router.webui_router import WebuiSettingsRouter
 from .components.router.system_router import SystemRouter
 from .components.router.plugin_router import PluginRouter
+from .components.router.plugin_market_router import PluginMarketRouter
 from .components.router.frontend_router import FrontendRouter
 from .components.router.config import (
     MainConfigRouter,
@@ -56,6 +57,7 @@ class WebuiPlugin(BasePlugin):
             WallpaperRouter,
             SystemRouter,
             PluginRouter,
+            PluginMarketRouter,
             FrontendRouter,
             # 配置管理路由
             MainConfigRouter,
