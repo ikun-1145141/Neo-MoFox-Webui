@@ -5,7 +5,6 @@ import type {
   LLMRequestMetrics,
   LLMStreamMetrics,
   LLMRecentRequest,
-  LLMMetricsCombinedOverview,
 } from '../types/llm-metrics'
 import { API_WEBUI_PREFIX } from '../config'
 
