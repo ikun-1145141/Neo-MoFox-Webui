@@ -40,6 +40,12 @@ const router = createRouter({
       meta: { requiresAuth: true, title: '插件详情', icon: 'material-symbols:extension-outline-rounded' },
     },
     {
+      path: '/llm-metrics',
+      name: 'llm-metrics',
+      component: () => import('../views/llm-metrics/LLMMetricsView.vue'),
+      meta: { requiresAuth: true, title: 'LLM 统计', icon: 'material-symbols:bar-chart-rounded' },
+    },
+    {
       path: '/settings',
       component: () => import('../views/SettingsView.vue'),
       meta: { requiresAuth: true, title: '设置', icon: 'material-symbols:settings-outline-rounded' },

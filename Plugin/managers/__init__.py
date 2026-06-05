@@ -6,10 +6,13 @@
 from .config_manager import ConfigManager
 from .wallpaper_manager import WallpaperManager
 from .dashboard_manager import DashboardManager, get_dashboard_manager
+from .llm_metrics_manager import LLMMetricsManager, get_llm_metrics_manager
 
 __all__ = [
 	"ConfigManager",
 	"WallpaperManager",
 	"DashboardManager",
 	"get_dashboard_manager",
+	"LLMMetricsManager",
+	"get_llm_metrics_manager",
 ]
