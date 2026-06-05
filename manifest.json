@@ -17,6 +17,11 @@
             "component_type": "router",
             "component_name": "webui",
             "dependencies": []
+        },
+        {
+            "component_type": "router",
+            "component_name": "llm-metrics",
+            "dependencies": []
         }
     ],
     "entry_point": "plugin.py",
