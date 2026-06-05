@@ -1,0 +1,1 @@
+import{c as e,d as t}from"./i18n-C9SJ-bIR.js";var n=t;function r(t){return e.post(`${n}/auth/login`,t)}function i(){return e.post(`${n}/auth/logout`)}export{i as n,r as t};
