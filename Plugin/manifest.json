@@ -17,11 +17,6 @@
             "component_type": "router",
             "component_name": "webui",
             "dependencies": []
-        },
-        {
-            "component_type": "router",
-            "component_name": "plugin-market",
-            "dependencies": []
         }
     ],
     "entry_point": "plugin.py",

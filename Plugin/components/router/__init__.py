@@ -2,15 +2,8 @@
 
 from .auth_router import AuthRouter
 from .dashboard_router import DashboardRouter
-from .plugin_market_router import PluginMarketRouter
 from .wallpaper_router import WallpaperRouter
 from .webui_router import WebuiSettingsRouter
 
 
-__all__ = [
-    "AuthRouter",
-    "DashboardRouter",
-    "PluginMarketRouter",
-    "WebuiSettingsRouter",
-    "WallpaperRouter",
-]
+__all__ = ["AuthRouter", "DashboardRouter", "WebuiSettingsRouter", "WallpaperRouter"]
