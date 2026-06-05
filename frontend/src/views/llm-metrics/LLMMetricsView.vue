@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import AppShell from '../../components/common/AppShell.vue'
-import PageHeader from '../../components/common/PageHeader.vue'
 import Icon from '../../components/common/Icon.vue'
 import { useI18n } from '../../utils/i18n'
 import {
@@ -20,7 +19,7 @@ import type {
   LLMStreamMetrics,
 } from '../../api/types/llm-metrics'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const overview = ref<LLMMetricsOverview | null>(null)
 const lastHoursOverview = ref<LLMMetricsOverview | null>(null)
@@ -37,31 +36,171 @@ let pollTimer: number | null = null
 
 const hourOptions = [1, 5, 24, 72]
 
-const safeOverview = computed<LLMMetricsOverview>(() => overview.value ?? {
+const emptyOverview: LLMMetricsOverview = {
   total_requests: 0,
   total_input_tokens: 0,
   total_output_tokens: 0,
   total_cost: 0,
   success_rate: 0,
   cache_hit_rate: 0,
-})
+}
 
-const totalTokens = computed(() => normalizedNumber(safeOverview.value.total_input_tokens) + normalizedNumber(safeOverview.value.total_output_tokens))
+const safeOverview = computed<LLMMetricsOverview>(() => overview.value ?? emptyOverview)
+const windowOverview = computed<LLMMetricsOverview>(() => lastHoursOverview.value ?? safeOverview.value)
+const selectedWindowStart = computed(() => Date.now() - selectedHours.value * 60 * 60 * 1000)
+const filteredRecentRequests = computed(() => recentRequests.value.filter((item) => {
+  const milliseconds = normalizeTimestamp(item.timestamp)
+  return milliseconds !== null && milliseconds >= selectedWindowStart.value
+}))
+
+const totalTokens = computed(() => normalizedNumber(windowOverview.value.total_input_tokens) + normalizedNumber(windowOverview.value.total_output_tokens))
 const averageCost = computed(() => {
-  const requestCount = normalizedNumber(safeOverview.value.total_requests)
+  const requestCount = normalizedNumber(windowOverview.value.total_requests)
   if (requestCount <= 0) return 0
-  return normalizedNumber(safeOverview.value.total_cost) / requestCount
+  return normalizedNumber(windowOverview.value.total_cost) / requestCount
 })
 
-const recentSuccessCount = computed(() => recentRequests.value.filter((item) => item.success).length)
-const recentFailureCount = computed(() => Math.max(recentRequests.value.length - recentSuccessCount.value, 0))
+const recentSuccessCount = computed(() => filteredRecentRequests.value.filter((item) => Boolean(item.success)).length)
+const recentFailureCount = computed(() => Math.max(filteredRecentRequests.value.length - recentSuccessCount.value, 0))
 
-const topModel = computed(() => models.value[0] ?? null)
-const topRequest = computed(() => requestNames.value[0] ?? null)
+const modelMetricsInWindow = computed<LLMModelMetrics[]>(() => {
+  const metrics = new Map<string, LLMModelMetrics>()
+
+  filteredRecentRequests.value.forEach((item) => {
+    const provider = item.provider ?? item.api_provider ?? 'unknown'
+    const key = `${provider}:${item.model_name}`
+    const current = metrics.get(key) ?? {
+      model_name: item.model_name,
+      model_identifier: item.model_identifier,
+      provider,
+      api_provider: item.api_provider,
+      total_requests: 0,
+      success_count: 0,
+      error_count: 0,
+      success_rate: 0,
+      total_prompt_tokens: 0,
+      total_completion_tokens: 0,
+      total_input_tokens: 0,
+      total_output_tokens: 0,
+      total_tokens: 0,
+      total_cache_hit_tokens: 0,
+      total_cost: 0,
+      avg_latency: 0,
+    }
+
+    const latency = normalizedNumber(item.latency)
+    current.total_requests += 1
+    current.success_count += item.success ? 1 : 0
+    current.error_count += item.success ? 0 : 1
+    current.total_prompt_tokens += normalizedNumber(item.prompt_tokens)
+    current.total_completion_tokens += normalizedNumber(item.completion_tokens)
+    current.total_input_tokens = normalizedNumber(current.total_input_tokens) + normalizedNumber(item.input_tokens ?? item.prompt_tokens)
+    current.total_output_tokens = normalizedNumber(current.total_output_tokens) + normalizedNumber(item.output_tokens ?? item.completion_tokens)
+    current.total_tokens += normalizedNumber(item.total_tokens)
+    current.total_cache_hit_tokens = normalizedNumber(current.total_cache_hit_tokens) + normalizedNumber(item.cache_hit_tokens)
+    current.total_cost += normalizedNumber(item.cost)
+    current.avg_latency += latency
+    metrics.set(key, current)
+  })
+
+  return Array.from(metrics.values())
+    .map((item) => ({
+      ...item,
+      success_rate: item.total_requests > 0 ? item.success_count / item.total_requests : 0,
+      avg_latency: item.total_requests > 0 ? item.avg_latency / item.total_requests : 0,
+    }))
+    .sort((left, right) => right.total_requests - left.total_requests)
+})
+
+const requestMetricsInWindow = computed<LLMRequestMetrics[]>(() => {
+  const metrics = new Map<string, LLMRequestMetrics>()
+
+  filteredRecentRequests.value.forEach((item) => {
+    const current = metrics.get(item.request_name) ?? {
+      request_name: item.request_name,
+      total_requests: 0,
+      success_count: 0,
+      error_count: 0,
+      success_rate: 0,
+      total_prompt_tokens: 0,
+      total_completion_tokens: 0,
+      total_input_tokens: 0,
+      total_output_tokens: 0,
+      total_tokens: 0,
+      total_cache_hit_tokens: 0,
+      total_cost: 0,
+      avg_latency: 0,
+    }
+
+    current.total_requests += 1
+    current.success_count += item.success ? 1 : 0
+    current.error_count += item.success ? 0 : 1
+    current.total_prompt_tokens += normalizedNumber(item.prompt_tokens)
+    current.total_completion_tokens += normalizedNumber(item.completion_tokens)
+    current.total_input_tokens = normalizedNumber(current.total_input_tokens) + normalizedNumber(item.input_tokens ?? item.prompt_tokens)
+    current.total_output_tokens = normalizedNumber(current.total_output_tokens) + normalizedNumber(item.output_tokens ?? item.completion_tokens)
+    current.total_tokens += normalizedNumber(item.total_tokens)
+    current.total_cache_hit_tokens = normalizedNumber(current.total_cache_hit_tokens) + normalizedNumber(item.cache_hit_tokens)
+    current.total_cost += normalizedNumber(item.cost)
+    current.avg_latency += normalizedNumber(item.latency)
+    metrics.set(item.request_name, current)
+  })
+
+  return Array.from(metrics.values())
+    .map((item) => ({
+      ...item,
+      success_rate: item.total_requests > 0 ? item.success_count / item.total_requests : 0,
+      avg_latency: item.total_requests > 0 ? item.avg_latency / item.total_requests : 0,
+    }))
+    .sort((left, right) => right.total_requests - left.total_requests)
+})
+
+const streamMetricsInWindow = computed<LLMStreamMetrics[]>(() => {
+  const metrics = new Map<string, LLMStreamMetrics>()
+
+  filteredRecentRequests.value.forEach((item) => {
+    const streamId = item.stream_id ?? 'unknown'
+    const current = metrics.get(streamId) ?? {
+      stream_id: streamId,
+      total_requests: 0,
+      total_prompt_tokens: 0,
+      total_completion_tokens: 0,
+      total_input_tokens: 0,
+      total_output_tokens: 0,
+      total_cache_hit: 0,
+      total_cache_miss: 0,
+      cache_hit_rate: 0,
+      total_cost: 0,
+      success_rate: 0,
+    }
+
+    current.total_requests += 1
+    current.total_prompt_tokens += normalizedNumber(item.prompt_tokens)
+    current.total_completion_tokens += normalizedNumber(item.completion_tokens)
+    current.total_input_tokens = normalizedNumber(current.total_input_tokens) + normalizedNumber(item.input_tokens ?? item.prompt_tokens)
+    current.total_output_tokens = normalizedNumber(current.total_output_tokens) + normalizedNumber(item.output_tokens ?? item.completion_tokens)
+    current.total_cache_hit += normalizedNumber(item.cache_hit_tokens)
+    current.total_cache_miss += normalizedNumber(item.cache_miss_tokens)
+    current.total_cost += normalizedNumber(item.cost)
+    current.success_rate = normalizedNumber(current.success_rate) + (item.success ? 1 : 0)
+    metrics.set(streamId, current)
+  })
+
+  return Array.from(metrics.values())
+    .map((item) => ({
+      ...item,
+      cache_hit_rate: item.total_cache_hit + item.total_cache_miss > 0 ? item.total_cache_hit / (item.total_cache_hit + item.total_cache_miss) : 0,
+      success_rate: item.total_requests > 0 ? normalizedNumber(item.success_rate) / item.total_requests : 0,
+    }))
+    .sort((left, right) => right.total_requests - left.total_requests)
+})
+
+const topModel = computed(() => modelMetricsInWindow.value[0] ?? null)
+const topRequest = computed(() => requestMetricsInWindow.value[0] ?? null)
 
 const modelRows = computed(() => {
-  const maxRequests = Math.max(...models.value.map((item) => normalizedNumber(item.total_requests)), 1)
-  return models.value.slice(0, 6).map((item) => {
+  const maxRequests = Math.max(...modelMetricsInWindow.value.map((item) => normalizedNumber(item.total_requests)), 1)
+  return modelMetricsInWindow.value.slice(0, 12).map((item) => {
     const requestCount = normalizedNumber(item.total_requests)
     return {
       ...item,
@@ -77,8 +216,8 @@ const modelRows = computed(() => {
 })
 
 const requestRows = computed(() => {
-  const maxRequests = Math.max(...requestNames.value.map((item) => normalizedNumber(item.total_requests)), 1)
-  return requestNames.value.slice(0, 6).map((item) => {
+  const maxRequests = Math.max(...requestMetricsInWindow.value.map((item) => normalizedNumber(item.total_requests)), 1)
+  return requestMetricsInWindow.value.slice(0, 12).map((item) => {
     const requestCount = normalizedNumber(item.total_requests)
     return {
       ...item,
@@ -93,7 +232,7 @@ const requestRows = computed(() => {
   })
 })
 
-const streamRows = computed(() => streams.value.slice(0, 5).map((item) => ({
+const streamRows = computed(() => streamMetricsInWindow.value.slice(0, 12).map((item) => ({
   ...item,
   total_requests: normalizedNumber(item.total_requests),
   total_input_tokens: normalizedNumber(item.total_input_tokens),
@@ -103,8 +242,8 @@ const streamRows = computed(() => streams.value.slice(0, 5).map((item) => ({
 })))
 
 const tokenSegments = computed(() => {
-  const input = normalizedNumber(safeOverview.value.total_input_tokens)
-  const output = normalizedNumber(safeOverview.value.total_output_tokens)
+  const input = normalizedNumber(windowOverview.value.total_input_tokens)
+  const output = normalizedNumber(windowOverview.value.total_output_tokens)
   const total = input + output
 
   if (total <= 0) {
@@ -118,7 +257,7 @@ const tokenSegments = computed(() => {
 })
 
 const recentTrend = computed(() => {
-  const rows = [...recentRequests.value].slice(0, 18).reverse()
+  const rows = [...filteredRecentRequests.value].slice(0, 18).reverse()
   const maxTokens = Math.max(...rows.map((item) => normalizedNumber(item.total_tokens)), 1)
   return rows.map((item) => {
     const tokens = normalizedNumber(item.total_tokens)
@@ -136,31 +275,31 @@ const recentTrend = computed(() => {
 const statCards = computed(() => [
   {
     label: t('llmMetrics.stats.totalRequests'),
-    value: formatNumber(safeOverview.value.total_requests),
+    value: formatNumber(windowOverview.value.total_requests),
     icon: 'material-symbols:send-time-extension-outline-rounded',
     tone: 'primary',
-    hint: t('llmMetrics.stats.totalRequestsHint', { count: formatNumber(lastHoursOverview.value?.total_requests ?? 0) }),
+    hint: t('llmMetrics.stats.totalRequestsHint', { count: formatNumber(windowOverview.value.total_requests) }),
   },
   {
     label: t('llmMetrics.stats.totalTokens'),
     value: formatCompact(totalTokens.value),
     icon: 'material-symbols:data-array-rounded',
     tone: 'secondary',
-    hint: `${t('llmMetrics.stats.input')} ${formatCompact(safeOverview.value.total_input_tokens)} · ${t('llmMetrics.stats.output')} ${formatCompact(safeOverview.value.total_output_tokens)}`,
+    hint: `${t('llmMetrics.stats.input')} ${formatCompact(windowOverview.value.total_input_tokens)} · ${t('llmMetrics.stats.output')} ${formatCompact(windowOverview.value.total_output_tokens)}`,
   },
   {
     label: t('llmMetrics.stats.totalCost'),
-    value: formatCurrency(safeOverview.value.total_cost),
+    value: formatCurrency(windowOverview.value.total_cost),
     icon: 'material-symbols:payments-outline-rounded',
     tone: 'tertiary',
     hint: t('llmMetrics.stats.avgCost', { cost: formatCurrency(averageCost.value) }),
   },
   {
     label: t('llmMetrics.stats.successRate'),
-    value: formatPercent(safeOverview.value.success_rate),
+    value: formatPercent(windowOverview.value.success_rate),
     icon: 'material-symbols:verified-rounded',
-    tone: safeOverview.value.success_rate >= 0.9 ? 'success' : 'warning',
-    hint: t('llmMetrics.stats.cacheHit', { rate: formatPercent(safeOverview.value.cache_hit_rate) }),
+    tone: windowOverview.value.success_rate >= 0.9 ? 'success' : 'warning',
+    hint: t('llmMetrics.stats.cacheHit', { rate: formatPercent(windowOverview.value.cache_hit_rate) }),
   },
 ])
 
@@ -178,7 +317,7 @@ async function fetchMetrics(refreshing = false): Promise<void> {
       listModels(),
       listRequestNames(),
       listStreams(),
-      getRecentRequests(40, 0),
+      getRecentRequests(1000, 0),
     ])
 
     overview.value = overviewData
@@ -196,7 +335,7 @@ async function fetchMetrics(refreshing = false): Promise<void> {
 
 async function changeHours(hours: number): Promise<void> {
   selectedHours.value = hours
-  lastHoursOverview.value = await getLastHoursSummary(hours)
+  await fetchMetrics(true)
 }
 
 function normalizedNumber(value: number | null | undefined): number {
@@ -204,12 +343,12 @@ function normalizedNumber(value: number | null | undefined): number {
 }
 
 function formatNumber(value: number | null | undefined): string {
-  return new Intl.NumberFormat().format(normalizedNumber(value))
+  return new Intl.NumberFormat(locale.value).format(normalizedNumber(value))
 }
 
 function formatCompact(value: number | null | undefined): string {
   const safeValue = normalizedNumber(value)
-  return new Intl.NumberFormat(undefined, {
+  return new Intl.NumberFormat(locale.value, {
     notation: safeValue >= 10000 ? 'compact' : 'standard',
     maximumFractionDigits: 1,
   }).format(safeValue)
@@ -217,7 +356,7 @@ function formatCompact(value: number | null | undefined): string {
 
 function formatCurrency(value: number | null | undefined): string {
   const safeValue = normalizedNumber(value)
-  return new Intl.NumberFormat(undefined, {
+  return new Intl.NumberFormat(locale.value, {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: safeValue >= 10 ? 2 : 4,
@@ -244,13 +383,13 @@ function normalizeTimestamp(timestamp: number | null | undefined): number | null
 function formatTime(timestamp: number | null | undefined): string {
   const milliseconds = normalizeTimestamp(timestamp)
   if (milliseconds === null) return '—'
-  return new Date(milliseconds).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return new Date(milliseconds).toLocaleTimeString(locale.value, { hour: '2-digit', minute: '2-digit' })
 }
 
 function formatDateTime(timestamp: number | null | undefined): string {
   const milliseconds = normalizeTimestamp(timestamp)
   if (milliseconds === null) return '—'
-  return new Date(milliseconds).toLocaleString()
+  return new Date(milliseconds).toLocaleString(locale.value)
 }
 
 onMounted(() => {
@@ -267,43 +406,36 @@ onUnmounted(() => {
 
 <template>
   <AppShell>
-    <PageHeader
-      :title="t('llmMetrics.title')"
-      :subtitle="t('llmMetrics.subtitle')"
-      icon="material-symbols:bar-chart-rounded"
-    />
-
     <div class="llm-metrics-page">
-      <section class="hero-card">
-        <div class="hero-copy">
-          <span class="eyebrow">{{ t('llmMetrics.hero.eyebrow') }}</span>
-          <h2>{{ t('llmMetrics.hero.title') }}</h2>
-          <p>{{ t('llmMetrics.hero.desc') }}</p>
-          <div class="hero-actions">
-            <button class="primary-action" :disabled="isRefreshing" @click="fetchMetrics(true)">
-              <Icon
-                :icon="isRefreshing ? 'material-symbols:progress-activity' : 'material-symbols:refresh-rounded'"
-                width="18"
-                height="18"
-                :class="{ spin: isRefreshing }"
-              />
-              {{ t('llmMetrics.actions.refresh') }}
-            </button>
-            <span v-if="lastUpdatedAt" class="updated-label">
-              {{ t('llmMetrics.lastUpdated') }}: {{ lastUpdatedAt }}
-            </span>
-          </div>
+      <section class="time-window-toolbar" :aria-label="t('llmMetrics.filters.timeRange')">
+        <div class="time-window-copy">
+          <span class="eyebrow">{{ t('llmMetrics.filters.timeRange') }}</span>
+          <strong>{{ t('llmMetrics.filters.currentRange') }}</strong>
+          <small>{{ formatNumber(windowOverview.total_requests) }} {{ t('llmMetrics.stats.totalRequests') }} · {{ formatCurrency(windowOverview.total_cost) }}</small>
         </div>
-
-        <div class="hero-meter" aria-hidden="true">
-          <div class="meter-ring">
-            <div class="meter-value">{{ formatPercent(safeOverview.success_rate) }}</div>
-            <div class="meter-label">{{ t('llmMetrics.stats.successRate') }}</div>
+        <div class="time-window-actions">
+          <div class="filter-buttons time-window-buttons">
+            <button
+              v-for="hours in hourOptions"
+              :key="hours"
+              :class="{ active: selectedHours === hours }"
+              @click="changeHours(hours)"
+            >
+              {{ t('llmMetrics.filters.hours', { hours: String(hours) }) }}
+            </button>
           </div>
-          <div class="meter-chip">
-            <Icon icon="material-symbols:cached-rounded" width="18" height="18" />
-            {{ t('llmMetrics.stats.cacheHit', { rate: formatPercent(safeOverview.cache_hit_rate) }) }}
-          </div>
+          <button class="primary-action" :disabled="isRefreshing" @click="fetchMetrics(true)">
+            <Icon
+              :icon="isRefreshing ? 'material-symbols:progress-activity' : 'material-symbols:refresh-rounded'"
+              width="18"
+              height="18"
+              :class="{ spin: isRefreshing }"
+            />
+            {{ t('llmMetrics.actions.refresh') }}
+          </button>
+          <span v-if="lastUpdatedAt" class="updated-label">
+            {{ t('llmMetrics.lastUpdated') }}: {{ lastUpdatedAt }}
+          </span>
         </div>
       </section>
 
@@ -336,8 +468,8 @@ onUnmounted(() => {
               <div class="token-output" :style="{ width: `${tokenSegments.output}%` }"></div>
             </div>
             <div class="token-legend">
-              <span><i class="input-dot"></i>{{ t('llmMetrics.stats.input') }} {{ formatNumber(safeOverview.total_input_tokens) }}</span>
-              <span><i class="output-dot"></i>{{ t('llmMetrics.stats.output') }} {{ formatNumber(safeOverview.total_output_tokens) }}</span>
+              <span><i class="input-dot"></i>{{ t('llmMetrics.stats.input') }} {{ formatNumber(windowOverview.total_input_tokens) }}</span>
+              <span><i class="output-dot"></i>{{ t('llmMetrics.stats.output') }} {{ formatNumber(windowOverview.total_output_tokens) }}</span>
             </div>
           </div>
 
@@ -370,20 +502,6 @@ onUnmounted(() => {
             <div class="quality-item error">
               <span>{{ t('llmMetrics.quality.failed') }}</span>
               <strong>{{ recentFailureCount }}</strong>
-            </div>
-          </div>
-
-          <div class="time-filter">
-            <span>{{ t('llmMetrics.filters.timeRange') }}</span>
-            <div class="filter-buttons">
-              <button
-                v-for="hours in hourOptions"
-                :key="hours"
-                :class="{ active: selectedHours === hours }"
-                @click="changeHours(hours)"
-              >
-                {{ t('llmMetrics.filters.hours', { hours: String(hours) }) }}
-              </button>
             </div>
           </div>
 
@@ -481,23 +599,25 @@ onUnmounted(() => {
             <Icon icon="material-symbols:history-rounded" width="24" height="24" />
           </div>
 
-          <div v-if="recentRequests.length" class="recent-table-wrap">
+          <div v-if="filteredRecentRequests.length" class="recent-table-wrap">
             <table class="recent-table">
               <thead>
                 <tr>
                   <th>{{ t('llmMetrics.recent.time') }}</th>
                   <th>{{ t('llmMetrics.recent.request') }}</th>
                   <th>{{ t('llmMetrics.recent.model') }}</th>
+                  <th>{{ t('llmMetrics.recent.url') }}</th>
                   <th>{{ t('llmMetrics.recent.tokens') }}</th>
                   <th>{{ t('llmMetrics.recent.cost') }}</th>
                   <th>{{ t('llmMetrics.recent.status') }}</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="item in recentRequests.slice(0, 10)" :key="item.id">
+                <tr v-for="item in filteredRecentRequests" :key="item.id">
                   <td>{{ formatDateTime(item.timestamp) }}</td>
                   <td>{{ item.request_name }}</td>
-                  <td>{{ item.provider }} / {{ item.model_name }}</td>
+                  <td>{{ item.model_name }}</td>
+                  <td>{{ item.provider ?? item.api_provider ?? '—' }}</td>
                   <td>{{ formatNumber(item.total_tokens) }}</td>
                   <td>{{ formatCurrency(item.cost) }}</td>
                   <td>
@@ -533,36 +653,6 @@ onUnmounted(() => {
   backdrop-filter: blur(14px);
 }
 
-.hero-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
-  gap: 1.5rem;
-  align-items: stretch;
-  padding: 1.5rem;
-  border-radius: 1.5rem;
-  overflow: hidden;
-  position: relative;
-}
-
-.hero-card::before {
-  content: '';
-  position: absolute;
-  inset: -30% auto auto 50%;
-  width: 420px;
-  height: 420px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--md-sys-color-primary-container) 56%, transparent);
-  filter: blur(40px);
-  opacity: 0.6;
-  pointer-events: none;
-}
-
-.hero-copy,
-.hero-meter {
-  position: relative;
-  z-index: 1;
-}
-
 .eyebrow {
   display: inline-flex;
   width: fit-content;
@@ -574,32 +664,6 @@ onUnmounted(() => {
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.01em;
-}
-
-.hero-copy h2 {
-  margin: 0.75rem 0 0;
-  max-width: 760px;
-  color: var(--md-sys-color-on-surface);
-  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
-  font-size: clamp(2rem, 5vw, 3.25rem);
-  line-height: 1.04;
-  letter-spacing: -0.045em;
-}
-
-.hero-copy p {
-  max-width: 660px;
-  margin: 0.75rem 0 0;
-  color: var(--md-sys-color-on-surface-variant);
-  font-size: 1rem;
-  line-height: 1.6;
-}
-
-.hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-  margin-top: 1.25rem;
 }
 
 .primary-action {
@@ -632,41 +696,53 @@ onUnmounted(() => {
   font-size: 0.8125rem;
 }
 
-.hero-meter {
+.time-window-toolbar {
+  position: sticky;
+  top: var(--app-top-bar-height, 64px);
+  z-index: 90;
   display: flex;
-  min-height: 230px;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   gap: 1rem;
-  border-radius: 1.25rem;
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-high) 76%, transparent);
-  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant) 60%, transparent);
+  margin-block-start: calc(var(--page-padding, 1.5rem) * -1);
+  margin-inline: calc(var(--page-padding, 1.5rem) * -1);
+  padding: 0.85rem var(--page-padding, 1.5rem);
+  border-block: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant) 72%, transparent);
+  border-inline: 0;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--md-sys-color-surface) 88%, transparent);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.027), 0 1px 3px rgba(0, 0, 0, 0.02);
+  backdrop-filter: blur(14px);
 }
 
-.meter-ring {
-  width: 160px;
-  height: 160px;
+.time-window-copy {
   display: flex;
+  min-width: 0;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at center, var(--md-sys-color-surface-container) 58%, transparent 59%),
-    conic-gradient(var(--md-sys-color-primary) calc(v-bind('normalizedNumber(safeOverview.success_rate)') * 100%), color-mix(in srgb, var(--md-sys-color-outline-variant) 42%, transparent) 0);
+  gap: 0.25rem;
 }
 
-.meter-value {
-  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
-  font-size: 1.75rem;
-  font-weight: 800;
+.time-window-copy strong {
   color: var(--md-sys-color-on-surface);
+  font-size: 1rem;
+  font-weight: 800;
 }
 
-.meter-label {
+.time-window-copy small {
   color: var(--md-sys-color-on-surface-variant);
   font-size: 0.8125rem;
+}
+
+.time-window-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.time-window-buttons {
+  justify-content: flex-end;
 }
 
 .meter-chip,
@@ -970,8 +1046,13 @@ onUnmounted(() => {
 .ranking-list,
 .stream-list {
   display: flex;
+  max-height: 360px;
   flex-direction: column;
   gap: 0.75rem;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--md-sys-color-outline-variant) transparent;
 }
 
 .ranking-row {
@@ -1050,14 +1131,15 @@ onUnmounted(() => {
 }
 
 .recent-table-wrap {
-  overflow-x: auto;
+  max-height: 420px;
+  overflow: auto;
   border-radius: 1rem;
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant) 54%, transparent);
 }
 
 .recent-table {
   width: 100%;
-  min-width: 760px;
+  min-width: 860px;
   border-collapse: collapse;
 }
 
@@ -1070,6 +1152,9 @@ onUnmounted(() => {
 }
 
 .recent-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   background: color-mix(in srgb, var(--md-sys-color-surface-container-high) 82%, transparent);
   color: var(--md-sys-color-on-surface-variant);
   font-weight: 800;
@@ -1127,13 +1212,14 @@ onUnmounted(() => {
 }
 
 @media (max-width: 760px) {
-  .hero-card {
-    grid-template-columns: 1fr;
-    padding: 1rem;
+  .time-window-toolbar {
+    align-items: stretch;
+    flex-direction: column;
   }
 
-  .hero-meter {
-    min-height: 210px;
+  .time-window-actions,
+  .time-window-buttons {
+    justify-content: flex-start;
   }
 
   .stat-grid {
@@ -1154,13 +1240,18 @@ onUnmounted(() => {
   .quality-grid {
     grid-template-columns: 1fr;
   }
+
+  .ranking-list,
+  .stream-list {
+    max-height: 300px;
+  }
+
+  .recent-table-wrap {
+    max-height: 360px;
+  }
 }
 
 @media (max-width: 480px) {
-  .hero-copy h2 {
-    font-size: 1.8rem;
-  }
-
   .ranking-row {
     grid-template-columns: 1fr;
   }

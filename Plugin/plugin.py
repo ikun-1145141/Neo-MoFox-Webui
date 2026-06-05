@@ -23,6 +23,7 @@ from .components.router.config import (
     ModelConfigRouter,
     PluginConfigRouter,
 )
+from .components.handlers import WebuiStartupPanelHandler
 
 logger = get_logger("webui_plugin")
 
@@ -59,6 +60,7 @@ class WebuiPlugin(BasePlugin):
             SystemRouter,
             PluginRouter,
             FrontendRouter,
+            WebuiStartupPanelHandler,
             # 配置管理路由
             MainConfigRouter,
             BotConfigRouter,

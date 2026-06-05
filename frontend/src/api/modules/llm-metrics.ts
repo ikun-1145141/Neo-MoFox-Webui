@@ -5,14 +5,14 @@ import type {
   LLMRequestMetrics,
   LLMStreamMetrics,
   LLMRecentRequest,
+  LLMMetricsCombinedOverview,
 } from '../types/llm-metrics'
 import { API_WEBUI_PREFIX } from '../config'
-
 
 const BASE_URL = `${API_WEBUI_PREFIX}/llm-metrics`
 
 export function getOverview(): Promise<LLMMetricsOverview> {
-  return instance.get(`${BASE_URL}/overview`)
+  return instance.get(`${BASE_URL}/overview/persistent`)
 }
 
 export function listModels(): Promise<LLMModelMetrics[]> {

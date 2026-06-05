@@ -510,6 +510,8 @@ async function handleSystemAction(action: 'restart' | 'shutdown' | 'logout') {
 
 /* ====== 主内容区 ====== */
 .main-content {
+  --app-top-bar-height: 64px;
+
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -522,12 +524,14 @@ async function handleSystemAction(action: 'restart' | 'shutdown' | 'logout') {
 .top-bar {
   display: flex;
   align-items: center;
+  box-sizing: border-box;
+  min-height: var(--app-top-bar-height);
   gap: 1rem;
   padding: 1rem 1.5rem;
   background: var(--md-sys-color-surface);
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 100;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
