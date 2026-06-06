@@ -23,6 +23,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Configure default Git branch name
+        run: git config --global init.defaultBranch main
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
