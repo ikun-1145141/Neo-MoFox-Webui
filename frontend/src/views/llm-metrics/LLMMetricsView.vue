@@ -2,8 +2,8 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import AppShell from '../../components/common/AppShell.vue'
 import Icon from '../../components/common/Icon.vue'
-import TokenUsageChart from '../../components/features/llm-metrics/TokenUsageChart.vue'
-import ModelRankingChart from '../../components/features/llm-metrics/ModelRankingChart.vue'
+import TokenUsageChart from '../../components/llm-metrics/TokenUsageChart.vue'
+import ModelRankingChart from '../../components/llm-metrics/ModelRankingChart.vue'
 import { useI18n } from '../../utils/i18n'
 import {
   getLastHoursSummary,
@@ -463,7 +463,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <AppShell>
+  <AppShell no-padding>
     <div class="llm-metrics-page">
       <section class="time-window-toolbar" :aria-label="t('llmMetrics.filters.timeRange')">
         <div class="time-window-copy">
@@ -488,7 +488,8 @@ onUnmounted(() => {
         </div>
       </section>
 
-      <section class="stat-grid" :aria-label="t('llmMetrics.sections.overview')">
+      <div class="llm-metrics-scroll">
+        <section class="stat-grid" :aria-label="t('llmMetrics.sections.overview')">
         <article v-for="card in statCards" :key="card.label" class="metric-card" :class="card.tone">
           <div class="metric-icon">
             <Icon :icon="card.icon" width="26" height="26" />
@@ -697,6 +698,7 @@ onUnmounted(() => {
           <div v-else class="empty-state">{{ isLoading ? t('llmMetrics.loading') : t('llmMetrics.empty.recent') }}</div>
         </article>
       </section>
+      </div>
     </div>
   </AppShell>
 </template>
@@ -705,8 +707,21 @@ onUnmounted(() => {
 .llm-metrics-page {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  height: calc(100dvh - var(--app-top-bar-height, 64px) - var(--app-bottom-nav-height, 0px));
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.llm-metrics-scroll {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1.5rem;
+  overflow: auto;
+  padding: 1.5rem;
 }
 
 .hero-card,
@@ -762,16 +777,13 @@ onUnmounted(() => {
 }
 
 .time-window-toolbar {
-  position: sticky;
-  top: var(--app-top-bar-height, 64px);
   z-index: 90;
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-block-start: calc(var(--page-padding, 1.5rem) * -1);
-  margin-inline: calc(var(--page-padding, 1.5rem) * -1);
-  padding: 0.85rem var(--page-padding, 1.5rem);
+  padding: 0.85rem 1.5rem;
   border-block: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant) 72%, transparent);
   border-inline: 0;
   border-radius: 0;

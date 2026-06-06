@@ -603,6 +603,7 @@ async function handleSystemAction(action: 'restart' | 'shutdown' | 'logout') {
   margin: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 /* ====== M3 Bottom Navigation Bar (移动端底栏) ====== */
@@ -852,3 +853,4 @@ async function handleSystemAction(action: 'restart' | 'shutdown' | 'logout') {
   scrollbar-width: none;
 }
 </style>
+
