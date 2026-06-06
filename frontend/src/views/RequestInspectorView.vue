@@ -4,6 +4,7 @@ import AppShell from '../components/common/AppShell.vue'
 import Icon from '../components/common/Icon.vue'
 import { useDialogStore } from '../utils/dialog'
 import { useToastStore } from '../utils/toast'
+import { useI18n } from '../utils/i18n'
 import {
   clearInspectorRequests,
   getInspectorAnalytics,
@@ -19,6 +20,7 @@ import type {
 
 const dialogStore = useDialogStore()
 const toastStore = useToastStore()
+const { t } = useI18n()
 
 const requests = ref<InspectorRequestSummary[]>([])
 const selectedRequest = ref<InspectorRequestDetail | null>(null)
@@ -114,16 +116,16 @@ async function selectRequest(requestId: number): Promise<void> {
 
 async function clearRequests(): Promise<void> {
   const confirmed = await dialogStore.confirm(
-    '确认清空当前内存中捕获的 LLM 请求体记录吗？',
-    '清空请求体记录',
-    '清空',
-    '取消',
+    t('requestInspector.dialogs.clearMessage'),
+    t('requestInspector.dialogs.clearTitle'),
+    t('requestInspector.actions.clear'),
+    t('requestInspector.dialogs.cancel'),
   )
   if (!confirmed) return
   await clearInspectorRequests()
   selectedRequest.value = null
   requests.value = []
-  toastStore.show('请求体记录已清空', 'success')
+  toastStore.show(t('requestInspector.toast.clearSuccess'), 'success')
 }
 
 function roleClass(role: string): string {
@@ -132,11 +134,11 @@ function roleClass(role: string): string {
 
 function blockTitle(block: InspectorMessageBlock): string {
   if (block.label) return block.label
-  if (block.type === 'tool_call') return '工具调用'
-  if (block.type === 'tool_result') return '工具结果'
-  if (block.type === 'media') return block.title ?? '媒体内容'
-  if (block.type === 'unknown') return '未知内容'
-  return '内容'
+  if (block.type === 'tool_call') return t('requestInspector.blocks.toolCall')
+  if (block.type === 'tool_result') return t('requestInspector.blocks.toolResult')
+  if (block.type === 'media') return block.title ?? t('requestInspector.blocks.media')
+  if (block.type === 'unknown') return t('requestInspector.blocks.unknown')
+  return t('requestInspector.blocks.content')
 }
 
 function formatMetric(value: unknown): string {
@@ -156,38 +158,38 @@ function formatTime(timestamp: number): string {
     <section class="inspector-page">
       <header class="hero-card">
         <div class="hero-copy">
-          <span class="eyebrow">LLM Request Inspector</span>
-          <h1>请求体检视器</h1>
-          <p>实时查看 Neo-MoFox 捕获的 OpenAI 兼容请求体，按摘要、消息、工具和原始 JSON 快速定位调试信息。</p>
+          <span class="eyebrow">{{ t('requestInspector.hero.eyebrow') }}</span>
+          <h1>{{ t('requestInspector.hero.title') }}</h1>
+          <p>{{ t('requestInspector.hero.desc') }}</p>
         </div>
         <div class="hero-actions">
           <button class="danger-button" :disabled="requests.length === 0" @click="clearRequests">
             <Icon icon="material-symbols:delete-outline-rounded" width="18" height="18" />
-            清空
+            {{ t('requestInspector.actions.clear') }}
           </button>
         </div>
       </header>
 
       <div class="stat-grid">
         <article class="stat-card">
-          <span>捕获请求</span>
+          <span>{{ t('requestInspector.stats.capturedRequests') }}</span>
           <strong>{{ totalCaptured }}</strong>
-          <small>最近更新时间 {{ lastUpdatedAt || '—' }}</small>
+          <small>{{ t('requestInspector.stats.lastUpdated') }} {{ lastUpdatedAt || '—' }}</small>
         </article>
         <article class="stat-card">
-          <span>消息总数</span>
+          <span>{{ t('requestInspector.stats.totalMessages') }}</span>
           <strong>{{ totalMessages }}</strong>
-          <small>来自当前内存快照</small>
+          <small>{{ t('requestInspector.stats.memorySnapshot') }}</small>
         </article>
         <article class="stat-card">
-          <span>工具声明</span>
+          <span>{{ t('requestInspector.stats.toolDeclarations') }}</span>
           <strong>{{ totalTools }}</strong>
-          <small>按请求摘要累计</small>
+          <small>{{ t('requestInspector.stats.summaryAccumulated') }}</small>
         </article>
         <article class="stat-card">
-          <span>统计请求数</span>
+          <span>{{ t('requestInspector.stats.statsRequests') }}</span>
           <strong>{{ formatMetric(statsSummary.total_requests) }}</strong>
-          <small>来自 LLM stats collector</small>
+          <small>{{ t('requestInspector.stats.fromCollector') }}</small>
         </article>
       </div>
 
@@ -195,21 +197,21 @@ function formatTime(timestamp: number): string {
         <aside class="request-list-panel">
           <div class="panel-toolbar">
             <div class="request-list-heading">
-              <span class="request-list-eyebrow">搜索和查看列表</span>
-              <h2>请求列表</h2>
-              <p>{{ filteredRequests.length }} / {{ requests.length }} 条</p>
+              <span class="request-list-eyebrow">{{ t('requestInspector.list.eyebrow') }}</span>
+              <h2>{{ t('requestInspector.list.title') }}</h2>
+              <p>{{ t('requestInspector.list.count', { filtered: String(filteredRequests.length), total: String(requests.length) }) }}</p>
             </div>
           </div>
 
           <div v-if="!selectedRequest" class="mobile-select-hint">
             <Icon icon="material-symbols:touch-app-outline-rounded" width="22" height="22" />
-            <span>点选下方请求查看详情</span>
+            <span>{{ t('requestInspector.list.mobileHint') }}</span>
           </div>
 
-          <input v-model="searchText" class="search-input" placeholder="搜索模型、API、提供商" />
+          <input v-model="searchText" class="search-input" :placeholder="t('requestInspector.list.searchPlaceholder')" />
 
-          <div v-if="isLoading" class="empty-state">加载请求体记录中...</div>
-          <div v-else-if="filteredRequests.length === 0" class="empty-state">暂无匹配的请求体记录</div>
+          <div v-if="isLoading" class="empty-state">{{ t('requestInspector.list.loading') }}</div>
+          <div v-else-if="filteredRequests.length === 0" class="empty-state">{{ t('requestInspector.list.empty') }}</div>
           <div v-else class="request-list">
             <button v-for="item in filteredRequests" :key="item.id" class="request-item"
               :class="{ active: selectedRequest?.id === item.id }" @click="selectRequest(item.id)">
@@ -218,9 +220,8 @@ function formatTime(timestamp: number): string {
                 <em>{{ item.ts_str }}</em>
               </span>
               <span class="request-item-name">{{ item.request_name || item.api_name }}</span>
-              <span class="request-item-meta">{{ item.api_provider }} · {{ item.msg_count }} messages · {{
-                item.tool_count }}
-                tools</span>
+              <span class="request-item-meta">{{ item.api_provider }} · {{ t('requestInspector.list.messages', { count: String(item.msg_count) }) }} · {{
+                t('requestInspector.list.tools', { count: String(item.tool_count) }) }}</span>
             </button>
           </div>
         </aside>
@@ -229,25 +230,25 @@ function formatTime(timestamp: number): string {
           <div v-if="!selectedRequest" class="detail-empty detail-placeholder">
             <Icon icon="material-symbols:plagiarism-outline-rounded" width="48" height="48" />
             <div>
-              <span class="eyebrow">请求体详情</span>
-              <h2>等待选择请求记录</h2>
-              <p>捕获记录会在 LLM 请求发生后自动出现，可在<span class="desktop-text">左侧</span><span class="mobile-text">下方</span>搜索并选择记录。</p>
+              <span class="eyebrow">{{ t('requestInspector.detail.eyebrow') }}</span>
+              <h2>{{ t('requestInspector.detail.emptyTitle') }}</h2>
+              <p>{{ t('requestInspector.detail.emptyPrefix') }}<span class="desktop-text">{{ t('requestInspector.detail.leftSide') }}</span><span class="mobile-text">{{ t('requestInspector.detail.below') }}</span>{{ t('requestInspector.detail.emptySuffix') }}</p>
             </div>
             <div class="placeholder-grid">
               <article>
                 <strong>{{ totalCaptured }}</strong>
-                <span>当前捕获请求</span>
+                <span>{{ t('requestInspector.detail.currentCaptured') }}</span>
               </article>
               <article>
                 <strong>{{ totalMessages }}</strong>
-                <span>累计消息块</span>
+                <span>{{ t('requestInspector.detail.accumulatedMessages') }}</span>
               </article>
               <article>
                 <strong>{{ totalTools }}</strong>
-                <span>工具声明数</span>
+                <span>{{ t('requestInspector.detail.toolDeclarationCount') }}</span>
               </article>
             </div>
-            <p class="placeholder-tip">提示：点击<span class="desktop-text">左侧</span><span class="mobile-text">下方</span>任意请求卡片后，这里会显示结构化消息流、工具 Schema 和 Raw JSON。</p>
+            <p class="placeholder-tip">{{ t('requestInspector.detail.tipPrefix') }}<span class="desktop-text">{{ t('requestInspector.detail.leftSide') }}</span><span class="mobile-text">{{ t('requestInspector.detail.below') }}</span>{{ t('requestInspector.detail.tipSuffix') }}</p>
           </div>
 
           <template v-else>
@@ -258,12 +259,12 @@ function formatTime(timestamp: number): string {
                 <p>{{ selectedRequest.api_name }} · {{ selectedRequest.api_provider }}</p>
               </div>
               <div class="segmented">
-                <button :class="{ active: viewMode === 'rendered' }" @click="viewMode = 'rendered'">结构化</button>
-                <button :class="{ active: viewMode === 'raw' }" @click="viewMode = 'raw'">Raw JSON</button>
+                <button :class="{ active: viewMode === 'rendered' }" @click="viewMode = 'rendered'">{{ t('requestInspector.viewMode.rendered') }}</button>
+                <button :class="{ active: viewMode === 'raw' }" @click="viewMode = 'raw'">{{ t('requestInspector.viewMode.raw') }}</button>
               </div>
             </div>
 
-            <div v-if="isDetailLoading" class="empty-state">加载详情中...</div>
+            <div v-if="isDetailLoading" class="empty-state">{{ t('requestInspector.detail.loading') }}</div>
 
             <template v-else-if="viewMode === 'rendered'">
               <section class="overview-grid">
@@ -274,13 +275,13 @@ function formatTime(timestamp: number): string {
               </section>
 
               <section v-if="selectedRequest.rendered.tools.length" class="section-card">
-                <h3>工具 Schema</h3>
+                <h3>{{ t('requestInspector.tools.title') }}</h3>
                 <article v-for="tool in selectedRequest.rendered.tools" :key="tool.index" class="tool-card">
                   <div class="tool-title">
                     <strong>{{ tool.name }}</strong>
                     <span>{{ tool.kind }}</span>
                   </div>
-                  <p>{{ tool.description || '无描述' }}</p>
+                  <p>{{ tool.description || t('requestInspector.tools.noDescription') }}</p>
                   <div class="property-list">
                     <span v-for="property in tool.properties" :key="property.name" class="property-pill">
                       {{ property.name }} · {{ property.type }}{{ property.required ? ' *' : '' }}
@@ -291,10 +292,10 @@ function formatTime(timestamp: number): string {
 
               <section class="section-card">
                 <div class="message-toolbar">
-                  <h3>消息流</h3>
+                  <h3>{{ t('requestInspector.messages.title') }}</h3>
                   <select v-model="selectedRole" class="role-select">
                     <option v-for="role in roleOptions" :key="role" :value="role">
-                      {{ role === 'all' ? '全部角色' : role }}
+                      {{ role === 'all' ? t('requestInspector.messages.allRoles') : role }}
                     </option>
                   </select>
                 </div>
