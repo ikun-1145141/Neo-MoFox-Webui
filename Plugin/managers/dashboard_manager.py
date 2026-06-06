@@ -34,7 +34,7 @@ class DashboardManager:
         """获取首页总览数据。"""
         runtime_overview = self._get_runtime_overview()
         business_overview = await self._get_business_overview()
-        llm_overview = get_llm_metrics_helper().get_overview()
+        llm_overview = await get_llm_metrics_helper().get_overview()
 
         return {
             "runtime": runtime_overview,

@@ -20,26 +20,6 @@ export interface LLMMetricsOverview {
   updated_at?: string
 }
 
-export interface LLMMemoryOverview {
-  model_count: number
-  total_requests: number
-  success_count: number
-  error_count: number
-  success_rate: number
-  avg_latency_seconds: number
-  avg_latency_ms: number
-  total_tokens_in: number
-  total_tokens_out: number
-  total_cost: number
-  updated_at: string
-}
-
-export interface LLMMetricsCombinedOverview {
-  legacy: LLMMemoryOverview
-  persistent: LLMMetricsOverview
-  updated_at: string
-}
-
 export interface LLMModelMetrics {
   model_name: string
   model_identifier?: string
@@ -77,6 +57,14 @@ export interface LLMRequestMetrics {
 
 export interface LLMStreamMetrics {
   stream_id: string
+  platform?: string
+  chat_type?: 'private' | 'group' | 'discuss' | 'unknown' | string
+  group_id?: string | null
+  group_name?: string | null
+  person_id?: string | null
+  message_count?: number
+  is_group_chat?: boolean
+  is_private_chat?: boolean
   total_requests: number
   total_prompt_tokens: number
   total_completion_tokens: number

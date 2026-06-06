@@ -6,9 +6,7 @@ import { useI18n } from '../../utils/i18n'
 import {
   getLastHoursSummary,
   getOverview,
-  getRecentRequests,
-  listModels,
-  listRequestNames,
+  getRecentRequestsByTime,
   listStreams,
 } from '../../api/modules/llm-metrics'
 import type {
@@ -23,8 +21,6 @@ const { t, locale } = useI18n()
 
 const overview = ref<LLMMetricsOverview | null>(null)
 const lastHoursOverview = ref<LLMMetricsOverview | null>(null)
-const models = ref<LLMModelMetrics[]>([])
-const requestNames = ref<LLMRequestMetrics[]>([])
 const streams = ref<LLMStreamMetrics[]>([])
 const recentRequests = ref<LLMRecentRequest[]>([])
 const isLoading = ref(true)
@@ -155,13 +151,30 @@ const requestMetricsInWindow = computed<LLMRequestMetrics[]>(() => {
     .sort((left, right) => right.total_requests - left.total_requests)
 })
 
+const streamInfoById = computed(() => {
+  const infoMap = new Map<string, LLMStreamMetrics>()
+  streams.value.forEach((stream) => {
+    infoMap.set(stream.stream_id, stream)
+  })
+  return infoMap
+})
+
 const streamMetricsInWindow = computed<LLMStreamMetrics[]>(() => {
   const metrics = new Map<string, LLMStreamMetrics>()
 
   filteredRecentRequests.value.forEach((item) => {
     const streamId = item.stream_id ?? 'unknown'
+    const streamInfo = streamInfoById.value.get(streamId)
     const current = metrics.get(streamId) ?? {
       stream_id: streamId,
+      platform: streamInfo?.platform,
+      chat_type: streamInfo?.chat_type,
+      group_id: streamInfo?.group_id,
+      group_name: streamInfo?.group_name,
+      person_id: streamInfo?.person_id,
+      message_count: streamInfo?.message_count,
+      is_group_chat: streamInfo?.is_group_chat,
+      is_private_chat: streamInfo?.is_private_chat,
       total_requests: 0,
       total_prompt_tokens: 0,
       total_completion_tokens: 0,
@@ -232,6 +245,23 @@ const requestRows = computed(() => {
   })
 })
 
+const formatStreamChatType = (stream: LLMStreamMetrics): string => {
+  if (stream.is_group_chat || stream.chat_type === 'group') return '群聊'
+  if (stream.chat_type === 'discuss') return '讨论组'
+  if (stream.is_private_chat || stream.chat_type === 'private') return '私聊'
+  return '未知会话'
+}
+
+const formatStreamTarget = (stream: LLMStreamMetrics): string => {
+  if (stream.is_group_chat || stream.chat_type === 'group' || stream.chat_type === 'discuss') {
+    return stream.group_name || stream.group_id || '未知群组'
+  }
+  if (stream.is_private_chat || stream.chat_type === 'private') {
+    return stream.person_id || '未知私聊'
+  }
+  return stream.stream_id
+}
+
 const streamRows = computed(() => streamMetricsInWindow.value.slice(0, 12).map((item) => ({
   ...item,
   total_requests: normalizedNumber(item.total_requests),
@@ -239,6 +269,9 @@ const streamRows = computed(() => streamMetricsInWindow.value.slice(0, 12).map((
   total_output_tokens: normalizedNumber(item.total_output_tokens),
   total_cost: normalizedNumber(item.total_cost),
   success_rate: normalizedNumber(item.success_rate),
+  display_platform: item.platform || 'unknown',
+  display_chat_type: formatStreamChatType(item),
+  display_target: formatStreamTarget(item),
 })))
 
 const tokenSegments = computed(() => {
@@ -311,21 +344,23 @@ async function fetchMetrics(refreshing = false): Promise<void> {
   }
 
   try {
-    const [overviewData, lastHoursData, modelData, requestData, streamData, recentData] = await Promise.all([
+    const endTs = Date.now() / 1000
+    const startTs = endTs - selectedHours.value * 60 * 60
+    const [overviewData, lastHoursData, streamData, recentData] = await Promise.all([
       getOverview(),
       getLastHoursSummary(selectedHours.value),
-      listModels(),
-      listRequestNames(),
       listStreams(),
-      getRecentRequests(1000, 0),
+      getRecentRequestsByTime(startTs, endTs, 1000, 0),
     ])
 
     overview.value = overviewData
     lastHoursOverview.value = lastHoursData
-    models.value = [...modelData].sort((left, right) => right.total_requests - left.total_requests)
-    requestNames.value = [...requestData].sort((left, right) => right.total_requests - left.total_requests)
     streams.value = [...streamData].sort((left, right) => right.total_requests - left.total_requests)
-    recentRequests.value = recentData
+    recentRequests.value = [...recentData].sort((left, right) => {
+      const leftTimestamp = normalizeTimestamp(left.timestamp) ?? 0
+      const rightTimestamp = normalizeTimestamp(right.timestamp) ?? 0
+      return rightTimestamp - leftTimestamp
+    })
     lastUpdatedAt.value = new Date().toLocaleString()
   } finally {
     isLoading.value = false
@@ -578,8 +613,9 @@ onUnmounted(() => {
           <div v-if="streamRows.length" class="stream-list">
             <div v-for="stream in streamRows" :key="stream.stream_id" class="stream-card">
               <div>
-                <span class="stream-id">{{ stream.stream_id }}</span>
-                <small>{{ formatCompact(normalizedNumber(stream.total_input_tokens) + normalizedNumber(stream.total_output_tokens)) }} tokens</small>
+                <span class="stream-id">{{ stream.display_target }}</span>
+                <small>{{ stream.display_platform }} · {{ stream.display_chat_type }} · {{ formatCompact(normalizedNumber(stream.total_input_tokens) + normalizedNumber(stream.total_output_tokens)) }} tokens</small>
+                <small v-if="stream.group_id" class="stream-raw-id">群号：{{ stream.group_id }}</small>
               </div>
               <div class="stream-stats">
                 <strong>{{ formatNumber(stream.total_requests) }}</strong>
@@ -1123,6 +1159,11 @@ onUnmounted(() => {
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant) 54%, transparent);
   border-radius: 1rem;
   background: color-mix(in srgb, var(--md-sys-color-surface-container-high) 52%, transparent);
+}
+
+.stream-raw-id {
+  color: var(--md-sys-color-on-surface-variant);
+  opacity: 0.82;
 }
 
 .stream-stats {
