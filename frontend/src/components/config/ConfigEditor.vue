@@ -501,6 +501,7 @@ watch(codeContent, (newCode) => {
 .editor-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   min-height: 0;
   display: flex;
   flex-direction: column;

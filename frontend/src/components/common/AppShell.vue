@@ -327,7 +327,10 @@ async function handleSystemAction(action: 'restart' | 'shutdown' | 'logout') {
 /* ====== 布局框架 ====== */
 .layout {
   display: flex;
+  width: 100%;
+  height: 100dvh;
   min-height: 100dvh;
+  overflow: hidden;
   flex-direction: column;
 }
 
@@ -515,8 +518,11 @@ async function handleSystemAction(action: 'restart' | 'shutdown' | 'logout') {
 
   flex: 1;
   display: flex;
-  flex-direction: column;
+  height: 100dvh;
+  min-height: 0;
   min-width: 0;
+  overflow: hidden;
+  flex-direction: column;
   background: color-mix(in srgb, var(--md-sys-color-surface) calc(var(--wallpaper-mask-opacity, 0.88) * 100%), transparent);
   /* 为移动端底部导航栏留出空间（桌面端为 0） */
   padding-bottom: var(--app-bottom-nav-height, 80px);
@@ -576,11 +582,13 @@ async function handleSystemAction(action: 'restart' | 'shutdown' | 'logout') {
 
 .page-slot {
   flex: 1;
+  min-height: 0;
   padding: 1.5rem;
   max-width: 100%;
   width: 100%;
   margin: 0 auto;
-  /* overflow-x: hidden; removed to let sticky to work */
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 @media (max-width: 640px) {

@@ -136,17 +136,24 @@ onBeforeUnmount(() => {
 }
 
 html, body {
+  width: 100%;
+  height: 100%;
   margin: 0;
   padding: 0;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
-  /* 禁用移动端橡皮筋效果 */
+  /* 禁用移动端橡皮筋效果，并避免根滚动容器抢占页面滚动 */
   overscroll-behavior: none;
 }
 
 html {
+  overflow: hidden;
   background: transparent;
   color: var(--md-sys-color-on-surface, #1b1b1f);
+}
+
+body {
+  overflow: hidden;
 }
 
 /* 全局布局变量：移动端底栏 + 顶栏高度 */
@@ -163,7 +170,10 @@ html {
 }
 
 #app {
+  width: 100%;
+  height: 100%;
   min-height: 100dvh;
+  overflow: hidden;
 }
 
 .wallpaper-layer {
