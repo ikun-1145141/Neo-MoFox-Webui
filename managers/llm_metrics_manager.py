@@ -9,12 +9,10 @@ from __future__ import annotations
 from typing import Any
 
 from src.core.managers.stream_manager import get_stream_manager
-from src.kernel.logger import get_logger  # type: ignore
 
 from ..utils import get_llm_metrics_helper
 from ..utils.llm_metrics import LLMMetricsHelper
 
-logger = get_logger("llm_metrics_manager")
 
 class LLMMetricsManager:
     """WebUI LLM 统计管理器。"""
@@ -30,32 +28,6 @@ class LLMMetricsManager:
             数据库统计后端的请求数、Token、成本、延迟和缓存命中率摘要。
         """
         return await self.metrics_helper.get_overview()
-
-    async def get_requests_by_time_range(
-        self,
-        *,
-        start_ts: float,
-        end_ts: float,
-        limit: int = 1000,
-        offset: int = 0,
-    ) -> list[dict[str, Any]]:
-        """获取指定时间范围内的 LLM 请求明细。
-
-        Args:
-            start_ts: 起始时间戳。
-            end_ts: 结束时间戳。
-            limit: 返回数量上限。
-            offset: 分页偏移量。
-
-        Returns:
-            指定时间范围内的请求记录列表。
-        """
-        return await self.metrics_helper.get_requests_by_time_range(
-            start_ts=start_ts,
-            end_ts=end_ts,
-            limit=limit,
-            offset=offset,
-        )
 
     async def get_recent_requests_by_hours(
         self,
@@ -92,7 +64,7 @@ class LLMMetricsManager:
         enriched_rows: list[dict[str, Any]] = []
 
         for row in rows:
-            logger.debug(f"Enriching stream stats row: {row}")
+            # logger.debug(f"Enriching stream stats row: {row}")
             stream_id = str(row.get("stream_id") or "")
             stream_info = await stream_manager.get_stream_info(stream_id) if stream_id else None
             chat_type = str((stream_info or {}).get("chat_type") or "unknown")
