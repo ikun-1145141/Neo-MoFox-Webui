@@ -69,7 +69,7 @@ const statsSummary = computed(() => analytics.value?.summary ?? {})
 
 onMounted(async () => {
   await refreshAll()
-  pollTimer = window.setInterval(refreshListOnly, 5000)
+  pollTimer = window.setInterval(refreshAll, 10000)
 })
 
 onUnmounted(() => {
@@ -161,10 +161,6 @@ function formatTime(timestamp: number): string {
           <p>实时查看 Neo-MoFox 捕获的 OpenAI 兼容请求体，按摘要、消息、工具和原始 JSON 快速定位调试信息。</p>
         </div>
         <div class="hero-actions">
-          <button class="tonal-button" :disabled="isRefreshing" @click="refreshAll">
-            <Icon icon="material-symbols:refresh-rounded" width="18" height="18" />
-            {{ isRefreshing ? '刷新中' : '刷新' }}
-          </button>
           <button class="danger-button" :disabled="requests.length === 0" @click="clearRequests">
             <Icon icon="material-symbols:delete-outline-rounded" width="18" height="18" />
             清空
