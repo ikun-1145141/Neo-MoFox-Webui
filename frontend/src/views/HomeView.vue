@@ -421,7 +421,27 @@ const quickLinks = computed(() => [
 
 @media (max-width: 640px) {
   .stat-grid-top {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.625rem;
+  }
+
+  .stat-grid-top :deep(.stat-card) {
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border-radius: 0.875rem;
+  }
+
+  .stat-grid-top :deep(.stat-icon) {
+    width: 22px;
+    height: 22px;
+  }
+
+  .stat-grid-top :deep(.stat-val) {
+    font-size: 0.9375rem;
+  }
+
+  .stat-grid-top :deep(.stat-label) {
+    font-size: 0.6875rem;
   }
   
   .dashboard-layout {
@@ -448,7 +468,53 @@ const quickLinks = computed(() => [
 
 @media (max-width: 640px) {
   .mini-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.625rem;
+  }
+
+  .mini-grid :deep(.data-panel),
+  .mini-grid > .data-panel {
+    min-height: 150px;
+    padding: 0.75rem;
+    border-radius: 0.875rem;
+  }
+
+  .mini-grid :deep(.panel-header),
+  .mini-grid > .data-panel .panel-header {
+    gap: 0.375rem;
+    margin-bottom: 0.625rem;
+  }
+
+  .mini-grid :deep(.panel-header svg),
+  .mini-grid > .data-panel .panel-header svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .mini-grid :deep(.panel-header h3),
+  .mini-grid > .data-panel .panel-header h3 {
+    font-size: 0.875rem;
+  }
+
+  .mini-grid :deep(.panel-content),
+  .mini-grid > .data-panel .panel-content {
+    gap: 0.375rem;
+  }
+
+  .mini-grid :deep(.data-item),
+  .mini-grid > .data-panel .data-item {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.125rem;
+    padding: 0.375rem 0;
+  }
+
+  .mini-grid :deep(.data-item span),
+  .mini-grid :deep(.data-item strong),
+  .mini-grid > .data-panel .data-item span,
+  .mini-grid > .data-panel .data-item strong {
+    font-size: 0.75rem;
+    line-height: 1.25;
   }
 }
 
@@ -573,6 +639,56 @@ const quickLinks = computed(() => [
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 1rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .quick-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.625rem;
+  }
+
+  .quick-card {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: 104px;
+    padding: 0.75rem;
+    border-radius: 0.875rem;
+  }
+
+  .quick-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 0.625rem;
+  }
+
+  .quick-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .quick-text {
+    gap: 0.0625rem;
+    min-width: 0;
+  }
+
+  .quick-label {
+    font-size: 0.8125rem;
+    line-height: 1.2;
+  }
+
+  .quick-desc {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 0.6875rem;
+    line-height: 1.25;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .quick-arrow {
+    display: none;
   }
 }
 
