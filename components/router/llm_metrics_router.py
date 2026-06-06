@@ -56,23 +56,21 @@ class LLMMetricsRouter(BaseRouter):
 
         @self.app.get("/recent-by-time", response_model=BaseResponse[list[dict[str, Any]]], dependencies=[VerifiedDep])
         async def get_recent_requests_by_time(
-            start_ts: float = Query(description="起始时间戳，单位为秒"),
-            end_ts: float = Query(description="结束时间戳，单位为秒"),
+            hours: float = Query(default=5.0, ge=0.0, le=8760.0, description="向前查询的小时数"),
             limit: int = Query(default=1000, ge=1, le=1000, description="返回数量上限"),
             offset: int = Query(default=0, ge=0, description="分页偏移量"),
         ) -> BaseResponse[list[dict[str, Any]]]:
-            """按指定时间范围获取数据库中的 LLM 请求明细。"""
+            """获取最近若干小时内的 LLM 请求明细。"""
             try:
-                data = await self.metrics_manager.get_requests_by_time_range(
-                    start_ts=start_ts,
-                    end_ts=end_ts,
+                data = await self.metrics_manager.get_recent_requests_by_hours(
+                    hours=hours,
                     limit=limit,
                     offset=offset,
                 )
-                return BaseResponse.ok(data=data, message="按时间获取 LLM 请求明细成功")
+                return BaseResponse.ok(data=data, message="获取最近 LLM 请求明细成功")
             except Exception as exc:
-                logger.error(f"按时间获取 LLM 请求明细失败: {exc}", exc_info=True)
-                raise HTTPException(status_code=500, detail=f"按时间获取 LLM 请求明细失败: {exc}")
+                logger.error(f"获取最近 LLM 请求明细失败: {exc}", exc_info=True)
+                raise HTTPException(status_code=500, detail=f"获取最近 LLM 请求明细失败: {exc}")
 
         @self.app.get("/streams", response_model=BaseResponse[list[dict[str, Any]]], dependencies=[VerifiedDep])
         async def list_streams() -> BaseResponse[list[dict[str, Any]]]:
