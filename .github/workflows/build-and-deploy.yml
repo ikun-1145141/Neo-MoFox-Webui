@@ -100,7 +100,6 @@ jobs:
             echo "No version change to commit"
           else
             git commit -m "Bump WebUI plugin to v${{ steps.bump.outputs.new_version }}"
-            git pull --rebase --autostash origin ${{ github.ref_name }}
             git push origin HEAD:${{ github.ref_name }}
           fi
 
@@ -144,6 +143,9 @@ jobs:
 
           echo "notes_file=${NOTES_FILE}" >> "$GITHUB_OUTPUT"
           cat "${NOTES_FILE}"
+
+      - name: Sync latest branch state
+        run: git pull --rebase --autostash origin ${{ github.ref_name }}
 
       - name: 发布插件市场更新包
         run: |
