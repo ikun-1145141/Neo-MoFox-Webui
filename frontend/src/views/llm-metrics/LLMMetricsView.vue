@@ -350,6 +350,7 @@ async function fetchMetrics(refreshing = false): Promise<void> {
       listStreams(),
       getRecentRequestsByTime(selectedHours.value, 1000, 0),
     ])
+    console.log('Fetched metrics:', { overviewData, lastHoursData, streamData, recentData })
 
     overview.value = overviewData
     lastHoursOverview.value = lastHoursData
