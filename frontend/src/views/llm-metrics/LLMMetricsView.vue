@@ -49,7 +49,7 @@ const filteredRecentRequests = computed(() => recentRequests.value.filter((item)
   return milliseconds !== null && milliseconds >= selectedWindowStart.value
 }))
 
-const totalTokens = computed(() => normalizedNumber(windowOverview.value.total_input_tokens) + normalizedNumber(windowOverview.value.total_output_tokens))
+const totalTokens = computed(() => getOverviewInputTokens(windowOverview.value) + getOverviewOutputTokens(windowOverview.value))
 const averageCost = computed(() => {
   const requestCount = normalizedNumber(windowOverview.value.total_requests)
   if (requestCount <= 0) return 0
@@ -64,12 +64,13 @@ const modelMetricsInWindow = computed<LLMModelMetrics[]>(() => {
 
   filteredRecentRequests.value.forEach((item) => {
     const provider = item.provider ?? item.api_provider ?? 'unknown'
-    const key = `${provider}:${item.model_name}`
+    const modelName = item.model_name || 'unknown'
+    const key = `${provider}:${modelName}`
     const current = metrics.get(key) ?? {
-      model_name: item.model_name,
+      model_name: modelName,
       model_identifier: item.model_identifier,
       provider,
-      api_provider: item.api_provider,
+      api_provider: item.api_provider ?? provider,
       total_requests: 0,
       success_count: 0,
       error_count: 0,
@@ -88,11 +89,11 @@ const modelMetricsInWindow = computed<LLMModelMetrics[]>(() => {
     current.total_requests += 1
     current.success_count += item.success ? 1 : 0
     current.error_count += item.success ? 0 : 1
-    current.total_prompt_tokens += normalizedNumber(item.prompt_tokens)
-    current.total_completion_tokens += normalizedNumber(item.completion_tokens)
-    current.total_input_tokens = normalizedNumber(current.total_input_tokens) + normalizedNumber(item.input_tokens ?? item.prompt_tokens)
-    current.total_output_tokens = normalizedNumber(current.total_output_tokens) + normalizedNumber(item.output_tokens ?? item.completion_tokens)
-    current.total_tokens += normalizedNumber(item.total_tokens)
+    current.total_prompt_tokens = normalizedNumber(current.total_prompt_tokens) + normalizedNumber(item.prompt_tokens)
+    current.total_completion_tokens = normalizedNumber(current.total_completion_tokens) + normalizedNumber(item.completion_tokens)
+    current.total_input_tokens = normalizedNumber(current.total_input_tokens) + getRequestInputTokens(item)
+    current.total_output_tokens = normalizedNumber(current.total_output_tokens) + getRequestOutputTokens(item)
+    current.total_tokens += getRequestTotalTokens(item)
     current.total_cache_hit_tokens = normalizedNumber(current.total_cache_hit_tokens) + normalizedNumber(item.cache_hit_tokens)
     current.total_cost += normalizedNumber(item.cost)
     current.avg_latency += latency
@@ -112,8 +113,9 @@ const requestMetricsInWindow = computed<LLMRequestMetrics[]>(() => {
   const metrics = new Map<string, LLMRequestMetrics>()
 
   filteredRecentRequests.value.forEach((item) => {
-    const current = metrics.get(item.request_name) ?? {
-      request_name: item.request_name,
+    const requestName = item.request_name || '(未命名)'
+    const current = metrics.get(requestName) ?? {
+      request_name: requestName,
       total_requests: 0,
       success_count: 0,
       error_count: 0,
@@ -131,15 +133,15 @@ const requestMetricsInWindow = computed<LLMRequestMetrics[]>(() => {
     current.total_requests += 1
     current.success_count += item.success ? 1 : 0
     current.error_count += item.success ? 0 : 1
-    current.total_prompt_tokens += normalizedNumber(item.prompt_tokens)
-    current.total_completion_tokens += normalizedNumber(item.completion_tokens)
-    current.total_input_tokens = normalizedNumber(current.total_input_tokens) + normalizedNumber(item.input_tokens ?? item.prompt_tokens)
-    current.total_output_tokens = normalizedNumber(current.total_output_tokens) + normalizedNumber(item.output_tokens ?? item.completion_tokens)
-    current.total_tokens += normalizedNumber(item.total_tokens)
+    current.total_prompt_tokens = normalizedNumber(current.total_prompt_tokens) + normalizedNumber(item.prompt_tokens)
+    current.total_completion_tokens = normalizedNumber(current.total_completion_tokens) + normalizedNumber(item.completion_tokens)
+    current.total_input_tokens = normalizedNumber(current.total_input_tokens) + getRequestInputTokens(item)
+    current.total_output_tokens = normalizedNumber(current.total_output_tokens) + getRequestOutputTokens(item)
+    current.total_tokens += getRequestTotalTokens(item)
     current.total_cache_hit_tokens = normalizedNumber(current.total_cache_hit_tokens) + normalizedNumber(item.cache_hit_tokens)
     current.total_cost += normalizedNumber(item.cost)
     current.avg_latency += normalizedNumber(item.latency)
-    metrics.set(item.request_name, current)
+    metrics.set(requestName, current)
   })
 
   return Array.from(metrics.values())
@@ -188,10 +190,10 @@ const streamMetricsInWindow = computed<LLMStreamMetrics[]>(() => {
     }
 
     current.total_requests += 1
-    current.total_prompt_tokens += normalizedNumber(item.prompt_tokens)
-    current.total_completion_tokens += normalizedNumber(item.completion_tokens)
-    current.total_input_tokens = normalizedNumber(current.total_input_tokens) + normalizedNumber(item.input_tokens ?? item.prompt_tokens)
-    current.total_output_tokens = normalizedNumber(current.total_output_tokens) + normalizedNumber(item.output_tokens ?? item.completion_tokens)
+    current.total_prompt_tokens = normalizedNumber(current.total_prompt_tokens) + normalizedNumber(item.prompt_tokens)
+    current.total_completion_tokens = normalizedNumber(current.total_completion_tokens) + normalizedNumber(item.completion_tokens)
+    current.total_input_tokens = normalizedNumber(current.total_input_tokens) + getRequestInputTokens(item)
+    current.total_output_tokens = normalizedNumber(current.total_output_tokens) + getRequestOutputTokens(item)
     current.total_cache_hit += normalizedNumber(item.cache_hit_tokens)
     current.total_cache_miss += normalizedNumber(item.cache_miss_tokens)
     current.total_cost += normalizedNumber(item.cost)
@@ -275,8 +277,8 @@ const streamRows = computed(() => streamMetricsInWindow.value.slice(0, 12).map((
 })))
 
 const tokenSegments = computed(() => {
-  const input = normalizedNumber(windowOverview.value.total_input_tokens)
-  const output = normalizedNumber(windowOverview.value.total_output_tokens)
+  const input = getOverviewInputTokens(windowOverview.value)
+  const output = getOverviewOutputTokens(windowOverview.value)
   const total = input + output
 
   if (total <= 0) {
@@ -291,9 +293,9 @@ const tokenSegments = computed(() => {
 
 const recentTrend = computed(() => {
   const rows = [...filteredRecentRequests.value].slice(0, 18).reverse()
-  const maxTokens = Math.max(...rows.map((item) => normalizedNumber(item.total_tokens)), 1)
+  const maxTokens = Math.max(...rows.map((item) => getRequestTotalTokens(item)), 1)
   return rows.map((item) => {
-    const tokens = normalizedNumber(item.total_tokens)
+    const tokens = getRequestTotalTokens(item)
     return {
       id: item.id,
       label: formatTime(item.timestamp),
@@ -318,7 +320,7 @@ const statCards = computed(() => [
     value: formatCompact(totalTokens.value),
     icon: 'material-symbols:data-array-rounded',
     tone: 'secondary',
-    hint: `${t('llmMetrics.stats.input')} ${formatCompact(windowOverview.value.total_input_tokens)} · ${t('llmMetrics.stats.output')} ${formatCompact(windowOverview.value.total_output_tokens)}`,
+    hint: `${t('llmMetrics.stats.input')} ${formatCompact(getOverviewInputTokens(windowOverview.value))} · ${t('llmMetrics.stats.output')} ${formatCompact(getOverviewOutputTokens(windowOverview.value))}`,
   },
   {
     label: t('llmMetrics.stats.totalCost'),
@@ -372,8 +374,31 @@ async function changeHours(hours: number): Promise<void> {
   await fetchMetrics(true)
 }
 
-function normalizedNumber(value: number | null | undefined): number {
-  return Number.isFinite(value) ? Number(value) : 0
+function normalizedNumber(value: number | string | null | undefined): number {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue : 0
+}
+
+function getOverviewInputTokens(metrics: LLMMetricsOverview): number {
+  return normalizedNumber(metrics.total_input_tokens ?? metrics.total_tokens_in ?? metrics.total_prompt_tokens)
+}
+
+function getOverviewOutputTokens(metrics: LLMMetricsOverview): number {
+  return normalizedNumber(metrics.total_output_tokens ?? metrics.total_tokens_out ?? metrics.total_completion_tokens)
+}
+
+function getRequestInputTokens(request: LLMRecentRequest): number {
+  return normalizedNumber(request.input_tokens ?? request.prompt_tokens)
+}
+
+function getRequestOutputTokens(request: LLMRecentRequest): number {
+  return normalizedNumber(request.output_tokens ?? request.completion_tokens)
+}
+
+function getRequestTotalTokens(request: LLMRecentRequest): number {
+  const total = normalizedNumber(request.total_tokens)
+  if (total > 0) return total
+  return getRequestInputTokens(request) + getRequestOutputTokens(request)
 }
 
 function formatNumber(value: number | null | undefined): string {
@@ -502,8 +527,8 @@ onUnmounted(() => {
               <div class="token-output" :style="{ width: `${tokenSegments.output}%` }"></div>
             </div>
             <div class="token-legend">
-              <span><i class="input-dot"></i>{{ t('llmMetrics.stats.input') }} {{ formatNumber(windowOverview.total_input_tokens) }}</span>
-              <span><i class="output-dot"></i>{{ t('llmMetrics.stats.output') }} {{ formatNumber(windowOverview.total_output_tokens) }}</span>
+              <span><i class="input-dot"></i>{{ t('llmMetrics.stats.input') }} {{ formatNumber(getOverviewInputTokens(windowOverview)) }}</span>
+              <span><i class="output-dot"></i>{{ t('llmMetrics.stats.output') }} {{ formatNumber(getOverviewOutputTokens(windowOverview)) }}</span>
             </div>
           </div>
 
@@ -653,7 +678,7 @@ onUnmounted(() => {
                   <td>{{ item.request_name }}</td>
                   <td>{{ item.model_name }}</td>
                   <td>{{ item.provider ?? item.api_provider ?? '—' }}</td>
-                  <td>{{ formatNumber(item.total_tokens) }}</td>
+                  <td>{{ formatNumber(getRequestTotalTokens(item)) }}</td>
                   <td>{{ formatCurrency(item.cost) }}</td>
                   <td>
                     <span class="status-pill" :class="item.success ? 'success' : 'error'">

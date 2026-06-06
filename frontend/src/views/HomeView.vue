@@ -82,6 +82,31 @@ const formatUptime = (seconds: number): string => {
   return parts.join(' ') || t('home.uptime.justStarted')
 }
 
+const normalizedNumber = (value: number | string | null | undefined): number => {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue : 0
+}
+
+const formatNumber = (value: number | string | null | undefined): string => {
+  return normalizedNumber(value).toLocaleString()
+}
+
+const formatPercent = (value: number | string | null | undefined): string => {
+  return `${(normalizedNumber(value) * 100).toFixed(1)}%`
+}
+
+const formatCurrency = (value: number | string | null | undefined): string => {
+  return `$${normalizedNumber(value).toFixed(4)}`
+}
+
+const getLlmInputTokens = (llm: DashboardOverview['llm']): number => {
+  return normalizedNumber(llm.total_input_tokens ?? llm.total_tokens_in ?? llm.total_prompt_tokens)
+}
+
+const getLlmOutputTokens = (llm: DashboardOverview['llm']): number => {
+  return normalizedNumber(llm.total_output_tokens ?? llm.total_tokens_out ?? llm.total_completion_tokens)
+}
+
 const runtimeItems = computed(() => {
   if (!dashboardData.value) return []
   const { runtime } = dashboardData.value
@@ -111,23 +136,23 @@ const llmItems = computed(() => {
   return [
     {
       label: t('home.llm.totalRequests'),
-      value: llm.total_requests
+      value: formatNumber(llm.total_requests)
     },
     {
       label: t('home.llm.successRate'),
-      value: `${(llm.success_rate * 100).toFixed(1)}%`
+      value: formatPercent(llm.success_rate)
     },
     {
       label: t('home.llm.inputTokens'),
-      value: llm.total_tokens_in.toLocaleString()
+      value: formatNumber(getLlmInputTokens(llm))
     },
     {
       label: t('home.llm.outputTokens'),
-      value: llm.total_tokens_out.toLocaleString()
+      value: formatNumber(getLlmOutputTokens(llm))
     },
     {
       label: t('home.llm.totalCost'),
-      value: `$${llm.total_cost.toFixed(4)}`
+      value: formatCurrency(llm.total_cost)
     }
   ]
 })
@@ -168,11 +193,13 @@ const quickLinks = computed(() => [
 
 <template>
   <AppShell>
-    <PageHeader
-      :title="t('home.title')"
-      :subtitle="t('home.subtitle')"
-      icon="material-symbols:dashboard-outline-rounded"
-    />
+    <div class="home-header-card">
+      <PageHeader
+        :title="t('home.title')"
+        :subtitle="t('home.subtitle')"
+        icon="material-symbols:dashboard-outline-rounded"
+      />
+    </div>
 
     <div class="dashboard-layout">
       <!-- 左侧主内容区 -->
@@ -328,6 +355,19 @@ const quickLinks = computed(() => [
 </template>
 
 <style scoped>
+.home-header-card {
+  margin-bottom: 1.5rem;
+  padding: 1.5rem;
+  background: color-mix(in srgb, var(--md-sys-color-surface-container) 88%, transparent);
+  border-radius: 1.25rem;
+  box-shadow: 0px 4px 16px rgba(24, 28, 32, 0.04);
+  backdrop-filter: blur(12px);
+}
+
+.home-header-card :deep(.page-header) {
+  margin-bottom: 0;
+}
+
 .dashboard-layout {
   width: 100%;
   max-width: 100%;

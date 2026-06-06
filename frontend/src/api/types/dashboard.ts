@@ -1,3 +1,5 @@
+import type { LLMMetricsOverview } from './llm-metrics';
+
 export interface DashboardOverview {
   runtime: {
     event: {
@@ -46,19 +48,7 @@ export interface DashboardOverview {
       by_type: Record<string, number>;
     };
   };
-  llm: {
-    model_count: number;
-    total_requests: number;
-    success_count: number;
-    error_count: number;
-    success_rate: number;
-    avg_latency_seconds: number;
-    avg_latency_ms: number;
-    total_tokens_in: number;
-    total_tokens_out: number;
-    total_cost: number;
-    updated_at: string;
-  };
+  llm: LLMMetricsOverview;
   updated_at: string;
 }
 

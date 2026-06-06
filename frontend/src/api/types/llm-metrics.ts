@@ -24,13 +24,13 @@ export interface LLMModelMetrics {
   model_name: string
   model_identifier?: string
   provider?: string
-  api_provider: string
+  api_provider?: string
   total_requests: number
   success_count: number
   error_count: number
   success_rate?: number
-  total_prompt_tokens: number
-  total_completion_tokens: number
+  total_prompt_tokens?: number
+  total_completion_tokens?: number
   total_input_tokens?: number
   total_output_tokens?: number
   total_tokens: number
@@ -45,8 +45,8 @@ export interface LLMRequestMetrics {
   success_count: number
   error_count: number
   success_rate?: number
-  total_prompt_tokens: number
-  total_completion_tokens: number
+  total_prompt_tokens?: number
+  total_completion_tokens?: number
   total_input_tokens?: number
   total_output_tokens?: number
   total_tokens: number
@@ -66,8 +66,8 @@ export interface LLMStreamMetrics {
   is_group_chat?: boolean
   is_private_chat?: boolean
   total_requests: number
-  total_prompt_tokens: number
-  total_completion_tokens: number
+  total_prompt_tokens?: number
+  total_completion_tokens?: number
   total_input_tokens?: number
   total_output_tokens?: number
   total_cache_hit: number
@@ -84,15 +84,15 @@ export interface LLMRecentRequest {
   model_name: string
   model_identifier?: string
   provider?: string
-  api_provider: string
+  api_provider?: string
   stream_id: string | null
-  prompt_tokens: number
-  completion_tokens: number
+  prompt_tokens?: number
+  completion_tokens?: number
   input_tokens?: number
   output_tokens?: number
-  total_tokens: number
-  cache_hit_tokens: number
-  cache_miss_tokens: number
+  total_tokens?: number
+  cache_hit_tokens?: number
+  cache_miss_tokens?: number
   cache_hit?: boolean
   cache_write_tokens?: number
   cost: number
