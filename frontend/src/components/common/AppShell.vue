@@ -26,6 +26,7 @@ const navItems = [
   { labelKey: 'app.nav.plugins', icon: 'material-symbols:extension-outline-rounded', name: 'plugins', path: '/plugins' },
   { labelKey: 'app.nav.config-plugins', icon: 'material-symbols:settings-outline-rounded', name: 'config-plugins', path: '/config/plugins' },
   { labelKey: 'app.nav.llmMetrics', icon: 'material-symbols:bar-chart-rounded', name: 'llm-metrics', path: '/llm-metrics' },
+  { labelKey: 'app.nav.requestInspector', icon: 'material-symbols:plagiarism-outline-rounded', name: 'request-inspector', path: '/request-inspector' },
   { labelKey: 'app.nav.settings', icon: 'material-symbols:setting-outline-rounded', name: 'settings-theme', path: '/settings' },
 ]
 

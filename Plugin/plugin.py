@@ -12,6 +12,7 @@ from src.app.plugin_system.api.log_api import get_logger
 from .components.router.auth_router import AuthRouter
 from .components.router.dashboard_router import DashboardRouter
 from .components.router.llm_metrics_router import LLMMetricsRouter
+from .components.router.request_inspector_router import RequestInspectorRouter
 from .components.router.wallpaper_router import WallpaperRouter
 from .components.router.webui_router import WebuiSettingsRouter
 from .components.router.system_router import SystemRouter
@@ -55,6 +56,7 @@ class WebuiPlugin(BasePlugin):
             AuthRouter,
             DashboardRouter,
             LLMMetricsRouter,
+            RequestInspectorRouter,
             WebuiSettingsRouter,
             WallpaperRouter,
             SystemRouter,

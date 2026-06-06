@@ -46,6 +46,12 @@ const router = createRouter({
       meta: { requiresAuth: true, title: 'LLM 统计', icon: 'material-symbols:bar-chart-rounded' },
     },
     {
+      path: '/request-inspector',
+      name: 'request-inspector',
+      component: () => import('../views/RequestInspectorView.vue'),
+      meta: { requiresAuth: true, title: '请求体检视器', icon: 'material-symbols:plagiarism-outline-rounded' },
+    },
+    {
       path: '/settings',
       component: () => import('../views/SettingsView.vue'),
       meta: { requiresAuth: true, title: '设置', icon: 'material-symbols:settings-outline-rounded' },

@@ -15,6 +15,7 @@ const messages = {
         plugins: '插件管理',
         'config-plugins': '插件配置',
         llmMetrics: 'LLM 统计',
+        requestInspector: '请求检视',
         settings: '设置',
       },
       actions: {
@@ -57,6 +58,7 @@ const messages = {
       plugins: '插件管理',
       'plugin-detail': '插件详情',
       'llm-metrics': 'LLM 统计',
+      'request-inspector': '请求体检视器',
       'settings-theme': '主题设置',
       'settings-general': '通用设置',
       'settings-data': '数据管理',
@@ -637,6 +639,7 @@ const messages = {
         plugins: 'Plugin Management',
         'config-plugins': 'Plugin Config',
         llmMetrics: 'LLM Metrics',
+        requestInspector: 'Request Inspector',
         settings: 'Settings',
       },
       actions: {
@@ -679,6 +682,7 @@ const messages = {
       plugins: 'Plugin Management',
       'plugin-detail': 'Plugin Detail',
       'llm-metrics': 'LLM Metrics',
+      'request-inspector': 'Request Inspector',
       'settings-theme': 'Theme Settings',
       'settings-general': 'General Settings',
       'settings-data': 'Data Management',
