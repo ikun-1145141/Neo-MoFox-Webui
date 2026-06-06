@@ -17,13 +17,12 @@ export function listStreams(): Promise<LLMStreamMetrics[]> {
 }
 
 export function getRecentRequestsByTime(
-  startTs: number,
-  endTs: number,
+  hours = 5.0,
   limit = 1000,
   offset = 0,
 ): Promise<LLMRecentRequest[]> {
   return instance.get(`${BASE_URL}/recent-by-time`, {
-    params: { start_ts: startTs, end_ts: endTs, limit, offset },
+    params: { hours, limit, offset },
   })
 }
 

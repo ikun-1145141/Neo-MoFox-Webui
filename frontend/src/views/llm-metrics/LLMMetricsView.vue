@@ -344,13 +344,11 @@ async function fetchMetrics(refreshing = false): Promise<void> {
   }
 
   try {
-    const endTs = Date.now() / 1000
-    const startTs = endTs - selectedHours.value * 60 * 60
     const [overviewData, lastHoursData, streamData, recentData] = await Promise.all([
       getOverview(),
       getLastHoursSummary(selectedHours.value),
       listStreams(),
-      getRecentRequestsByTime(startTs, endTs, 1000, 0),
+      getRecentRequestsByTime(selectedHours.value, 1000, 0),
     ])
 
     overview.value = overviewData

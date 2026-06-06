@@ -10,7 +10,7 @@ import time
 from datetime import datetime
 from typing import Any
 
-from src.kernel.llm.stats import get_llm_stats_collector,get_requests_by_time_range  # type: ignore
+from src.kernel.llm.stats import get_llm_stats_collector, get_requests_by_time_range  # type: ignore
 
 
 class LLMMetricsHelper:
@@ -56,6 +56,32 @@ class LLMMetricsHelper:
             offset=offset,
         )
 
+    async def get_recent_requests_by_hours(
+        self,
+        *,
+        hours: float = 5.0,
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """获取最近若干小时内的 LLM 请求明细。
+
+        Args:
+            hours: 向前查询的小时数。
+            limit: 返回数量上限。
+            offset: 分页偏移量。
+
+        Returns:
+            最近指定小时内按时间倒序排列的请求记录列表。
+        """
+        end_ts = time.time()
+        start_ts = end_ts - max(hours, 0.0) * 3600
+        return await self.get_requests_by_time_range(
+            start_ts=start_ts,
+            end_ts=end_ts,
+            limit=limit,
+            offset=offset,
+        )
+
     async def list_streams(self) -> list[dict[str, Any]]:
         """获取数据库中按 stream_id 分组的统计。
 
@@ -76,6 +102,7 @@ class LLMMetricsHelper:
         end_ts = time.time()
         start_ts = end_ts - max(hours, 0.0) * 3600
         return await get_llm_stats_collector().get_by_time_range(start_ts, end_ts)
+
 
 _llm_metrics_helper: LLMMetricsHelper | None = None
 

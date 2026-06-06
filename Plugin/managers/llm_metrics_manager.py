@@ -55,6 +55,29 @@ class LLMMetricsManager:
             offset=offset,
         )
 
+    async def get_recent_requests_by_hours(
+        self,
+        *,
+        hours: float = 5.0,
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """获取最近若干小时内的 LLM 请求明细。
+
+        Args:
+            hours: 向前查询的小时数。
+            limit: 返回数量上限。
+            offset: 分页偏移量。
+
+        Returns:
+            最近指定小时内的请求记录列表。
+        """
+        return await self.metrics_helper.get_recent_requests_by_hours(
+            hours=hours,
+            limit=limit,
+            offset=offset,
+        )
+
     async def list_streams(self) -> list[dict[str, Any]]:
         """获取按 stream_id 分组并补齐会话来源信息的持久化统计。
 
