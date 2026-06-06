@@ -10,7 +10,7 @@ import time
 from datetime import datetime
 from typing import Any
 
-from src.kernel.llm.stats import get_llm_stats_collector, get_requests_by_time_range  # type: ignore
+from src.kernel.llm.stats import get_llm_stats_collector
 
 
 class LLMMetricsHelper:
@@ -29,32 +29,6 @@ class LLMMetricsHelper:
             "avg_latency_ms": round(float(summary.get("avg_latency", 0.0)) * 1000, 3),
             "updated_at": datetime.now().isoformat(timespec="seconds"),
         }
-
-    async def get_requests_by_time_range(
-        self,
-        *,
-        start_ts: float,
-        end_ts: float,
-        limit: int = 1000,
-        offset: int = 0,
-    ) -> list[dict[str, Any]]:
-        """获取指定时间范围内的 LLM 请求明细。
-
-        Args:
-            start_ts: 起始时间戳。
-            end_ts: 结束时间戳。
-            limit: 返回数量上限。
-            offset: 分页偏移量。
-
-        Returns:
-            指定时间范围内按时间倒序排列的请求记录列表。
-        """
-        return await get_requests_by_time_range(
-            start_ts=start_ts,
-            end_ts=end_ts,
-            limit=limit,
-            offset=offset,
-        )
 
     async def get_recent_requests_by_hours(
         self,
@@ -75,7 +49,7 @@ class LLMMetricsHelper:
         """
         end_ts = time.time()
         start_ts = end_ts - max(hours, 0.0) * 3600
-        return await self.get_requests_by_time_range(
+        return await get_llm_stats_collector().list_requests_by_time_range(
             start_ts=start_ts,
             end_ts=end_ts,
             limit=limit,
