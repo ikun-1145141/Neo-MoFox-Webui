@@ -33,7 +33,7 @@ const modelRankingMode = ref<'chart' | 'list'>('chart')
 
 let pollTimer: number | null = null
 
-const hourOptions = [1, 5, 24, 72]
+const hourOptions = [1, 5, 24, 72, 168, 720]
 
 const emptyOverview: LLMMetricsOverview = {
   total_requests: 0,
@@ -432,6 +432,12 @@ function formatLatency(value: number | null | undefined): string {
   return `${safeValue.toFixed(0)}ms`
 }
 
+function formatTimeWindowOption(hours: number): string {
+  if (hours === 168) return t('llmMetrics.filters.sevenDays')
+  if (hours === 720) return t('llmMetrics.filters.oneMonth')
+  return t('llmMetrics.filters.hours', { hours: String(hours) })
+}
+
 function normalizeTimestamp(timestamp: number | null | undefined): number | null {
   const safeTimestamp = normalizedNumber(timestamp)
   if (safeTimestamp <= 0) return null
@@ -479,7 +485,7 @@ onUnmounted(() => {
               :class="{ active: selectedHours === hours }"
               @click="changeHours(hours)"
             >
-              {{ t('llmMetrics.filters.hours', { hours: String(hours) }) }}
+              {{ formatTimeWindowOption(hours) }}
             </button>
           </div>
           <span v-if="lastUpdatedAt" class="updated-label">

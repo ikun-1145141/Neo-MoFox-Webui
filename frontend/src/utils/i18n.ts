@@ -525,6 +525,8 @@ const messages = {
       filters: {
         timeRange: '时间窗口',
         hours: '{hours} 小时',
+        sevenDays: '7 天',
+        oneMonth: '一个月',
         currentRange: '当前窗口请求',
       },
       models: {
@@ -1149,6 +1151,8 @@ const messages = {
       filters: {
         timeRange: 'Time range',
         hours: '{hours}h',
+        sevenDays: '7 days',
+        oneMonth: '1 month',
         currentRange: 'Requests in range',
       },
       models: {
