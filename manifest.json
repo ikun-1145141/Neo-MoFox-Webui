@@ -27,6 +27,11 @@
             "component_type": "event_handler",
             "component_name": "webui_startup_panel",
             "dependencies": []
+        },
+        {
+            "component_type": "router",
+            "component_name": "request-inspector",
+            "dependencies": []
         }
     ],
     "entry_point": "plugin.py",
