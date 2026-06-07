@@ -2,14 +2,8 @@ name: Build and Publish WebUI Plugin
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - master
-    paths:
-      - 'frontend/**'
-      - 'Plugin/**'
-      - '.github/workflows/build-and-deploy.yml'
+  schedule:
+    - cron: '0 0 * * *'
 
 permissions:
   contents: write
@@ -32,7 +26,25 @@ jobs:
           fetch-depth: 0
           token: ${{ github.token }}
 
+      - name: Check recent source changes
+        id: recent_changes
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Non-scheduled run, build will continue."
+            exit 0
+          fi
+
+          if git log --since="24 hours ago" --pretty=format:'%H' -- frontend Plugin .github/workflows/build-and-deploy.yml | grep -q .; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Recent changes found, build will continue."
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No changes found in the last 24 hours, build will be skipped."
+          fi
+
       - name: Setup Node.js
+        if: steps.recent_changes.outputs.has_changes == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -40,32 +52,39 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Setup Python
+        if: steps.recent_changes.outputs.has_changes == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install frontend dependencies
+        if: steps.recent_changes.outputs.has_changes == 'true'
         working-directory: frontend
         run: npm ci
 
       - name: Build frontend
+        if: steps.recent_changes.outputs.has_changes == 'true'
         working-directory: frontend
         run: npm run build
 
       - name: Install MPDT
+        if: steps.recent_changes.outputs.has_changes == 'true'
         run: python -m pip install mofox-plugin-dev-toolkit
 
       - name: Configure MPDT GitHub token
+        if: steps.recent_changes.outputs.has_changes == 'true'
         run: mpdt config edit github.token "${MPDT_GITHUB_TOKEN}"
         env:
           MPDT_GITHUB_TOKEN: ${{ secrets.MPDT_GITHUB_TOKEN }}
 
       - name: Configure Git
+        if: steps.recent_changes.outputs.has_changes == 'true'
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Bump plugin patch version
+        if: steps.recent_changes.outputs.has_changes == 'true'
         id: bump
         run: |
           OLD_VERSION=$(python - <<'PY'
@@ -93,6 +112,7 @@ jobs:
           echo "Plugin version bumped: ${OLD_VERSION} -> ${NEW_VERSION}"
 
       - name: Commit version bump
+        if: steps.recent_changes.outputs.has_changes == 'true'
         run: |
           git add Plugin/manifest.json
 
@@ -104,6 +124,7 @@ jobs:
           fi
 
       - name: Prepare release plugin directory
+        if: steps.recent_changes.outputs.has_changes == 'true'
         run: |
           RELEASE_DIR="/tmp/webui-plugin-release"
           rm -rf "${RELEASE_DIR}"
@@ -124,6 +145,7 @@ jobs:
           ls -la "${RELEASE_DIR}/static"
 
       - name: 生成更新日志
+        if: steps.recent_changes.outputs.has_changes == 'true'
         id: release_notes
         run: |
           NOTES_FILE="/tmp/webui-plugin-release-notes.md"
@@ -145,14 +167,17 @@ jobs:
           cat "${NOTES_FILE}"
 
       - name: Sync latest branch state
+        if: steps.recent_changes.outputs.has_changes == 'true'
         run: git pull --rebase --autostash origin ${{ github.ref_name }}
 
       - name: 发布插件市场更新包
+        if: steps.recent_changes.outputs.has_changes == 'true'
         run: |
           mpdt market package-update /tmp/webui-plugin-release \
             --release-notes "$(cat '${{ steps.release_notes.outputs.notes_file }}')"
 
       - name: 生成发布摘要
+        if: steps.recent_changes.outputs.has_changes == 'true'
         run: |
           echo "## 📦 WebUI 插件发布摘要" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -163,3 +188,10 @@ jobs:
           echo "- **新版本**：\`${{ steps.bump.outputs.new_version }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **触发提交**：\`${GITHUB_SHA:0:7}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **状态**：✅ 已发布插件市场更新包" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 生成跳过摘要
+        if: steps.recent_changes.outputs.has_changes == 'false'
+        run: |
+          echo "## 📦 WebUI 插件发布摘要" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **状态**：⏭️ 最近 24 小时内没有相关提交，已跳过构建与发布" >> "$GITHUB_STEP_SUMMARY"
