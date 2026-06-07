@@ -39,7 +39,7 @@ class WebuiPlugin(BasePlugin):
     - Git 更新管理（未来）
     """
 
-    plugin_name: str = "webui"
+    plugin_name: str = "neo-mofox-webui"
     plugin_description: str = "Neo-MoFox WebUI 后端插件"
     plugin_version: str = "1.0.0"
 
