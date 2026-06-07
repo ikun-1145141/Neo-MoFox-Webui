@@ -150,6 +150,19 @@
               </div>
 
               <div class="form-field">
+                <label for="model-cache-hit-price-in">{{ t('modelEditDialog.model.cacheHitPriceInLabel') }}</label>
+                <input
+                  id="model-cache-hit-price-in"
+                  v-model.number="formData.cache_hit_price_in"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-field">
                 <label for="model-price-out">{{ t('modelEditDialog.model.priceOutLabel') }}</label>
                 <input
                   id="model-price-out"
@@ -198,6 +211,20 @@
                 </span>
                 <span class="checkbox-label">{{ t('modelEditDialog.model.toolCallCompatLabel') }}</span>
               </label>
+            </div>
+
+            <div class="form-field">
+              <label for="model-extra-params">{{ t('modelEditDialog.model.extraParamsLabel') }}</label>
+              <p class="field-description">{{ t('modelEditDialog.model.extraParamsDesc') }}</p>
+              <textarea
+                id="model-extra-params"
+                v-model="extraParamsText"
+                :placeholder="t('modelEditDialog.model.extraParamsPlaceholder')"
+                rows="4"
+              />
+              <button type="button" class="preset-btn" @click="fillToolChoiceAuto">
+                {{ t('modelEditDialog.model.toolChoiceAutoPreset') }}
+              </button>
             </div>
 
             <div class="form-field checkbox-field">
@@ -302,6 +329,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { parse as parseToml } from 'toml'
 import { useI18n } from '@/utils/i18n'
 import { useDialogStore } from '@/utils/dialog'
 import Icon from '../common/Icon.vue'
@@ -338,6 +366,7 @@ const emit = defineEmits<{
 
 // 表单数据
 const formData = ref<Record<string, any>>({})
+const extraParamsText = ref('{}')
 
 // 标题
 const title = ref('')
@@ -381,6 +410,7 @@ function initForm() {
         model_identifier: '',
         api_provider: props.providers[0] || '',
         price_in: 0.0,
+        cache_hit_price_in: 0.0,
         price_out: 0.0,
         force_stream_mode: false,
         max_context: 32768,
@@ -405,13 +435,46 @@ function initForm() {
       formData.value.model_list = []
     }
   }
+
+  if (props.type === 'model') {
+    syncExtraParamsText()
+  }
+}
+
+function syncExtraParamsText() {
+  extraParamsText.value = formatExtraParams(formData.value.extra_params)
+}
+
+function formatExtraParams(value: Record<string, any> | undefined) {
+  if (!value || Object.keys(value).length === 0) {
+    return '{}'
+  }
+
+  return JSON.stringify(value, null, 2)
+}
+
+function parseExtraParamsText() {
+  const text = extraParamsText.value.trim()
+  if (!text) {
+    return {}
+  }
+
+  try {
+    return parseToml(`extra_params = ${text}`).extra_params || {}
+  } catch {
+    return JSON.parse(text)
+  }
+}
+
+function fillToolChoiceAuto() {
+  extraParamsText.value = '{ tool_choice = "auto" }'
 }
 
 // 任务：添加模型
 function addModel() {
   // 关闭所有打开的下拉框
   closeAllDropdowns()
-  
+
   if (!formData.value.model_list) {
     formData.value.model_list = []
   }
@@ -446,6 +509,13 @@ async function handleSubmit() {
   } else if (props.type === 'model') {
     if (!formData.value.name || !formData.value.model_identifier || !formData.value.api_provider) {
       await dialogStore.alert(t('modelEditDialog.errors.requiredFields'))
+      return
+    }
+
+    try {
+      formData.value.extra_params = parseExtraParamsText()
+    } catch {
+      await dialogStore.alert(t('modelEditDialog.errors.invalidExtraParams'))
       return
     }
   } else if (props.type === 'task') {
@@ -575,6 +645,7 @@ async function handleSubmit() {
 .form-field input[type="url"],
 .form-field input[type="password"],
 .form-field input[type="number"],
+.form-field textarea,
 .form-field select {
   padding: 12px 16px;
   font-size: 14px;
@@ -587,6 +658,7 @@ async function handleSubmit() {
 }
 
 .form-field input:focus,
+.form-field textarea:focus,
 .form-field select:focus {
   outline: none;
   border-color: var(--md-sys-color-primary);
@@ -596,6 +668,31 @@ async function handleSubmit() {
 .form-field input:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.form-field textarea {
+  resize: vertical;
+  min-height: 96px;
+  line-height: 1.5;
+}
+
+.preset-btn {
+  align-self: flex-start;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.preset-btn:hover {
+  background: var(--md-sys-color-secondary);
+  color: var(--md-sys-color-on-secondary);
 }
 
 .field-hint {

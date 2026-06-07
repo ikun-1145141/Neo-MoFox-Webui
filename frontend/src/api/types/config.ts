@@ -158,11 +158,14 @@ export interface ModelData {
   name: string
   api_provider: string
   model_identifier: string
-  input_price: number
-  output_price: number
-  context_length: number
-  max_output_tokens: number
-  priority: number
+  price_in: number
+  cache_hit_price_in?: number | null
+  price_out: number
+  max_context: number
+  force_stream_mode: boolean
+  tool_call_compat: boolean
+  extra_params: Record<string, unknown>
+  priority?: number
   anti_truncation: boolean
 }
 
