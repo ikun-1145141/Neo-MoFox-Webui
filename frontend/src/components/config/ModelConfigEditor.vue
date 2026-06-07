@@ -89,8 +89,6 @@
           <div v-if="activeTab === 'providers'" class="config-section">
             <div class="section-header">
               <h3>{{ t('modelConfigEditor.providers.title') }}</h3>
-            </div>
-            <div class="sticky-action-row">
               <button type="button" class="add-btn" @click="addProvider">
                 <Icon icon="material-symbols:add-rounded" :size="20" />
                 <span>{{ t('modelConfigEditor.actions.add') }}</span>
@@ -153,11 +151,9 @@
           </div>
 
           <!-- 模型配置 -->
-          <div v-if="activeTab === 'models'" class="config-section models-section">
+          <div v-if="activeTab === 'models'" class="config-section">
             <div class="section-header">
               <h3>{{ t('modelConfigEditor.models.title') }}</h3>
-            </div>
-            <div class="sticky-action-row">
               <button type="button" class="add-btn" @click="addModel">
                 <Icon icon="material-symbols:add-rounded" :size="20" />
                 <span>{{ t('modelConfigEditor.actions.add') }}</span>
@@ -904,22 +900,6 @@ function handleDialogSubmit(data: Record<string, any>) {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
-}
-
-.sticky-action-row {
-  position: sticky;
-  top: 8px;
-  z-index: 1;
-  display: flex;
-  justify-content: flex-end;
-  margin-top: -30px;
-  margin-right: -100px;
-  margin-bottom: 20px;
-  pointer-events: none;
-}
-
-.sticky-action-row .add-btn {
-  pointer-events: auto;
 }
 
 .section-header h3 {
