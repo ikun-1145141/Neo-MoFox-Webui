@@ -79,7 +79,7 @@ export interface SectionSchema {
  * 增强配置响应（对应后端 EnhancedConfigResponse）
  */
 export interface EnhancedConfigResponse {
-  config_type: 'bot' | 'model' | 'plugin'
+  config_type: 'bot' | 'model' | 'plugin' | 'mcp'
   config_name: string
   config_path: string
   schema: SectionSchema[]
@@ -91,7 +91,7 @@ export interface EnhancedConfigResponse {
  * 全量写入请求（对应后端 FullWriteRequest）
  */
 export interface FullWriteRequest {
-  config_type: 'bot' | 'model' | 'plugin'
+  config_type: 'bot' | 'model' | 'plugin' | 'mcp'
   plugin_name?: string
   data: Record<string, unknown>
 }
@@ -100,7 +100,7 @@ export interface FullWriteRequest {
  * 增量写入请求（对应后端 PatchWriteRequest）
  */
 export interface PatchWriteRequest {
-  config_type: 'bot' | 'model' | 'plugin'
+  config_type: 'bot' | 'model' | 'plugin' | 'mcp'
   plugin_name?: string
   data: Record<string, unknown>
 }
@@ -125,6 +125,20 @@ export interface ModelTestResult {
   error_message?: string
   model_identifier: string
   provider_base_url: string
+}
+
+export interface McpTestRequest {
+  server_type: 'stdio' | 'sse' | 'streamable'
+  name: string
+  config: Record<string, unknown> | string
+  timeout: number
+}
+
+export interface McpTestResult {
+  success: boolean
+  message: string
+  detail?: string | null
+  latency_ms?: number | null
 }
 
 /**

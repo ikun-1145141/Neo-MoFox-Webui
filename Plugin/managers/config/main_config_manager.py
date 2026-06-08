@@ -11,7 +11,10 @@ from typing import Any, Literal
 from src.app.plugin_system.api.config_api import get_config
 from src.app.plugin_system.api.log_api import get_logger
 from src.core.config.core_config import CoreConfig
+from src.core.config.mcp_config import MCPConfig
 from src.core.config.model_config import ModelConfig
+
+ConfigType = Literal["bot", "model", "plugin", "mcp"]
 
 from ...utils.config_parser import ConfigParser
 from ...utils.config_types import EnhancedConfigResponse
@@ -30,10 +33,11 @@ class MainConfigManager:
         # 配置文件路径映射
         self.bot_config_path = Path("config/core.toml")
         self.model_config_path = Path("config/model.toml")
+        self.mcp_config_path = Path("config/mcp.toml")
 
     async def get_config(
         self,
-        config_type: Literal["bot", "model", "plugin"],
+        config_type: ConfigType,
         plugin_name: str | None = None,
     ) -> EnhancedConfigResponse:
         """获取增强配置。
@@ -53,6 +57,8 @@ class MainConfigManager:
             return await self._get_bot_config()
         elif config_type == "model":
             return await self._get_model_config()
+        elif config_type == "mcp":
+            return await self._get_mcp_config()
         elif config_type == "plugin":
             if not plugin_name:
                 raise ValueError("plugin_name 不能为空")
@@ -62,7 +68,7 @@ class MainConfigManager:
 
     async def get_raw_toml(
         self,
-        config_type: Literal["bot", "model", "plugin"],
+        config_type: ConfigType,
         plugin_name: str | None = None,
     ) -> str:
         """获取原始 TOML 文件内容。
@@ -83,6 +89,8 @@ class MainConfigManager:
             config_path = self.bot_config_path
         elif config_type == "model":
             config_path = self.model_config_path
+        elif config_type == "mcp":
+            config_path = self.mcp_config_path
         elif config_type == "plugin":
             if not plugin_name:
                 raise ValueError("plugin_name 不能为空")
@@ -98,7 +106,7 @@ class MainConfigManager:
 
     async def full_write(
         self,
-        config_type: Literal["bot", "model", "plugin"],
+        config_type: ConfigType,
         data: dict[str, Any],
         plugin_name: str | None = None,
     ) -> EnhancedConfigResponse:
@@ -119,6 +127,8 @@ class MainConfigManager:
             return await self._write_bot_config(data)
         elif config_type == "model":
             return await self._write_model_config(data)
+        elif config_type == "mcp":
+            return await self._write_mcp_config(data)
         elif config_type == "plugin":
             if not plugin_name:
                 raise ValueError("plugin_name 不能为空")
@@ -128,7 +138,7 @@ class MainConfigManager:
 
     async def patch_write(
         self,
-        config_type: Literal["bot", "model", "plugin"],
+        config_type: ConfigType,
         patch: dict[str, Any],
         plugin_name: str | None = None,
     ) -> EnhancedConfigResponse:
@@ -198,6 +208,25 @@ class MainConfigManager:
         logger.info("模型配置已写入")
 
         return await self._get_model_config()
+
+    # ===== 私有方法：mcp 配置 =====
+
+    async def _get_mcp_config(self) -> EnhancedConfigResponse:
+        """获取 MCP 配置。"""
+        data = ConfigParser.read_toml(self.mcp_config_path)
+        return EnhancedConfigResponse(
+            config_type="mcp",
+            config_name="MCP 配置",
+            config_path=str(self.mcp_config_path),
+            schema=[],
+            data=data,
+        )
+
+    async def _write_mcp_config(self, data: dict[str, Any]) -> EnhancedConfigResponse:
+        """写入 MCP 配置。"""
+        ConfigParser.write_toml(self.mcp_config_path, MCPConfig, data)
+        logger.info("MCP 配置已写入")
+        return await self._get_mcp_config()
 
     # ===== 私有方法：plugin 配置 =====
 

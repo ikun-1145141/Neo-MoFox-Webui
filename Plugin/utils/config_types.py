@@ -130,7 +130,7 @@ class EnhancedConfigResponse(BaseModel):
         data: 当前配置值（与 TOML 文件内容一致的字典）
     """
 
-    config_type: Literal["bot", "model", "plugin"] = Field(..., description="配置类型")
+    config_type: Literal["bot", "model", "plugin", "mcp"] = Field(..., description="配置类型")
     config_name: str = Field(..., description="配置名称")
     config_path: str = Field(..., description="配置文件路径")
     plugin_name: str | None = Field(default=None, description="插件名")
@@ -201,6 +201,24 @@ class ModelTestResult(BaseModel):
     error_message: str | None = Field(default=None, description="错误信息")
     model_identifier: str = Field(..., description="模型标识符")
     provider_base_url: str = Field(..., description="提供商 URL")
+
+
+class McpTestRequest(BaseModel):
+    """MCP 服务测试请求。"""
+
+    server_type: Literal["stdio", "sse", "streamable"] = Field(..., description="MCP 服务类型")
+    name: str = Field(..., description="服务名称")
+    config: dict[str, Any] | str = Field(..., description="服务配置")
+    timeout: int = Field(default=10, description="超时时间")
+
+
+class McpTestResult(BaseModel):
+    """MCP 服务测试结果。"""
+
+    success: bool = Field(..., description="是否成功")
+    message: str = Field(..., description="结果消息")
+    detail: str | None = Field(default=None, description="详细信息")
+    latency_ms: float | None = Field(default=None, description="耗时（毫秒）")
 
 
 # ===== 插件配置相关结构 =====

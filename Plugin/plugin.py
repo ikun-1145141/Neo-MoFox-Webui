@@ -22,6 +22,7 @@ from .components.router.config import (
     MainConfigRouter,
     BotConfigRouter,
     ModelConfigRouter,
+    McpConfigRouter,
     PluginConfigRouter,
 )
 from .components.handlers import WebuiStartupPanelHandler
@@ -67,6 +68,7 @@ class WebuiPlugin(BasePlugin):
             MainConfigRouter,
             BotConfigRouter,
             ModelConfigRouter,
+            McpConfigRouter,
             PluginConfigRouter,
         ]
         return components
