@@ -679,19 +679,26 @@ function getFieldComponent(inputType: string, fieldType?: string) {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .field-title-zh {
   font-size: 14px;
   font-weight: 600;
   color: var(--md-sys-color-on-surface);
+  flex-shrink: 0;
 }
 
 .field-name-en {
   font-size: 13px;
   font-weight: 400;
   color: var(--md-sys-color-on-surface-variant);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
 }
 
 .required-mark {
@@ -704,6 +711,7 @@ function getFieldComponent(inputType: string, fieldType?: string) {
   align-items: center;
   cursor: help;
   margin-left: 2px;
+  flex-shrink: 0;
 }
 
 .help-icon {
@@ -744,6 +752,35 @@ function getFieldComponent(inputType: string, fieldType?: string) {
   visibility: visible;
   opacity: 1;
   transform: translateX(-50%) translateY(-8px);
+}
+
+/* ===== 移动端适配 ===== */
+@media screen and (max-width: 768px) {
+  .form-editor {
+    padding: 12px;
+  }
+
+  .section-header {
+    padding: 12px 16px;
+  }
+
+  .section-content {
+    padding: 0 16px 16px 16px;
+  }
+
+  .form-field {
+    padding: 12px;
+  }
+
+  .tooltip-popup {
+    left: auto;
+    right: 0;
+    transform: translateY(-4px);
+  }
+
+  .field-tooltip:hover .tooltip-popup {
+    transform: translateY(-8px);
+  }
 }
 
 /* 对象节样式 */

@@ -44,35 +44,34 @@ const tabs = [
 .settings-layout {
   display: flex;
   align-items: stretch;
-  /* 视口高度减去 top-bar 与移动端底栏 */
-  min-height: calc(100dvh - var(--app-top-bar-height, 64px) - var(--app-bottom-nav-height, 0px));
+  /* 视口高度减去 top-bar 与移动端底栏，页面自身不滚动 */
+  height: calc(100dvh - var(--app-top-bar-height, 64px) - var(--app-bottom-nav-height, 0px));
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* 侧边选项卡 */
 .settings-sidebar {
   width: 250px;
+  height: 100%;
+  min-height: 0;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   background: color-mix(in srgb, var(--md-sys-color-surface) 75%, transparent);
   backdrop-filter: blur(12px);
   overflow-y: auto;
-  position: sticky;
-  top: var(--app-top-bar-height, 64px); /* 吸顶，保持在 top-bar 下方 */
-  height: calc(100dvh - var(--app-top-bar-height, 64px) - var(--app-bottom-nav-height, 0px));
   z-index: 5;
 }
 
 @media (max-width: 900px) {
   .settings-layout {
     flex-direction: column;
-    min-height: auto;
   }
   .settings-sidebar {
     width: 100%;
-    position: sticky;
-    top: var(--app-top-bar-height, 64px);
     height: auto;
+    max-height: 160px;
     border-right: none;
     border-bottom: 1px solid var(--md-sys-color-outline-variant);
   }
@@ -138,6 +137,8 @@ const tabs = [
 .settings-content {
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  overflow: auto;
   padding: 2rem;
 }
 

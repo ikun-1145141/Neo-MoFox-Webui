@@ -2,6 +2,8 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import AppShell from '../../components/common/AppShell.vue'
 import Icon from '../../components/common/Icon.vue'
+import TokenUsageChart from '../../components/llm-metrics/TokenUsageChart.vue'
+import ModelRankingChart from '../../components/llm-metrics/ModelRankingChart.vue'
 import { useI18n } from '../../utils/i18n'
 import {
   getLastHoursSummary,
@@ -27,10 +29,11 @@ const isLoading = ref(true)
 const isRefreshing = ref(false)
 const lastUpdatedAt = ref('')
 const selectedHours = ref(24)
+const modelRankingMode = ref<'chart' | 'list'>('chart')
 
 let pollTimer: number | null = null
 
-const hourOptions = [1, 5, 24, 72]
+const hourOptions = [1, 5, 24, 72, 168, 720]
 
 const emptyOverview: LLMMetricsOverview = {
   total_requests: 0,
@@ -276,6 +279,18 @@ const streamRows = computed(() => streamMetricsInWindow.value.slice(0, 12).map((
   display_target: formatStreamTarget(item),
 })))
 
+const recentTrend = computed(() => [...filteredRecentRequests.value].slice(0, 18).reverse().map((item) => ({
+  id: item.id,
+  label: formatTime(item.timestamp),
+  success: Boolean(item.success),
+  cacheHit: Boolean(item.cache_hit),
+  inputTokens: getRequestInputTokens(item),
+  outputTokens: getRequestOutputTokens(item),
+  tokens: getRequestTotalTokens(item),
+})))
+
+const hasTokenChartData = computed(() => totalTokens.value > 0 || recentTrend.value.some((item) => item.tokens > 0))
+
 const tokenSegments = computed(() => {
   const input = getOverviewInputTokens(windowOverview.value)
   const output = getOverviewOutputTokens(windowOverview.value)
@@ -289,22 +304,6 @@ const tokenSegments = computed(() => {
     input: (input / total) * 100,
     output: (output / total) * 100,
   }
-})
-
-const recentTrend = computed(() => {
-  const rows = [...filteredRecentRequests.value].slice(0, 18).reverse()
-  const maxTokens = Math.max(...rows.map((item) => getRequestTotalTokens(item)), 1)
-  return rows.map((item) => {
-    const tokens = getRequestTotalTokens(item)
-    return {
-      id: item.id,
-      label: formatTime(item.timestamp),
-      height: Math.max((tokens / maxTokens) * 100, tokens > 0 ? 8 : 0),
-      success: item.success,
-      cacheHit: item.cache_hit,
-      tokens,
-    }
-  })
 })
 
 const statCards = computed(() => [
@@ -433,6 +432,12 @@ function formatLatency(value: number | null | undefined): string {
   return `${safeValue.toFixed(0)}ms`
 }
 
+function formatTimeWindowOption(hours: number): string {
+  if (hours === 168) return t('llmMetrics.filters.sevenDays')
+  if (hours === 720) return t('llmMetrics.filters.oneMonth')
+  return t('llmMetrics.filters.hours', { hours: String(hours) })
+}
+
 function normalizeTimestamp(timestamp: number | null | undefined): number | null {
   const safeTimestamp = normalizedNumber(timestamp)
   if (safeTimestamp <= 0) return null
@@ -453,7 +458,7 @@ function formatDateTime(timestamp: number | null | undefined): string {
 
 onMounted(() => {
   fetchMetrics()
-  pollTimer = window.setInterval(() => fetchMetrics(true), 30000)
+  pollTimer = window.setInterval(() => fetchMetrics(true), 10000)
 })
 
 onUnmounted(() => {
@@ -464,7 +469,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <AppShell>
+  <AppShell no-padding>
     <div class="llm-metrics-page">
       <section class="time-window-toolbar" :aria-label="t('llmMetrics.filters.timeRange')">
         <div class="time-window-copy">
@@ -480,25 +485,17 @@ onUnmounted(() => {
               :class="{ active: selectedHours === hours }"
               @click="changeHours(hours)"
             >
-              {{ t('llmMetrics.filters.hours', { hours: String(hours) }) }}
+              {{ formatTimeWindowOption(hours) }}
             </button>
           </div>
-          <button class="primary-action" :disabled="isRefreshing" @click="fetchMetrics(true)">
-            <Icon
-              :icon="isRefreshing ? 'material-symbols:progress-activity' : 'material-symbols:refresh-rounded'"
-              width="18"
-              height="18"
-              :class="{ spin: isRefreshing }"
-            />
-            {{ t('llmMetrics.actions.refresh') }}
-          </button>
           <span v-if="lastUpdatedAt" class="updated-label">
             {{ t('llmMetrics.lastUpdated') }}: {{ lastUpdatedAt }}
           </span>
         </div>
       </section>
 
-      <section class="stat-grid" :aria-label="t('llmMetrics.sections.overview')">
+      <div class="llm-metrics-scroll">
+        <section class="stat-grid" :aria-label="t('llmMetrics.sections.overview')">
         <article v-for="card in statCards" :key="card.label" class="metric-card" :class="card.tone">
           <div class="metric-icon">
             <Icon :icon="card.icon" width="26" height="26" />
@@ -526,22 +523,24 @@ onUnmounted(() => {
               <div class="token-input" :style="{ width: `${tokenSegments.input}%` }"></div>
               <div class="token-output" :style="{ width: `${tokenSegments.output}%` }"></div>
             </div>
-            <div class="token-legend">
+            <div class="token-summary-row">
               <span><i class="input-dot"></i>{{ t('llmMetrics.stats.input') }} {{ formatNumber(getOverviewInputTokens(windowOverview)) }}</span>
               <span><i class="output-dot"></i>{{ t('llmMetrics.stats.output') }} {{ formatNumber(getOverviewOutputTokens(windowOverview)) }}</span>
             </div>
           </div>
 
-          <div class="trend-bars" :aria-label="t('llmMetrics.tokens.recentTrend')">
-            <div
-              v-for="bar in recentTrend"
-              :key="bar.id"
-              class="trend-bar"
-              :class="{ failed: !bar.success, cached: bar.cacheHit }"
-              :style="{ height: `${bar.height}%` }"
-              :title="`${bar.label} · ${formatNumber(bar.tokens)} tokens`"
-            ></div>
+          <div v-if="hasTokenChartData" class="echart-card token-chart" :aria-label="t('llmMetrics.tokens.recentTrend')">
+            <TokenUsageChart
+              :input-tokens="getOverviewInputTokens(windowOverview)"
+              :output-tokens="getOverviewOutputTokens(windowOverview)"
+              :trend="recentTrend"
+              :input-label="t('llmMetrics.stats.input')"
+              :output-label="t('llmMetrics.stats.output')"
+              :fallback-label="t('llmMetrics.filters.currentRange')"
+              :locale="locale"
+            />
           </div>
+          <div v-else class="empty-state compact-empty">{{ isLoading ? t('llmMetrics.loading') : t('llmMetrics.empty.recent') }}</div>
         </article>
 
         <article class="panel health-panel">
@@ -574,23 +573,36 @@ onUnmounted(() => {
 
       <section class="ranking-grid">
         <article class="panel ranking-panel">
-          <div class="panel-heading">
+          <div class="panel-heading ranking-heading">
             <div>
               <span class="eyebrow">{{ t('llmMetrics.sections.models') }}</span>
               <h3>{{ t('llmMetrics.models.title') }}</h3>
             </div>
-            <span v-if="topModel" class="pill">{{ topModel.provider }}</span>
+            <div class="ranking-actions">
+              <span v-if="topModel" class="pill">{{ topModel.provider }}</span>
+              <div class="mode-switch" aria-label="模型使用排行显示模式">
+                <button :class="{ active: modelRankingMode === 'chart' }" @click="modelRankingMode = 'chart'">图表</button>
+                <button :class="{ active: modelRankingMode === 'list' }" @click="modelRankingMode = 'list'">列表</button>
+              </div>
+            </div>
           </div>
 
-          <div v-if="modelRows.length" class="ranking-list">
-            <div v-for="model in modelRows" :key="`${model.provider}:${model.model_name}`" class="ranking-row">
+          <div v-if="modelRows.length && modelRankingMode === 'chart'" class="echart-card ranking-chart">
+            <ModelRankingChart
+              :rows="modelRows"
+              :metric-label="t('llmMetrics.stats.totalRequests')"
+              :locale="locale"
+            />
+          </div>
+          <div v-else-if="modelRows.length" class="ranking-list">
+            <div v-for="model in modelRows" :key="`${model.provider}:${model.model_name}`" class="ranking-row ranking-row--stacked">
               <div class="row-main">
                 <span class="row-title">{{ model.model_name }}</span>
                 <span class="row-meta">{{ model.provider }} · {{ formatLatency(model.avg_latency) }}</span>
+                <span class="row-token-line">{{ formatCompact(normalizedNumber(model.total_input_tokens) + normalizedNumber(model.total_output_tokens)) }} tokens · {{ formatCurrency(model.total_cost) }}</span>
               </div>
               <div class="row-value">
                 <strong>{{ formatNumber(model.total_requests) }}</strong>
-                <span>{{ formatCurrency(model.total_cost) }}</span>
               </div>
               <div class="row-bar"><i :style="{ width: `${model.share}%` }"></i></div>
             </div>
@@ -598,24 +610,24 @@ onUnmounted(() => {
           <div v-else class="empty-state">{{ isLoading ? t('llmMetrics.loading') : t('llmMetrics.empty.models') }}</div>
         </article>
 
-        <article class="panel ranking-panel">
-          <div class="panel-heading">
+        <article class="panel ranking-panel request-ranking-panel">
+          <div class="panel-heading request-ranking-heading">
             <div>
               <span class="eyebrow">{{ t('llmMetrics.sections.requests') }}</span>
               <h3>{{ t('llmMetrics.requests.title') }}</h3>
+              <span v-if="topRequest" class="pill request-top-pill">{{ topRequest.request_name }}</span>
             </div>
-            <span v-if="topRequest" class="pill">{{ topRequest.request_name }}</span>
           </div>
 
-          <div v-if="requestRows.length" class="ranking-list">
-            <div v-for="request in requestRows" :key="request.request_name" class="ranking-row">
+          <div v-if="requestRows.length" class="request-ranking-list">
+            <div v-for="request in requestRows" :key="request.request_name" class="ranking-row ranking-row--stacked request-ranking-row">
               <div class="row-main">
                 <span class="row-title">{{ request.request_name }}</span>
                 <span class="row-meta">{{ formatPercent(request.success_rate) }} · {{ formatLatency(request.avg_latency) }}</span>
+                <span class="row-token-line">{{ formatCompact(normalizedNumber(request.total_input_tokens) + normalizedNumber(request.total_output_tokens)) }} tokens · {{ formatCurrency(request.total_cost) }}</span>
               </div>
               <div class="row-value">
                 <strong>{{ formatNumber(request.total_requests) }}</strong>
-                <span>{{ formatCompact(normalizedNumber(request.total_input_tokens) + normalizedNumber(request.total_output_tokens)) }} tokens</span>
               </div>
               <div class="row-bar"><i :style="{ width: `${request.share}%` }"></i></div>
             </div>
@@ -692,6 +704,7 @@ onUnmounted(() => {
           <div v-else class="empty-state">{{ isLoading ? t('llmMetrics.loading') : t('llmMetrics.empty.recent') }}</div>
         </article>
       </section>
+      </div>
     </div>
   </AppShell>
 </template>
@@ -700,8 +713,21 @@ onUnmounted(() => {
 .llm-metrics-page {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  height: calc(100dvh - var(--app-top-bar-height, 64px) - var(--app-bottom-nav-height, 0px));
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.llm-metrics-scroll {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1.5rem;
+  overflow: auto;
+  padding: 1.5rem;
 }
 
 .hero-card,
@@ -757,16 +783,13 @@ onUnmounted(() => {
 }
 
 .time-window-toolbar {
-  position: sticky;
-  top: var(--app-top-bar-height, 64px);
   z-index: 90;
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-block-start: calc(var(--page-padding, 1.5rem) * -1);
-  margin-inline: calc(var(--page-padding, 1.5rem) * -1);
-  padding: 0.85rem var(--page-padding, 1.5rem);
+  padding: 0.85rem 1.5rem;
   border-block: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant) 72%, transparent);
   border-inline: 0;
   border-radius: 0;
@@ -888,6 +911,7 @@ onUnmounted(() => {
 .metric-content span,
 .metric-content small,
 .row-meta,
+.row-token-line,
 .row-value span,
 .stream-card small,
 .stream-stats span,
@@ -959,6 +983,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  margin-bottom: 1rem;
 }
 
 .token-track {
@@ -977,7 +1002,7 @@ onUnmounted(() => {
   background: var(--md-sys-color-tertiary);
 }
 
-.token-legend {
+.token-summary-row {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
@@ -985,15 +1010,17 @@ onUnmounted(() => {
   font-size: 0.8125rem;
 }
 
-.token-legend span {
+.token-summary-row span {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+  min-width: 0;
 }
 
-.token-legend i {
+.token-summary-row i {
   width: 0.625rem;
   height: 0.625rem;
+  flex-shrink: 0;
   border-radius: 50%;
 }
 
@@ -1005,30 +1032,87 @@ onUnmounted(() => {
   background: var(--md-sys-color-tertiary);
 }
 
-.trend-bars {
-  display: flex;
-  align-items: end;
-  gap: 0.45rem;
-  height: 180px;
-  margin-top: 1.25rem;
-  padding: 1rem;
+.echart-card {
+  min-width: 0;
+  overflow: visible;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant) 54%, transparent);
   border-radius: 1rem;
   background: color-mix(in srgb, var(--md-sys-color-surface-container-high) 64%, transparent);
 }
 
-.trend-bar {
-  flex: 1;
-  min-width: 6px;
-  border-radius: 9999px 9999px 0 0;
-  background: linear-gradient(180deg, var(--md-sys-color-primary), color-mix(in srgb, var(--md-sys-color-primary) 48%, transparent));
+.echart-card :deep(.echarts),
+.echart-card :deep(canvas) {
+  overflow: visible !important;
 }
 
-.trend-bar.cached {
-  background: linear-gradient(180deg, var(--md-sys-color-tertiary), color-mix(in srgb, var(--md-sys-color-tertiary) 48%, transparent));
+.token-chart {
+  height: 220px;
+  padding: 0.75rem;
 }
 
-.trend-bar.failed {
-  background: linear-gradient(180deg, var(--md-sys-color-error), color-mix(in srgb, var(--md-sys-color-error) 48%, transparent));
+.token-chart :deep(.echarts),
+.ranking-chart :deep(.echarts) {
+  width: 100%;
+  height: 100%;
+}
+
+.ranking-heading,
+.request-ranking-heading {
+  align-items: flex-start;
+}
+
+.request-ranking-heading > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.request-top-pill {
+  max-width: 100%;
+  margin-top: 0.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ranking-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.mode-switch {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant) 72%, transparent);
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high) 72%, transparent);
+}
+
+.mode-switch button {
+  border: 0;
+  padding: 0.3rem 0.65rem;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.mode-switch button.active {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+
+.ranking-chart {
+  height: 360px;
+  padding: 0.75rem;
+}
+
+.compact-empty {
+  min-height: 220px;
 }
 
 .quality-grid {
@@ -1104,6 +1188,7 @@ onUnmounted(() => {
 }
 
 .ranking-list,
+.request-ranking-list,
 .stream-list {
   display: flex;
   max-height: 360px;
@@ -1115,11 +1200,22 @@ onUnmounted(() => {
   scrollbar-color: var(--md-sys-color-outline-variant) transparent;
 }
 
+.request-ranking-row {
+  padding: 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant) 54%, transparent);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high) 52%, transparent);
+}
+
 .ranking-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.75rem;
   align-items: center;
+}
+
+.ranking-row--stacked {
+  align-items: start;
 }
 
 .row-main,
@@ -1142,12 +1238,18 @@ onUnmounted(() => {
 }
 
 .row-meta,
+.row-token-line,
 .row-value span,
 .stream-card small,
 .stream-stats span,
 .last-hours-card small,
 .last-hours-card span {
   font-size: 0.75rem;
+}
+
+.row-token-line {
+  display: block;
+  margin-top: 0.1rem;
 }
 
 .row-value {
@@ -1288,7 +1390,8 @@ onUnmounted(() => {
   }
 
   .stat-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
   }
 
   .metric-card,
@@ -1296,10 +1399,28 @@ onUnmounted(() => {
     padding: 1rem;
   }
 
-  .trend-bars {
-    height: 140px;
-    gap: 0.3rem;
-    padding: 0.75rem;
+  .metric-card {
+    min-height: 126px;
+    gap: 0.75rem;
+  }
+
+  .metric-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 0.875rem;
+  }
+
+  .metric-content strong {
+    font-size: 1.25rem;
+  }
+
+  .metric-content small {
+    font-size: 0.6875rem;
+  }
+
+  .token-chart {
+    height: 190px;
+    padding: 0.5rem;
   }
 
   .quality-grid {
@@ -1317,6 +1438,43 @@ onUnmounted(() => {
 }
 
 @media (max-width: 480px) {
+  .stat-grid {
+    gap: 0.625rem;
+  }
+
+  .metric-card {
+    min-height: 118px;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+  }
+
+  .metric-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .metric-content span {
+    font-size: 0.72rem;
+  }
+
+  .metric-content strong {
+    font-size: 1.05rem;
+  }
+
+  .metric-content small {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .ranking-heading,
+  .ranking-actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .ranking-row {
     grid-template-columns: 1fr;
   }
