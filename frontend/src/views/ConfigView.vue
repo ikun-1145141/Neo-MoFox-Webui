@@ -3,7 +3,7 @@
   @description 配置管理主视图（机器人配置 + 模型配置）
   
   功能：
-  - Tab 切换（机器人配置 / 模型配置）
+  - Tab 切换（机器人配置 / 模型配置 / MCP 配置）
   - 使用 ConfigEditor 和 ModelConfigEditor
   - 数据加载、保存、错误处理
 -->
@@ -68,6 +68,15 @@
           :model-value="modelConfig?.data"
           @save="handleSave('model', $event)"
         />
+
+        <!-- MCP 配置 -->
+        <McpConfigEditor
+          v-else-if="activeTab === 'mcp' && mcpConfig"
+          :title="mcpConfig?.config_name"
+          :config-path="mcpConfig?.config_path"
+          :model-value="mcpConfig?.data"
+          @save="handleSave('mcp', $event)"
+        />
       </div>
     </div>
   </AppShell>
@@ -80,6 +89,7 @@ import AppShell from '@/components/common/AppShell.vue'
 import Icon from '@/components/common/Icon.vue'
 import ConfigEditor from '@/components/config/ConfigEditor.vue'
 import ModelConfigEditor from '@/components/config/ModelConfigEditor.vue'
+import McpConfigEditor from '@/components/config/McpConfigEditor.vue'
 import { getConfig, fullWriteConfig } from '@/api/modules/config'
 import type { EnhancedConfigResponse } from '@/api/types/config'
 import { useI18n } from '@/utils/i18n'
@@ -93,21 +103,25 @@ const router = useRouter()
 const tabs = computed(() => [
   { value: 'bot' as const, label: t('config.tabs.bot'), icon: 'material-symbols:smart-toy-outline-rounded' },
   { value: 'model' as const, label: t('config.tabs.model'), icon: 'material-symbols:model-training-outline-rounded' },
+  { value: 'mcp' as const, label: t('config.tabs.mcp'), icon: 'material-symbols:hub-outline-rounded' },
 ])
 
 // 当前激活的 Tab
-const activeTab = ref<'bot' | 'model'>('bot')
+const activeTab = ref<'bot' | 'model' | 'mcp'>('bot')
+
+type ConfigTab = typeof activeTab.value
 
 // 配置数据
 const botConfig = ref<EnhancedConfigResponse | null>(null)
 const modelConfig = ref<EnhancedConfigResponse | null>(null)
+const mcpConfig = ref<EnhancedConfigResponse | null>(null)
 
 // 加载状态
 const isLoading = ref(false)
 const errorMessage = ref('')
 
 // 切换 Tab
-function switchTab(tab: 'bot' | 'model') {
+function switchTab(tab: ConfigTab) {
   activeTab.value = tab
   // 更新 URL 查询参数
   router.replace({ query: { tab } })
@@ -120,18 +134,21 @@ async function loadConfig() {
     isLoading.value = true
     errorMessage.value = ''
 
-    // 并行加载两个配置
+    // 并行加载三个配置
     console.log('[ConfigView] 发起 API 请求...')
-    const [botResponse, modelResponse] = await Promise.all([
+    const [botResponse, modelResponse, mcpResponse] = await Promise.all([
       getConfig('bot'),
       getConfig('model'),
+      getConfig('mcp'),
     ])
 
     console.log('[ConfigView] Bot 配置:', botResponse)
     console.log('[ConfigView] Model 配置:', modelResponse)
+    console.log('[ConfigView] MCP 配置:', mcpResponse)
 
     botConfig.value = botResponse
     modelConfig.value = modelResponse
+    mcpConfig.value = mcpResponse
     
     console.log('[ConfigView] 配置加载成功')
   } catch (error: any) {
@@ -143,7 +160,7 @@ async function loadConfig() {
 }
 
 // 保存配置
-async function handleSave(configType: 'bot' | 'model', data: Record<string, any>) {
+async function handleSave(configType: ConfigTab, data: Record<string, any>) {
   console.log(`[ConfigView] handleSave 被调用:`, { configType, dataKeys: Object.keys(data) })
   try {
     const response = await fullWriteConfig(configType, data)
@@ -152,9 +169,12 @@ async function handleSave(configType: 'bot' | 'model', data: Record<string, any>
     if (configType === 'bot') {
       botConfig.value = response
       console.log('[ConfigView] Bot 配置保存成功，已更新 botConfig')
-    } else {
+    } else if (configType === 'model') {
       modelConfig.value = response
       console.log('[ConfigView] Model 配置保存成功，已更新 modelConfig')
+    } else {
+      mcpConfig.value = response
+      console.log('[ConfigView] MCP 配置保存成功，已更新 mcpConfig')
     }
 
     // 显示成功提示（可以集成 Toast 组件）
@@ -168,8 +188,8 @@ async function handleSave(configType: 'bot' | 'model', data: Record<string, any>
 onMounted(() => {
   // 从 URL 查询参数恢复 Tab 状态
   const tabParam = router.currentRoute.value.query.tab as string
-  if (tabParam === 'model') {
-    activeTab.value = 'model'
+  if (tabParam === 'model' || tabParam === 'bot' || tabParam === 'mcp') {
+    activeTab.value = tabParam
   }
 
   loadConfig()

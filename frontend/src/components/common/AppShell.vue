@@ -853,4 +853,3 @@ async function handleSystemAction(action: 'restart' | 'shutdown' | 'logout') {
   scrollbar-width: none;
 }
 </style>
-

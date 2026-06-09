@@ -790,4 +790,3 @@ function getFieldComponent(inputType: string, fieldType?: string) {
   padding: 8px 0;
 }
 </style>
-

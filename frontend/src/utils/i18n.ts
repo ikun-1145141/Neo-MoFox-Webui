@@ -203,6 +203,7 @@ const messages = {
       tabs: {
         bot: '机器人配置',
         model: '模型配置',
+        mcp: 'MCP 配置',
       },
       loading: '加载配置中...',
       retry: '重试',
@@ -596,6 +597,19 @@ const messages = {
         getRawTomlFailed: '获取原始 TOML 失败: {error}',
       },
     },
+    mcpConfigEditor: {
+      tabs: {
+        stdio: 'Stdio 服务器',
+        sse: 'SSE 服务器',
+        streamable: 'Streamable HTTP 服务器',
+      },
+      sections: {
+        stdio: 'Stdio 服务器',
+        sse: 'SSE 服务器',
+        streamable: 'Streamable HTTP 服务器',
+      },
+      empty: '暂无配置项',
+    },
     modelConfigEditor: {
       title: '模型配置',
       tabs: {
@@ -907,6 +921,7 @@ const messages = {
       tabs: {
         bot: 'Bot Config',
         model: 'Model Config',
+        mcp: 'MCP Config',
       },
       loading: 'Loading configuration...',
       retry: 'Retry',
@@ -1227,6 +1242,19 @@ const messages = {
         configTypeRequired: 'configType must be specified to retrieve raw TOML',
         getRawTomlFailed: 'Failed to get raw TOML: {error}',
       },
+    },
+    mcpConfigEditor: {
+      tabs: {
+        stdio: 'Stdio Servers',
+        sse: 'SSE Servers',
+        streamable: 'Streamable HTTP Servers',
+      },
+      sections: {
+        stdio: 'Stdio Servers',
+        sse: 'SSE Servers',
+        streamable: 'Streamable HTTP Servers',
+      },
+      empty: 'No configuration items',
     },
     requestInspector: {
       hero: {

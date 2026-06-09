@@ -121,7 +121,7 @@ const { t } = useI18n()
 interface Props {
   title?: string
   configPath?: string
-  configType?: 'bot' | 'model' | 'plugin'
+  configType?: 'bot' | 'model' | 'plugin' | 'mcp'
   pluginName?: string
   schema?: SectionSchema[]
   modelValue?: Record<string, any>
@@ -414,22 +414,23 @@ watch(codeContent, (newCode) => {
 
 .toolbar-left {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1;
+  align-items: center;
+  gap: 12px;
 }
 
 .config-title {
-  font-size: 18px;
+  margin: 0;
+  font-size: 20px;
   font-weight: 600;
   color: var(--md-sys-color-on-surface);
-  margin: 0;
 }
 
 .config-path {
   font-size: 12px;
-  color: var(--md-sys-color-on-surface-variant);
-  font-family: 'Consolas', 'Monaco', monospace;
+  color: var(--md-sys-color-outline);
+  padding: 4px 8px;
+  background: var(--md-sys-color-surface-container);
+  border-radius: 4px;
 }
 
 .toolbar-right {

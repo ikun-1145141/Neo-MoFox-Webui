@@ -6,6 +6,7 @@
 from .main_config_manager import MainConfigManager, get_main_config_manager
 from .bot_config_manager import BotConfigManager, get_bot_config_manager
 from .model_config_manager import ModelConfigManager, get_model_config_manager
+from .mcp_config_manager import McpConfigManager, get_mcp_config_manager
 from .plugin_config_manager import PluginConfigManager, get_plugin_config_manager
 
 __all__ = [
@@ -15,6 +16,8 @@ __all__ = [
     "get_bot_config_manager",
     "ModelConfigManager",
     "get_model_config_manager",
+    "McpConfigManager",
+    "get_mcp_config_manager",
     "PluginConfigManager",
     "get_plugin_config_manager",
 ]

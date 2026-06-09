@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Literal
 
 from fastapi import HTTPException, Query
 
+ConfigType = Literal["bot", "model", "plugin", "mcp"]
+
 from src.core.components.base.router import BaseRouter
 from src.core.utils.security import VerifiedDep
 from src.app.plugin_system.api.log_api import get_logger
@@ -61,7 +63,7 @@ class MainConfigRouter(BaseRouter):
             dependencies=[VerifiedDep],
         )
         async def get_config(
-            config_type: Literal["bot", "model", "plugin"],
+            config_type: ConfigType,
             plugin_name: str | None = Query(default=None),
         ) -> BaseResponse[EnhancedConfigResponse]:
             """获取增强配置。
@@ -92,7 +94,7 @@ class MainConfigRouter(BaseRouter):
             dependencies=[VerifiedDep],
         )
         async def get_raw_toml(
-            config_type: Literal["bot", "model", "plugin"],
+            config_type: ConfigType,
             plugin_name: str | None = Query(default=None),
         ) -> BaseResponse[str]:
             """获取原始 TOML 文件内容。
@@ -123,7 +125,7 @@ class MainConfigRouter(BaseRouter):
             dependencies=[VerifiedDep],
         )
         async def full_write_config(
-            config_type: Literal["bot", "model", "plugin"],
+            config_type: ConfigType,
             request: FullWriteRequest,
             plugin_name: str | None = Query(default=None),
         ) -> BaseResponse[EnhancedConfigResponse]:
@@ -155,7 +157,7 @@ class MainConfigRouter(BaseRouter):
             dependencies=[VerifiedDep],
         )
         async def patch_write_config(
-            config_type: Literal["bot", "model", "plugin"],
+            config_type: ConfigType,
             request: PatchWriteRequest,
             plugin_name: str | None = Query(default=None),
         ) -> BaseResponse[EnhancedConfigResponse]:

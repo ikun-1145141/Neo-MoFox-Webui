@@ -381,7 +381,7 @@ class ConfigParser:
 
         # 生成默认 config_name
         if not config_name:
-            name_map = {"bot": "机器人配置", "model": "模型配置", "plugin": "插件配置"}
+            name_map = {"bot": "机器人配置", "model": "模型配置", "plugin": "插件配置", "mcp": "MCP 配置"}
             config_name = name_map.get(config_type, config_type)
 
         return EnhancedConfigResponse(

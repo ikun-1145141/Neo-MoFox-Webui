@@ -7,6 +7,8 @@ import http from '../base'
 import { API_WEBUI_PREFIX } from '../config'
 import type {
   EnhancedConfigResponse,
+  McpTestRequest,
+  McpTestResult,
   ModelTestRequest,
   ModelTestResult,
   PluginConfigEntry,
@@ -23,7 +25,7 @@ const BASE = `${API_WEBUI_PREFIX}/config`
  * @param pluginName 插件名（config_type=plugin 时必填）
  */
 export function getConfig(
-  configType: 'bot' | 'model' | 'plugin',
+  configType: 'bot' | 'model' | 'plugin' | 'mcp',
   pluginName?: string
 ): Promise<EnhancedConfigResponse> {
   const params = pluginName ? `?plugin_name=${pluginName}` : ''
@@ -36,7 +38,7 @@ export function getConfig(
  * @param pluginName 插件名（config_type=plugin 时必填）
  */
 export function getRawConfig(
-  configType: 'bot' | 'model' | 'plugin',
+  configType: 'bot' | 'model' | 'plugin' | 'mcp',
   pluginName?: string
 ): Promise<string> {
   const params = pluginName ? `?plugin_name=${pluginName}` : ''
@@ -50,7 +52,7 @@ export function getRawConfig(
  * @param pluginName 插件名（plugin 类型时必填）
  */
 export function fullWriteConfig(
-  configType: 'bot' | 'model' | 'plugin',
+  configType: 'bot' | 'model' | 'plugin' | 'mcp',
   data: Record<string, any>,
   pluginName?: string
 ): Promise<EnhancedConfigResponse> {
@@ -65,7 +67,7 @@ export function fullWriteConfig(
  * @param pluginName 插件名（plugin 类型时必填）
  */
 export function patchWriteConfig(
-  configType: 'bot' | 'model' | 'plugin',
+  configType: 'bot' | 'model' | 'plugin' | 'mcp',
   data: Record<string, any>,
   pluginName?: string
 ): Promise<EnhancedConfigResponse> {
@@ -97,6 +99,10 @@ export function listProviders(): Promise<string[]> {
 export function listModels(provider?: string): Promise<string[]> {
   const params = provider ? `?provider=${provider}` : ''
   return http.get(`${BASE}-model/models${params}`)
+}
+
+export function testMcpServer(request: McpTestRequest): Promise<McpTestResult> {
+  return http.post(`${BASE}-mcp/test`, request)
 }
 
 // ===== 插件配置路由 =====
