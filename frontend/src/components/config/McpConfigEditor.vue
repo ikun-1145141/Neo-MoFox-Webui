@@ -260,6 +260,14 @@ watch(
   () => props.modelValue,
   (newValue) => {
     localData.value = JSON.parse(JSON.stringify(newValue || {}))
+    // 规范化：确保 mcp 下的 server 字段为 dict 而非空字符串
+    if (localData.value.mcp && typeof localData.value.mcp === 'object') {
+      for (const key of ['stdio_servers', 'sse_servers', 'streamable_http_servers']) {
+        if (key in localData.value.mcp && typeof localData.value.mcp[key] !== 'object') {
+          localData.value.mcp[key] = {}
+        }
+      }
+    }
     originalData.value = JSON.parse(JSON.stringify(localData.value))
   },
   { immediate: true, deep: true }

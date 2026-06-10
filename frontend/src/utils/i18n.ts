@@ -610,6 +610,41 @@ const messages = {
       },
       empty: '暂无配置项',
     },
+    mcpEditDialog: {
+      title: {
+        add: '添加 MCP 服务',
+        edit: '编辑 MCP 服务',
+      },
+      fields: {
+        name: '服务名称',
+        namePlaceholder: '例如: fetch',
+        nameHint: '服务名称不可修改',
+        command: '命令',
+        commandPlaceholder: '例如: npx / uvx',
+        args: '参数',
+        argsDesc: '每行一个参数，会保存为 args 数组',
+        argsPlaceholder: '-y\n@modelcontextprotocol/server-example',
+        env: '环境变量',
+        envDesc: '每行一个 KEY=VALUE',
+        url: 'URL',
+        urlPlaceholder: 'http://localhost:3000/sse',
+        headers: '请求头',
+        headersDesc: '每行一个 KEY=VALUE，例如 Authorization=Bearer xxx',
+        timeout: '超时(秒)',
+        instructions: '系统指令',
+        instructionsDesc: '可选，为此服务提供额外的系统指令',
+        deferLoading: '延迟加载',
+        deferLoadingDesc: '启用后仅对子代理暴露此服务工具',
+      },
+      actions: {
+        cancel: '取消',
+        add: '添加',
+        save: '保存',
+      },
+      errors: {
+        requiredFields: '请填写必填字段',
+      },
+    },
     modelConfigEditor: {
       title: '模型配置',
       tabs: {
@@ -1255,6 +1290,41 @@ const messages = {
         streamable: 'Streamable HTTP Servers',
       },
       empty: 'No configuration items',
+    },
+    mcpEditDialog: {
+      title: {
+        add: 'Add MCP Server',
+        edit: 'Edit MCP Server',
+      },
+      fields: {
+        name: 'Server Name',
+        namePlaceholder: 'e.g. fetch',
+        nameHint: 'Server name cannot be changed',
+        command: 'Command',
+        commandPlaceholder: 'e.g. npx / uvx',
+        args: 'Arguments',
+        argsDesc: 'One argument per line, saved as args array',
+        argsPlaceholder: '-y\n@modelcontextprotocol/server-example',
+        env: 'Environment Variables',
+        envDesc: 'One KEY=VALUE per line',
+        url: 'URL',
+        urlPlaceholder: 'http://localhost:3000/sse',
+        headers: 'Headers',
+        headersDesc: 'One KEY=VALUE per line, e.g. Authorization=Bearer xxx',
+        timeout: 'Timeout (sec)',
+        instructions: 'Instructions',
+        instructionsDesc: 'Optional system instructions for this server',
+        deferLoading: 'Defer Loading',
+        deferLoadingDesc: 'Only expose tools to sub-agents when enabled',
+      },
+      actions: {
+        cancel: 'Cancel',
+        add: 'Add',
+        save: 'Save',
+      },
+      errors: {
+        requiredFields: 'Please fill in required fields',
+      },
     },
     requestInspector: {
       hero: {

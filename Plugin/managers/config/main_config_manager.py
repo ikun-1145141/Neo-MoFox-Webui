@@ -214,6 +214,11 @@ class MainConfigManager:
     async def _get_mcp_config(self) -> EnhancedConfigResponse:
         """获取 MCP 配置。"""
         data = ConfigParser.read_toml(self.mcp_config_path)
+        # 规范化：确保应为 dict 的字段不是被错误序列化的字符串
+        if "mcp" in data and isinstance(data["mcp"], dict):
+            for key in ("stdio_servers", "sse_servers", "streamable_http_servers"):
+                if key in data["mcp"] and not isinstance(data["mcp"][key], dict):
+                    data["mcp"][key] = {}
         return EnhancedConfigResponse(
             config_type="mcp",
             config_name="MCP 配置",
@@ -224,6 +229,11 @@ class MainConfigManager:
 
     async def _write_mcp_config(self, data: dict[str, Any]) -> EnhancedConfigResponse:
         """写入 MCP 配置。"""
+        # 规范化 mcp section 中应为 dict 的字段（TOML 渲染可能将空 dict 写为 ""）
+        if "mcp" in data and isinstance(data["mcp"], dict):
+            for key in ("stdio_servers", "sse_servers", "streamable_http_servers"):
+                if key in data["mcp"] and not isinstance(data["mcp"][key], dict):
+                    data["mcp"][key] = {}
         ConfigParser.write_toml(self.mcp_config_path, MCPConfig, data)
         logger.info("MCP 配置已写入")
         return await self._get_mcp_config()
