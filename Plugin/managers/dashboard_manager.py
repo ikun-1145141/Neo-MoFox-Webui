@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import case, cast, func, select, Date
+from sqlalchemy import Date, case, cast, func, or_, select
 
 from src.core.components.registry import get_global_registry  # type: ignore
 from src.core.components.types import ComponentType  # type: ignore
@@ -72,9 +72,23 @@ class DashboardManager:
         """获取业务核心总览数据。"""
         day_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
 
-        today_total = await QueryBuilder(Messages).filter(time__gte=day_start).count()
-        today_inbound = await QueryBuilder(Messages).filter(time__gte=day_start, person_id__isnull=False).count()
-        today_outbound = await QueryBuilder(Messages).filter(time__gte=day_start, person_id__isnull=True).count()
+        async with get_db_session() as session:
+            today_total_stmt = select(func.count(Messages.id)).where(
+                Messages.time >= day_start,
+            )
+            today_inbound_stmt = select(func.count(Messages.id)).where(
+                Messages.time >= day_start,
+                Messages.person_id.isnot(None),
+                Messages.person_id != "bot",
+            )
+            today_outbound_stmt = select(func.count(Messages.id)).where(
+                Messages.time >= day_start,
+                or_(Messages.person_id.is_(None), Messages.person_id == "bot"),
+            )
+
+            today_total = await session.scalar(today_total_stmt) or 0
+            today_inbound = await session.scalar(today_inbound_stmt) or 0
+            today_outbound = await session.scalar(today_outbound_stmt) or 0
 
         stream_manager = get_stream_manager()
         active_streams = len(getattr(stream_manager, "_streams", {}))
@@ -141,8 +155,20 @@ class DashboardManager:
             stmt = select(
                 date_expr.label('date'),
                 func.count(Messages.id).label('total'),
-                func.sum(case((Messages.person_id.isnot(None), 1), else_=0)).label('inbound'),
-                func.sum(case((Messages.person_id.is_(None), 1), else_=0)).label('outbound'),
+                func.sum(case(
+                    (
+                        Messages.person_id.isnot(None) & (Messages.person_id != "bot"),
+                        1,
+                    ),
+                    else_=0,
+                )).label('inbound'),
+                func.sum(case(
+                    (
+                        or_(Messages.person_id.is_(None), Messages.person_id == "bot"),
+                        1,
+                    ),
+                    else_=0,
+                )).label('outbound'),
             ).where(
                 Messages.time >= start_timestamp
             ).group_by('date')
