@@ -3,59 +3,66 @@
  * 日志查看器视图。
  *
  * 提供实时日志 WebSocket 推送和历史日志文件浏览功能，
- * 支持日志级别过滤、关键词搜索、自动滚动等。
+ * 支持日志级别过滤、关键词搜索、自动滚动和历史日志滚动分页。
  */
 
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import AppShell from '../components/common/AppShell.vue'
 import Icon from '../components/common/Icon.vue'
-import { useI18n } from '../utils/i18n'
 import { useToastStore } from '../utils/toast'
 import { getLogFiles, getLogContent } from '../api/modules/log'
 import { API_BASE_URL } from '../api/config'
 import type { RealtimeLogEntry, LogFileInfo, LogContentResponse } from '../api/types/log'
 
-const { t } = useI18n()
+type WsStatus = 'disconnected' | 'connecting' | 'connected'
+type HistoryLoadMode = 'replace' | 'prepend' | 'append'
+type HistoryMeta = Omit<LogContentResponse, 'content'>
+
 const toastStore = useToastStore()
 
-// ========== 状态 ==========
 const activeTab = ref<'realtime' | 'history'>('realtime')
 
-// 实时日志
 const realtimeLogs = ref<RealtimeLogEntry[]>([])
-const wsStatus = ref<'disconnected' | 'connecting' | 'connected'>('disconnected')
+const wsStatus = ref<WsStatus>('disconnected')
 const autoScroll = ref(true)
 const searchText = ref('')
 const selectedLevels = ref<Set<string>>(new Set())
 const logContainerRef = ref<HTMLElement | null>(null)
+const lastRealtimeAt = ref<string>('')
 const maxLogEntries = 2000
 
-// 历史日志
 const logFiles = ref<LogFileInfo[]>([])
 const selectedFile = ref<string>('')
-const historyContent = ref('')
+const historyLines = ref<string[]>([])
 const historyLoading = ref(false)
-const historyMeta = ref<Omit<LogContentResponse, 'content'> | null>(null)
+const historyLoadingPrev = ref(false)
+const historyLoadingNext = ref(false)
+const historyMeta = ref<HistoryMeta | null>(null)
+const historyStartOffset = ref(0)
+const historyEndOffset = ref(0)
+const historyHasPrev = ref(false)
+const historyHasNext = ref(false)
+const historyContainerRef = ref<HTMLElement | null>(null)
+const loadedHistoryOffsets = ref<Set<number>>(new Set())
+const historyChunkLimit = 65536
 
-// WebSocket
 let ws: WebSocket | null = null
 let heartbeatTimer: number | null = null
 
 const LOG_LEVELS = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] as const
 
-// ========== 计算属性 ==========
 const filteredLogs = computed(() => {
   const keyword = searchText.value.trim().toLowerCase()
   return realtimeLogs.value.filter((entry) => {
-    // 级别过滤
-    if (selectedLevels.value.size > 0 && !selectedLevels.value.has(entry.level)) {
+    if (selectedLevels.value.size > 0 && !selectedLevels.value.has(entry.level.toUpperCase())) {
       return false
     }
-    // 关键词搜索
+
     if (keyword) {
       const haystack = `${entry.message} ${entry.logger_name} ${entry.display}`.toLowerCase()
       return haystack.includes(keyword)
     }
+
     return true
   })
 })
@@ -63,14 +70,27 @@ const filteredLogs = computed(() => {
 const logStats = computed(() => {
   const stats: Record<string, number> = {}
   for (const entry of realtimeLogs.value) {
-    stats[entry.level] = (stats[entry.level] || 0) + 1
+    const level = entry.level.toUpperCase()
+    stats[level] = (stats[level] || 0) + 1
   }
   return stats
 })
 
-// ========== WebSocket ==========
+const wsStatusText = computed(() => {
+  if (wsStatus.value === 'connected') return '实时连接已建立'
+  if (wsStatus.value === 'connecting') return '正在连接日志流'
+  return '日志流已断开'
+})
+
+const historyProgressText = computed(() => {
+  const meta = historyMeta.value
+  if (!meta) return '未加载日志内容'
+  const loadedSize = Math.max(0, historyEndOffset.value - historyStartOffset.value)
+  return `${formatFileSize(loadedSize)} / ${formatFileSize(meta.total_size)}`
+})
+
 function connectWs(): void {
-  if (ws && ws.readyState === WebSocket.OPEN) return
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
 
   wsStatus.value = 'connecting'
   const origin = API_BASE_URL.replace(/^http/, 'ws')
@@ -79,40 +99,48 @@ function connectWs(): void {
     ? `${origin}/webui/api/log/ws?token=${encodeURIComponent(token)}`
     : `${origin}/webui/api/log/ws`
 
+  console.info('[LogView] connecting realtime log websocket', {
+    apiBaseUrl: API_BASE_URL,
+    origin,
+    hasToken: Boolean(token),
+    url,
+  })
+
   ws = new WebSocket(url)
 
   ws.onopen = () => {
+    console.info('[LogView] realtime log websocket connected')
     wsStatus.value = 'connected'
+    sendLevelFilter()
     startHeartbeat()
   }
 
   ws.onmessage = (event: MessageEvent) => {
-    try {
-      const msg = JSON.parse(event.data as string)
-      if (msg.type === 'history_batch' && Array.isArray(msg.data)) {
-        realtimeLogs.value = [...msg.data, ...realtimeLogs.value].slice(-maxLogEntries)
-        scrollToBottom()
-      } else if (msg.type === 'realtime_log' && msg.data) {
-        realtimeLogs.value.push(msg.data)
-        if (realtimeLogs.value.length > maxLogEntries) {
-          realtimeLogs.value = realtimeLogs.value.slice(-maxLogEntries)
-        }
-        if (autoScroll.value) {
-          scrollToBottom()
-        }
-      }
-    } catch {
-      // 忽略非 JSON 消息
-    }
+    console.debug('[LogView] realtime log websocket message', event.data)
+    handleWsMessage(event.data)
   }
 
-  ws.onclose = () => {
+  ws.onclose = (event: CloseEvent) => {
+    console.warn('[LogView] realtime log websocket closed', {
+      code: event.code,
+      reason: event.reason,
+      wasClean: event.wasClean,
+    })
     wsStatus.value = 'disconnected'
     stopHeartbeat()
+    ws = null
   }
 
-  ws.onerror = () => {
+  ws.onerror = (event: Event) => {
+    console.error('[LogView] realtime log websocket error', {
+      apiBaseUrl: API_BASE_URL,
+      origin,
+      url,
+      readyState: ws?.readyState,
+      event,
+    })
     wsStatus.value = 'disconnected'
+    toastStore.show('实时日志连接异常，请检查后端服务', 'error')
   }
 }
 
@@ -141,6 +169,76 @@ function stopHeartbeat(): void {
   }
 }
 
+function handleWsMessage(rawData: unknown): void {
+  try {
+    const msg = typeof rawData === 'string' ? JSON.parse(rawData) : rawData
+    if (!msg || typeof msg !== 'object') return
+
+    const typedMsg = msg as { type?: string; data?: unknown }
+    if (typedMsg.type === 'pong') return
+
+    if (typedMsg.type === 'history_batch' && Array.isArray(typedMsg.data)) {
+      const entries = typedMsg.data.map(normalizeLogEntry).filter(Boolean) as RealtimeLogEntry[]
+      realtimeLogs.value = mergeRealtimeLogs(entries, realtimeLogs.value)
+      if (autoScroll.value) scrollToBottom()
+      return
+    }
+
+    if (typedMsg.type === 'realtime_log' && typedMsg.data) {
+      appendRealtimeLog(typedMsg.data)
+      return
+    }
+
+    if (typedMsg.type === undefined && 'message' in typedMsg) {
+      appendRealtimeLog(typedMsg)
+    }
+  } catch {
+    if (typeof rawData === 'string' && rawData.trim()) {
+      appendRealtimeLog({ message: rawData, level: 'INFO' })
+    }
+  }
+}
+
+function normalizeLogEntry(value: unknown): RealtimeLogEntry | null {
+  if (!value || typeof value !== 'object') return null
+
+  const raw = value as Partial<RealtimeLogEntry> & Record<string, unknown>
+  const message = String(raw.message ?? raw.msg ?? raw.text ?? '')
+  if (!message) return null
+
+  return {
+    timestamp: String(raw.timestamp ?? raw.time ?? new Date().toLocaleTimeString()),
+    level: String(raw.level ?? 'INFO').toUpperCase(),
+    logger_name: String(raw.logger_name ?? raw.name ?? ''),
+    display: String(raw.display ?? raw.logger_name ?? raw.name ?? ''),
+    color: String(raw.color ?? ''),
+    message,
+    metadata: typeof raw.metadata === 'object' && raw.metadata !== null
+      ? raw.metadata as Record<string, unknown>
+      : {},
+  }
+}
+
+function mergeRealtimeLogs(prefix: RealtimeLogEntry[], current: RealtimeLogEntry[]): RealtimeLogEntry[] {
+  return [...prefix, ...current].slice(-maxLogEntries)
+}
+
+function appendRealtimeLog(value: unknown): void {
+  const entry = normalizeLogEntry(value)
+  if (!entry) return
+
+  realtimeLogs.value.push(entry)
+  lastRealtimeAt.value = entry.timestamp
+
+  if (realtimeLogs.value.length > maxLogEntries) {
+    realtimeLogs.value = realtimeLogs.value.slice(-maxLogEntries)
+  }
+
+  if (autoScroll.value) {
+    scrollToBottom()
+  }
+}
+
 function sendLevelFilter(): void {
   if (ws && ws.readyState === WebSocket.OPEN) {
     const levels = selectedLevels.value.size > 0 ? Array.from(selectedLevels.value) : null
@@ -148,20 +246,19 @@ function sendLevelFilter(): void {
   }
 }
 
-// ========== 实时日志操作 ==========
 function toggleLevel(level: string): void {
   if (selectedLevels.value.has(level)) {
     selectedLevels.value.delete(level)
   } else {
     selectedLevels.value.add(level)
   }
-  // 触发响应式更新
   selectedLevels.value = new Set(selectedLevels.value)
   sendLevelFilter()
 }
 
 function clearLogs(): void {
   realtimeLogs.value = []
+  lastRealtimeAt.value = ''
 }
 
 function scrollToBottom(): void {
@@ -173,18 +270,25 @@ function scrollToBottom(): void {
   })
 }
 
-function handleScroll(): void {
+function handleRealtimeScroll(): void {
   const container = logContainerRef.value
   if (!container) return
-  const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50
-  autoScroll.value = atBottom
+  autoScroll.value = isNearBottom(container)
+}
+
+function isNearTop(container: HTMLElement, threshold = 72): boolean {
+  return container.scrollTop < threshold
+}
+
+function isNearBottom(container: HTMLElement, threshold = 72): boolean {
+  return container.scrollHeight - container.scrollTop - container.clientHeight < threshold
 }
 
 function levelColor(level: string): string {
   switch (level.toUpperCase()) {
     case 'DEBUG': return 'var(--md-sys-color-on-surface-variant)'
     case 'INFO': return 'var(--md-sys-color-primary)'
-    case 'WARNING': return '#e09000'
+    case 'WARNING': return '#dd5b00'
     case 'ERROR': return 'var(--md-sys-color-error)'
     case 'CRITICAL': return '#d32f2f'
     default: return 'var(--md-sys-color-on-surface)'
@@ -194,15 +298,14 @@ function levelColor(level: string): string {
 function levelBg(level: string): string {
   switch (level.toUpperCase()) {
     case 'DEBUG': return 'color-mix(in srgb, var(--md-sys-color-on-surface-variant) 10%, transparent)'
-    case 'INFO': return 'color-mix(in srgb, var(--md-sys-color-primary) 12%, transparent)'
-    case 'WARNING': return 'color-mix(in srgb, #e09000 12%, transparent)'
-    case 'ERROR': return 'color-mix(in srgb, var(--md-sys-color-error) 12%, transparent)'
-    case 'CRITICAL': return 'color-mix(in srgb, #d32f2f 15%, transparent)'
+    case 'INFO': return 'color-mix(in srgb, var(--md-sys-color-primary) 13%, transparent)'
+    case 'WARNING': return 'color-mix(in srgb, #dd5b00 14%, transparent)'
+    case 'ERROR': return 'color-mix(in srgb, var(--md-sys-color-error) 13%, transparent)'
+    case 'CRITICAL': return 'color-mix(in srgb, #d32f2f 17%, transparent)'
     default: return 'transparent'
   }
 }
 
-// ========== 历史日志 ==========
 async function loadLogFiles(): Promise<void> {
   try {
     const data = await getLogFiles()
@@ -212,41 +315,100 @@ async function loadLogFiles(): Promise<void> {
   }
 }
 
-async function loadFileContent(filename: string, offset = 0): Promise<void> {
-  historyLoading.value = true
+async function loadFileContent(
+  filename: string,
+  offset = 0,
+  mode: HistoryLoadMode = 'replace',
+): Promise<void> {
+  if (!filename) return
+  if (mode !== 'replace' && loadedHistoryOffsets.value.has(offset)) return
+
+  const container = historyContainerRef.value
+  const previousScrollHeight = container?.scrollHeight ?? 0
+  const previousScrollTop = container?.scrollTop ?? 0
+
+  setHistoryLoading(mode, true)
+
   try {
-    const data = await getLogContent(filename, offset)
-    historyContent.value = data.content.join('\n')
-    historyMeta.value = {
-      offset: data.offset,
-      size: data.size,
-      total_size: data.total_size,
-      has_prev: data.has_prev,
-      has_next: data.has_next,
-      next_offset: data.next_offset,
-      prev_offset: data.prev_offset,
+    const data = await getLogContent(filename, offset, historyChunkLimit)
+    applyHistoryChunk(data, mode)
+
+    await nextTick()
+    if (!historyContainerRef.value) return
+
+    if (mode === 'prepend') {
+      historyContainerRef.value.scrollTop = historyContainerRef.value.scrollHeight - previousScrollHeight + previousScrollTop
+    } else if (mode === 'replace') {
+      historyContainerRef.value.scrollTop = 0
     }
   } catch {
     toastStore.show('获取日志内容失败', 'error')
   } finally {
-    historyLoading.value = false
+    setHistoryLoading(mode, false)
+  }
+}
+
+function setHistoryLoading(mode: HistoryLoadMode, value: boolean): void {
+  if (mode === 'replace') historyLoading.value = value
+  if (mode === 'prepend') historyLoadingPrev.value = value
+  if (mode === 'append') historyLoadingNext.value = value
+}
+
+function applyHistoryChunk(data: LogContentResponse, mode: HistoryLoadMode): void {
+  const meta = extractHistoryMeta(data)
+  historyMeta.value = meta
+  loadedHistoryOffsets.value = new Set(loadedHistoryOffsets.value).add(data.offset)
+
+  if (mode === 'replace') {
+    historyLines.value = data.content
+    historyStartOffset.value = data.offset
+    historyEndOffset.value = data.next_offset
+  } else if (mode === 'prepend') {
+    historyLines.value = [...data.content, ...historyLines.value]
+    historyStartOffset.value = data.offset
+  } else {
+    historyLines.value = [...historyLines.value, ...data.content]
+    historyEndOffset.value = data.next_offset
+  }
+
+  historyHasPrev.value = historyStartOffset.value > 0
+  historyHasNext.value = historyEndOffset.value < data.total_size
+}
+
+function extractHistoryMeta(data: LogContentResponse): HistoryMeta {
+  return {
+    offset: data.offset,
+    size: data.size,
+    total_size: data.total_size,
+    has_prev: data.has_prev,
+    has_next: data.has_next,
+    next_offset: data.next_offset,
+    prev_offset: data.prev_offset,
   }
 }
 
 function selectLogFile(filename: string): void {
   selectedFile.value = filename
+  historyLines.value = []
+  historyMeta.value = null
+  historyStartOffset.value = 0
+  historyEndOffset.value = 0
+  historyHasPrev.value = false
+  historyHasNext.value = false
+  loadedHistoryOffsets.value = new Set()
   loadFileContent(filename)
 }
 
-function loadPrev(): void {
-  if (historyMeta.value?.has_prev && selectedFile.value) {
-    loadFileContent(selectedFile.value, historyMeta.value.prev_offset)
-  }
-}
+function handleHistoryScroll(): void {
+  const container = historyContainerRef.value
+  if (!container || historyLoading.value) return
 
-function loadNext(): void {
-  if (historyMeta.value?.has_next && selectedFile.value) {
-    loadFileContent(selectedFile.value, historyMeta.value.next_offset)
+  if (isNearTop(container) && historyHasPrev.value && !historyLoadingPrev.value) {
+    loadFileContent(selectedFile.value, Math.max(0, historyStartOffset.value - historyChunkLimit), 'prepend')
+  }
+
+  if (isNearBottom(container) && historyHasNext.value && !historyLoadingNext.value) {
+    loadFileContent(selectedFile.value, historyEndOffset.value, 'append')
   }
 }
 
@@ -264,7 +426,6 @@ function formatTimestamp(ts: string): string {
   }
 }
 
-// ========== 生命周期 ==========
 watch(activeTab, (tab) => {
   if (tab === 'realtime') {
     connectWs()
@@ -285,23 +446,25 @@ onUnmounted(() => {
 <template>
   <AppShell>
     <section class="log-page">
-      <!-- Hero Card -->
       <header class="hero-card">
         <div class="hero-copy">
-          <span class="eyebrow">SYSTEM LOGS</span>
+          <span class="eyebrow">SYSTEM OBSERVABILITY</span>
           <h1>日志查看器</h1>
-          <p>实时监控系统日志输出，支持级别过滤与历史浏览</p>
+          <p>实时追踪运行状态，快速检索历史日志，并通过滚动无缝加载上下文。</p>
         </div>
         <div class="hero-actions">
+          <div class="hero-metric">
+            <span>当前缓冲</span>
+            <strong>{{ realtimeLogs.length }}</strong>
+          </div>
           <div class="ws-status" :class="wsStatus">
             <span class="ws-dot"></span>
-            <span class="ws-label">{{ wsStatus === 'connected' ? '已连接' : wsStatus === 'connecting' ? '连接中' : '已断开' }}</span>
+            <span>{{ wsStatusText }}</span>
           </div>
         </div>
       </header>
 
-      <!-- Tab 切换 -->
-      <div class="tab-bar">
+      <div class="tab-bar" role="tablist" aria-label="日志模式">
         <button class="tab-item" :class="{ active: activeTab === 'realtime' }" @click="activeTab = 'realtime'">
           <Icon icon="material-symbols:stream-rounded" width="18" height="18" />
           <span>实时日志</span>
@@ -312,74 +475,95 @@ onUnmounted(() => {
         </button>
       </div>
 
-      <!-- 实时日志面板 -->
       <div v-if="activeTab === 'realtime'" class="realtime-section">
-        <!-- 统计条 -->
         <div class="stat-grid">
-          <article v-for="level in LOG_LEVELS" :key="level" class="stat-card mini"
-            :class="{ selected: selectedLevels.has(level) }" @click="toggleLevel(level)">
-            <span class="stat-level" :style="{ color: levelColor(level) }">{{ level }}</span>
+          <button
+            v-for="level in LOG_LEVELS"
+            :key="level"
+            class="stat-card mini"
+            :class="{ selected: selectedLevels.has(level) }"
+            :style="{ '--level-accent': levelColor(level), '--level-tint': levelBg(level) }"
+            @click="toggleLevel(level)"
+          >
+            <span class="stat-level">{{ level }}</span>
             <strong>{{ logStats[level] || 0 }}</strong>
-          </article>
+          </button>
         </div>
 
-        <!-- 工具栏 -->
-        <div class="toolbar">
-          <div class="toolbar-left">
-            <input v-model="searchText" class="search-input" placeholder="搜索日志内容..." />
-          </div>
+        <div class="control-card">
+          <label class="search-field">
+            <Icon icon="material-symbols:search-rounded" width="19" height="19" />
+            <input v-model="searchText" placeholder="搜索消息、来源或显示名..." />
+          </label>
           <div class="toolbar-right">
-            <button class="icon-button" :class="{ active: autoScroll }" @click="autoScroll = !autoScroll"
-              title="自动滚动">
-              <Icon icon="material-symbols:vertical-align-bottom-rounded" width="20" height="20" />
+            <button class="pill-action" :class="{ active: autoScroll }" @click="autoScroll = !autoScroll">
+              <Icon icon="material-symbols:vertical-align-bottom-rounded" width="18" height="18" />
+              自动滚动
             </button>
             <button class="icon-button" @click="clearLogs" title="清空日志">
               <Icon icon="material-symbols:delete-outline-rounded" width="20" height="20" />
             </button>
-            <button class="icon-button" @click="wsStatus === 'connected' ? disconnectWs() : connectWs()"
-              :title="wsStatus === 'connected' ? '断开' : '连接'">
-              <Icon :icon="wsStatus === 'connected' ? 'material-symbols:link-off-rounded' : 'material-symbols:link-rounded'"
-                width="20" height="20" />
+            <button
+              class="icon-button"
+              @click="wsStatus === 'connected' ? disconnectWs() : connectWs()"
+              :title="wsStatus === 'connected' ? '断开' : '连接'"
+            >
+              <Icon
+                :icon="wsStatus === 'connected' ? 'material-symbols:link-off-rounded' : 'material-symbols:link-rounded'"
+                width="20"
+                height="20"
+              />
             </button>
           </div>
         </div>
 
-        <!-- 日志输出区域 -->
-        <div class="log-container" ref="logContainerRef" @scroll="handleScroll">
+        <div class="log-container" ref="logContainerRef" @scroll="handleRealtimeScroll">
+          <div class="terminal-topbar">
+            <div class="traffic-lights">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <span>{{ wsStatus === 'connected' ? 'Live stream' : 'Stream paused' }}</span>
+          </div>
+
           <div v-if="filteredLogs.length === 0" class="empty-state">
             <Icon icon="material-symbols:terminal-rounded" width="48" height="48" />
-            <p>{{ wsStatus === 'connected' ? '等待日志输出...' : '未连接到日志服务' }}</p>
+            <p>{{ wsStatus === 'connected' ? '等待新的日志输出...' : '实时日志服务未连接' }}</p>
           </div>
           <div v-else class="log-entries">
-            <div v-for="(entry, idx) in filteredLogs" :key="idx" class="log-entry"
-              :style="{ '--entry-level-color': levelColor(entry.level), '--entry-level-bg': levelBg(entry.level) }">
+            <div
+              v-for="(entry, idx) in filteredLogs"
+              :key="`${entry.timestamp}-${idx}`"
+              class="log-entry"
+              :style="{ '--entry-level-color': levelColor(entry.level), '--entry-level-bg': levelBg(entry.level) }"
+            >
               <span class="log-time">{{ entry.timestamp }}</span>
-              <span class="log-level-badge" :style="{ color: levelColor(entry.level), background: levelBg(entry.level) }">
-                {{ entry.level }}
-              </span>
-              <span class="log-logger">{{ entry.display || entry.logger_name }}</span>
+              <span class="log-level-badge">{{ entry.level }}</span>
+              <span class="log-logger">{{ entry.display || entry.logger_name || 'core' }}</span>
               <span class="log-message">{{ entry.message }}</span>
             </div>
           </div>
         </div>
 
-        <!-- 底部状态栏 -->
         <div class="status-bar">
           <span>共 {{ realtimeLogs.length }} 条 · 显示 {{ filteredLogs.length }} 条</span>
-          <span v-if="!autoScroll" class="scroll-hint" @click="autoScroll = true; scrollToBottom()">
+          <span v-if="lastRealtimeAt">最后更新 {{ lastRealtimeAt }}</span>
+          <button v-if="!autoScroll" class="scroll-hint" @click="autoScroll = true; scrollToBottom()">
             <Icon icon="material-symbols:arrow-downward-rounded" width="14" height="14" />
             回到底部
-          </span>
+          </button>
         </div>
       </div>
 
-      <!-- 历史日志面板 -->
       <div v-else class="history-section">
         <div class="history-layout">
-          <!-- 文件列表 -->
           <aside class="file-list-panel">
             <div class="panel-header">
-              <h3>日志文件</h3>
+              <div>
+                <span class="panel-kicker">Archives</span>
+                <h3>日志文件</h3>
+              </div>
               <button class="icon-button" @click="loadLogFiles" title="刷新">
                 <Icon icon="material-symbols:refresh-rounded" width="18" height="18" />
               </button>
@@ -388,8 +572,13 @@ onUnmounted(() => {
               <p>暂无日志文件</p>
             </div>
             <div v-else class="file-list">
-              <button v-for="file in logFiles" :key="file.filename" class="file-item"
-                :class="{ active: selectedFile === file.filename }" @click="selectLogFile(file.filename)">
+              <button
+                v-for="file in logFiles"
+                :key="file.filename"
+                class="file-item"
+                :class="{ active: selectedFile === file.filename }"
+                @click="selectLogFile(file.filename)"
+              >
                 <div class="file-item-main">
                   <Icon icon="material-symbols:description-outline-rounded" width="18" height="18" />
                   <span class="file-name">{{ file.filename }}</span>
@@ -402,35 +591,35 @@ onUnmounted(() => {
             </div>
           </aside>
 
-          <!-- 内容面板 -->
           <main class="content-panel">
-            <div v-if="!selectedFile" class="empty-state">
-              <Icon icon="material-symbols:folder-open-outline-rounded" width="48" height="48" />
+            <div v-if="!selectedFile" class="empty-state hero-empty">
+              <Icon icon="material-symbols:folder-open-outline-rounded" width="54" height="54" />
               <p>选择一个日志文件查看内容</p>
+              <span>选中文件后，在内容区域上下滚动即可自动加载更多。</span>
             </div>
             <template v-else>
               <div class="content-header">
-                <h3>{{ selectedFile }}</h3>
-                <span v-if="historyMeta" class="content-meta">
-                  {{ formatFileSize(historyMeta.total_size) }}
-                </span>
+                <div>
+                  <span class="panel-kicker">History viewer</span>
+                  <h3>{{ selectedFile }}</h3>
+                </div>
+                <span class="content-meta">{{ historyProgressText }}</span>
               </div>
-              <div v-if="historyLoading" class="empty-state">
-                <p>加载中...</p>
-              </div>
-              <pre v-else class="history-content">{{ historyContent }}</pre>
-              <div v-if="historyMeta" class="pagination">
-                <button class="tonal-button" :disabled="!historyMeta.has_prev" @click="loadPrev">
-                  <Icon icon="material-symbols:chevron-left-rounded" width="18" height="18" />
-                  上一页
-                </button>
-                <span class="pagination-info">
-                  {{ formatFileSize(historyMeta.size) }} / {{ formatFileSize(historyMeta.total_size) }}
-                </span>
-                <button class="tonal-button" :disabled="!historyMeta.has_next" @click="loadNext">
-                  下一页
-                  <Icon icon="material-symbols:chevron-right-rounded" width="18" height="18" />
-                </button>
+
+              <div class="history-content-wrap" ref="historyContainerRef" @scroll="handleHistoryScroll">
+                <div v-if="historyLoading" class="empty-state">
+                  <Icon icon="material-symbols:progress-activity-rounded" width="36" height="36" />
+                  <p>正在加载日志内容...</p>
+                </div>
+                <template v-else>
+                  <div v-if="historyLoadingPrev" class="load-sentinel">正在加载上方内容...</div>
+                  <div v-else-if="!historyHasPrev && historyLines.length > 0" class="load-sentinel muted">已到达文件开头</div>
+
+                  <pre class="history-content">{{ historyLines.join('\n') }}</pre>
+
+                  <div v-if="historyLoadingNext" class="load-sentinel">正在加载下方内容...</div>
+                  <div v-else-if="!historyHasNext && historyLines.length > 0" class="load-sentinel muted">已到达文件末尾</div>
+                </template>
               </div>
             </template>
           </main>
@@ -442,376 +631,565 @@ onUnmounted(() => {
 
 <style scoped>
 .log-page {
+  --page-shadow: 0 18px 48px rgba(0, 0, 0, .08), 0 4px 18px rgba(0, 0, 0, .045), 0 1px 4px rgba(0, 0, 0, .035);
+  --soft-border: color-mix(in srgb, var(--md-sys-color-outline-variant) 72%, transparent);
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.2rem;
 }
 
-/* ===== Hero Card ===== */
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+
 .hero-card,
+.control-card,
 .log-container,
 .history-layout,
 .stat-card {
-  border: 1px solid var(--md-sys-color-outline-variant);
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-low) 78%, transparent);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--soft-border);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--md-sys-color-surface-container-lowest) 92%, transparent), color-mix(in srgb, var(--md-sys-color-surface-container-low) 88%, transparent));
+  box-shadow: var(--page-shadow);
   backdrop-filter: blur(18px) saturate(1.08);
   -webkit-backdrop-filter: blur(18px) saturate(1.08);
 }
 
 .hero-card {
+  position: relative;
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  padding: 1.5rem;
-  border-radius: 28px;
+  align-items: stretch;
+  gap: 1.2rem;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border-radius: var(--md-sys-shape-corner-extra-large);
+  overflow: hidden;
 }
 
-.eyebrow {
+.hero-card::before {
+  content: '';
+  position: absolute;
+  inset: -40% auto auto 58%;
+  width: 360px;
+  height: 360px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--md-sys-color-primary) 28%, transparent), transparent 68%);
+  pointer-events: none;
+}
+
+.hero-copy,
+.hero-actions {
+  position: relative;
+  z-index: 1;
+}
+
+.eyebrow,
+.panel-kicker {
   color: var(--md-sys-color-primary);
-  font-size: .78rem;
-  font-weight: 700;
-  letter-spacing: .08em;
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .12em;
   text-transform: uppercase;
 }
-
-h1, h2, h3, p { margin: 0; }
 
 h1 {
   margin-top: .35rem;
   color: var(--md-sys-color-on-surface);
-  font-size: clamp(1.8rem, 4vw, 3rem);
-  letter-spacing: -.04em;
+  font-size: clamp(2rem, 4.6vw, 3.65rem);
+  line-height: .98;
+  letter-spacing: -.055em;
 }
 
 .hero-copy p {
+  max-width: 38rem;
+  margin-top: .7rem;
   color: var(--md-sys-color-on-surface-variant);
-  margin-top: .25rem;
+  font-size: 1rem;
+  line-height: 1.65;
 }
 
-/* WS 状态指示 */
-.ws-status {
+.hero-actions {
   display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: .75rem;
+  flex-wrap: wrap;
+  min-width: 220px;
+}
+
+.hero-metric,
+.ws-status {
+  display: inline-flex;
   align-items: center;
+  border: 1px solid var(--soft-border);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-lowest) 76%, transparent);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, .045);
+}
+
+.hero-metric {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .1rem;
+  padding: .7rem .9rem;
+  border-radius: 18px;
+}
+
+.hero-metric span {
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: .72rem;
+  font-weight: 700;
+}
+
+.hero-metric strong {
+  color: var(--md-sys-color-on-surface);
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.ws-status {
   gap: .5rem;
-  padding: .5rem .9rem;
-  border-radius: 999px;
-  background: var(--md-sys-color-surface-container);
-  border: 1px solid var(--md-sys-color-outline-variant);
-  font-size: .85rem;
-  font-weight: 600;
+  padding: .62rem .9rem;
+  border-radius: var(--md-sys-shape-corner-full);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: .86rem;
+  font-weight: 700;
 }
 
 .ws-dot {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: var(--md-sys-color-outline);
-  transition: background .3s;
+  transition: background .25s, box-shadow .25s;
 }
 
 .ws-status.connected .ws-dot {
   background: #1aae39;
-  box-shadow: 0 0 6px #1aae39;
+  box-shadow: 0 0 0 6px rgba(26, 174, 57, .12), 0 0 12px rgba(26, 174, 57, .6);
 }
 
 .ws-status.connecting .ws-dot {
-  background: #e09000;
+  background: #dd5b00;
   animation: pulse 1s infinite;
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: .4; }
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .45; transform: scale(.82); }
 }
 
-/* ===== Tab Bar ===== */
 .tab-bar {
   display: inline-flex;
-  padding: .3rem;
-  border-radius: 999px;
-  background: var(--md-sys-color-surface-container-high);
-  border: 1px solid var(--md-sys-color-outline-variant);
-  gap: .25rem;
   align-self: flex-start;
+  gap: .28rem;
+  padding: .32rem;
+  border: 1px solid var(--soft-border);
+  border-radius: var(--md-sys-shape-corner-full);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high) 88%, transparent);
 }
 
 .tab-item {
   display: inline-flex;
   align-items: center;
-  gap: .4rem;
+  gap: .42rem;
   border: 0;
-  border-radius: 999px;
-  padding: .6rem 1rem;
-  font-weight: 600;
-  font-size: .9rem;
-  cursor: pointer;
-  background: transparent;
+  border-radius: var(--md-sys-shape-corner-full);
+  padding: .62rem 1.05rem;
   color: var(--md-sys-color-on-surface-variant);
-  transition: all .2s;
+  background: transparent;
+  font-size: .9rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform .18s ease, background .18s ease, color .18s ease;
+}
+
+.tab-item:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent);
 }
 
 .tab-item.active {
-  background: var(--md-sys-color-primary);
   color: var(--md-sys-color-on-primary);
+  background: var(--md-sys-color-primary);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--md-sys-color-primary) 26%, transparent);
 }
 
-/* ===== Stat Grid ===== */
+.realtime-section,
+.history-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: .75rem;
+  gap: .8rem;
 }
 
 .stat-card.mini {
-  padding: .75rem;
-  border-radius: 18px;
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: .2rem;
+  align-items: flex-start;
+  gap: .3rem;
+  min-height: 86px;
+  padding: .85rem;
+  border-radius: 20px;
+  color: var(--md-sys-color-on-surface);
   cursor: pointer;
-  transition: all .2s;
-  user-select: none;
+  overflow: hidden;
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+
+.stat-card.mini::after {
+  content: '';
+  position: absolute;
+  inset: auto .8rem .8rem auto;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--level-tint);
 }
 
 .stat-card.mini:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  transform: translateY(-2px);
 }
 
 .stat-card.mini.selected {
-  border-color: var(--md-sys-color-primary);
-  background: color-mix(in srgb, var(--md-sys-color-primary-container) 55%, transparent);
-  backdrop-filter: blur(12px);
+  border-color: var(--level-accent);
+  background: linear-gradient(145deg, var(--level-tint), color-mix(in srgb, var(--md-sys-color-surface-container-lowest) 82%, transparent));
 }
 
 .stat-level {
+  position: relative;
+  z-index: 1;
+  color: var(--level-accent);
   font-size: .72rem;
-  font-weight: 700;
-  letter-spacing: .06em;
+  font-weight: 900;
+  letter-spacing: .08em;
 }
 
 .stat-card.mini strong {
-  font-size: 1.4rem;
+  position: relative;
+  z-index: 1;
   color: var(--md-sys-color-on-surface);
+  font-size: 1.72rem;
+  line-height: 1;
 }
 
-/* ===== Toolbar ===== */
-.toolbar {
+.control-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: .75rem;
+  padding: .75rem;
+  border-radius: 22px;
 }
 
-.toolbar-left {
-  flex: 1;
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  width: min(100%, 460px);
+  padding: .72rem .9rem;
+  border: 1px solid var(--soft-border);
+  border-radius: 16px;
+  color: var(--md-sys-color-on-surface-variant);
+  background: var(--md-sys-color-surface-container-lowest);
+}
+
+.search-field input {
+  width: 100%;
   min-width: 0;
+  border: 0;
+  outline: 0;
+  color: var(--md-sys-color-on-surface);
+  background: transparent;
+  font-size: .9rem;
+}
+
+.search-field input::placeholder {
+  color: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 72%, transparent);
 }
 
 .toolbar-right {
   display: flex;
   align-items: center;
-  gap: .4rem;
+  justify-content: flex-end;
+  gap: .45rem;
+  flex-wrap: wrap;
 }
 
-.search-input {
-  width: 100%;
-  max-width: 360px;
-  border: 1px solid var(--md-sys-color-outline-variant);
-  border-radius: 14px;
-  background: var(--md-sys-color-surface);
-  color: var(--md-sys-color-on-surface);
-  padding: .65rem .9rem;
-  outline: none;
-  font-size: .9rem;
-  transition: border-color .2s;
-}
-
-.search-input:focus {
-  border-color: var(--md-sys-color-primary);
-}
-
-.icon-button {
+.icon-button,
+.pill-action,
+.scroll-hint {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
   border: 0;
-  border-radius: 12px;
-  background: transparent;
-  color: var(--md-sys-color-on-surface-variant);
   cursor: pointer;
-  transition: all .15s;
+  transition: transform .16s ease, background .16s ease, color .16s ease;
 }
 
-.icon-button:hover {
-  background: var(--md-sys-color-surface-container-high);
+.icon-button {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  color: var(--md-sys-color-on-surface-variant);
+  background: transparent;
 }
 
-.icon-button.active {
-  background: var(--md-sys-color-primary-container);
+.icon-button:hover,
+.pill-action:hover,
+.scroll-hint:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--md-sys-color-primary) 10%, transparent);
+}
+
+.icon-button.active,
+.pill-action.active {
   color: var(--md-sys-color-on-primary-container);
+  background: var(--md-sys-color-primary-container);
 }
 
-/* ===== Log Container ===== */
+.pill-action {
+  gap: .4rem;
+  min-height: 40px;
+  padding: 0 .85rem;
+  border-radius: var(--md-sys-shape-corner-full);
+  color: var(--md-sys-color-on-surface-variant);
+  background: transparent;
+  font-size: .82rem;
+  font-weight: 800;
+}
+
 .log-container {
-  border-radius: 22px;
-  padding: .5rem;
-  min-height: 420px;
+  min-height: 430px;
   max-height: calc(100vh - 420px);
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: auto;
+  border-radius: 24px;
+  background: linear-gradient(180deg, #111318, #17191f);
+  color: #e8e8ef;
   scroll-behavior: smooth;
 }
+
+.terminal-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .62rem .85rem;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+  background: rgba(17, 19, 24, .88);
+  backdrop-filter: blur(14px);
+  color: rgba(255, 255, 255, .56);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.traffic-lights {
+  display: inline-flex;
+  gap: .4rem;
+}
+
+.traffic-lights span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.traffic-lights span:nth-child(1) { background: #ff5f56; }
+.traffic-lights span:nth-child(2) { background: #ffbd2e; }
+.traffic-lights span:nth-child(3) { background: #27c93f; }
 
 .log-entries {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
+  padding: .65rem;
 }
 
 .log-entry {
   display: grid;
-  grid-template-columns: auto auto auto 1fr;
-  gap: .6rem;
+  grid-template-columns: minmax(132px, auto) auto minmax(112px, 180px) minmax(0, 1fr);
+  gap: .65rem;
   align-items: baseline;
-  padding: .4rem .7rem;
-  border-radius: 10px;
+  padding: .48rem .62rem;
+  border-left: 3px solid transparent;
+  border-radius: 12px;
   font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
   font-size: .8rem;
-  line-height: 1.5;
-  transition: background .15s;
+  line-height: 1.55;
+  transition: background .15s ease, border-color .15s ease;
 }
 
 .log-entry:hover {
-  background: var(--entry-level-bg);
+  border-left-color: var(--entry-level-color);
+  background: color-mix(in srgb, var(--entry-level-bg) 76%, rgba(255, 255, 255, .04));
 }
 
 .log-time {
-  color: var(--md-sys-color-on-surface-variant);
-  opacity: .7;
+  color: rgba(255, 255, 255, .46);
   font-size: .72rem;
   white-space: nowrap;
 }
 
 .log-level-badge {
+  min-width: 58px;
+  padding: .12rem .45rem;
+  border-radius: 999px;
+  color: var(--entry-level-color);
+  background: var(--entry-level-bg);
   font-size: .68rem;
-  font-weight: 700;
-  padding: .1rem .4rem;
-  border-radius: 6px;
+  font-weight: 900;
   text-align: center;
-  min-width: 52px;
   white-space: nowrap;
 }
 
 .log-logger {
-  color: var(--md-sys-color-tertiary);
-  font-weight: 600;
-  font-size: .75rem;
+  color: #62aef0;
+  font-size: .74rem;
+  font-weight: 800;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 160px;
 }
 
 .log-message {
-  color: var(--md-sys-color-on-surface);
+  color: rgba(255, 255, 255, .9);
   word-break: break-word;
   white-space: pre-wrap;
 }
 
-/* ===== Status Bar ===== */
 .status-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: .5rem .75rem;
-  font-size: .78rem;
+  gap: .75rem;
+  min-height: 34px;
+  padding: 0 .3rem;
   color: var(--md-sys-color-on-surface-variant);
+  font-size: .8rem;
 }
 
 .scroll-hint {
-  display: inline-flex;
-  align-items: center;
   gap: .3rem;
-  cursor: pointer;
+  padding: .38rem .7rem;
+  border-radius: 999px;
   color: var(--md-sys-color-primary);
-  font-weight: 600;
+  background: transparent;
+  font-weight: 800;
 }
 
-/* ===== Empty State ===== */
 .empty-state {
   min-height: 220px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: .6rem;
+  gap: .65rem;
+  padding: 2rem;
   color: var(--md-sys-color-on-surface-variant);
   text-align: center;
 }
 
-.empty-state.small {
-  min-height: 80px;
+.log-container .empty-state {
+  color: rgba(255, 255, 255, .58);
 }
 
-/* ===== History Section ===== */
+.empty-state.small {
+  min-height: 90px;
+  padding: 1rem;
+}
+
+.hero-empty span {
+  max-width: 24rem;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: .86rem;
+}
+
 .history-layout {
   display: grid;
-  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
-  min-height: 55vh;
-  border-radius: 28px;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  min-height: 58vh;
+  border-radius: var(--md-sys-shape-corner-extra-large);
   overflow: hidden;
 }
 
 .file-list-panel {
-  border-right: 1px solid var(--md-sys-color-outline-variant);
+  border-right: 1px solid var(--soft-border);
   padding: 1rem;
   overflow-y: auto;
-  max-height: calc(100vh - 320px);
+  max-height: calc(100vh - 310px);
 }
 
-.panel-header {
+.panel-header,
+.content-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: .75rem;
+  gap: 1rem;
 }
 
-.panel-header h3 {
-  font-size: 1.1rem;
-  font-weight: 700;
+.panel-header {
+  margin-bottom: .85rem;
+}
+
+.panel-header h3,
+.content-header h3 {
   color: var(--md-sys-color-on-surface);
+  font-size: 1.08rem;
+  font-weight: 900;
+  letter-spacing: -.02em;
 }
 
 .file-list {
   display: flex;
   flex-direction: column;
-  gap: .4rem;
+  gap: .45rem;
 }
 
 .file-item {
   width: 100%;
-  text-align: left;
   display: flex;
   flex-direction: column;
-  gap: .3rem;
-  padding: .75rem;
+  gap: .35rem;
+  padding: .82rem;
   border: 1px solid transparent;
-  border-radius: 14px;
-  background: transparent;
+  border-radius: 16px;
   color: var(--md-sys-color-on-surface);
+  background: transparent;
+  text-align: left;
   cursor: pointer;
-  transition: all .15s;
+  transition: transform .16s ease, background .16s ease, border-color .16s ease;
 }
 
 .file-item:hover,
 .file-item.active {
-  background: var(--md-sys-color-secondary-container);
-  border-color: var(--md-sys-color-outline-variant);
+  border-color: color-mix(in srgb, var(--md-sys-color-primary) 28%, var(--soft-border));
+  background: color-mix(in srgb, var(--md-sys-color-primary-container) 44%, transparent);
+}
+
+.file-item:hover {
+  transform: translateY(-1px);
 }
 
 .file-item-main {
@@ -821,106 +1199,77 @@ h1 {
 }
 
 .file-name {
-  font-weight: 600;
-  font-size: .85rem;
+  font-size: .86rem;
+  font-weight: 800;
   word-break: break-all;
 }
 
 .file-item-meta {
   display: flex;
-  gap: .75rem;
-  padding-left: 1.6rem;
-  font-size: .72rem;
+  flex-wrap: wrap;
+  gap: .45rem .8rem;
+  padding-left: 1.65rem;
   color: var(--md-sys-color-on-surface-variant);
+  font-size: .72rem;
 }
 
-/* ===== Content Panel ===== */
 .content-panel {
-  padding: 1.25rem;
-  overflow-y: auto;
-  max-height: calc(100vh - 320px);
+  min-width: 0;
   display: flex;
   flex-direction: column;
-}
-
-.content-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.content-header h3 {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--md-sys-color-on-surface);
+  gap: .9rem;
+  padding: 1.1rem;
+  max-height: calc(100vh - 310px);
 }
 
 .content-meta {
-  font-size: .78rem;
-  color: var(--md-sys-color-on-surface-variant);
-  padding: .25rem .6rem;
+  flex-shrink: 0;
+  padding: .32rem .68rem;
   border-radius: 999px;
-  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-primary-container);
+  background: var(--md-sys-color-primary-container);
+  font-size: .78rem;
+  font-weight: 800;
+}
+
+.history-content-wrap {
+  flex: 1;
+  min-height: 420px;
+  overflow: auto;
+  border: 1px solid var(--soft-border);
+  border-radius: 20px;
+  background: var(--md-sys-color-surface-container-lowest);
 }
 
 .history-content {
-  flex: 1;
-  overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
+  min-height: 100%;
+  margin: 0;
   padding: 1rem;
-  border-radius: 16px;
-  background: var(--md-sys-color-surface-container-lowest);
-  border: 1px solid var(--md-sys-color-outline-variant);
+  color: var(--md-sys-color-on-surface);
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: .8rem;
-  line-height: 1.6;
-  color: var(--md-sys-color-on-surface);
-  margin: 0;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
-/* ===== Pagination ===== */
-.pagination {
+.load-sentinel {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
-  margin-top: 1rem;
+  min-height: 42px;
+  color: var(--md-sys-color-primary);
+  background: color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent);
+  font-size: .78rem;
+  font-weight: 800;
 }
 
-.pagination-info {
-  font-size: .8rem;
+.load-sentinel.muted {
   color: var(--md-sys-color-on-surface-variant);
+  background: transparent;
 }
 
-.tonal-button {
-  display: inline-flex;
-  align-items: center;
-  gap: .35rem;
-  border: 0;
-  border-radius: 999px;
-  padding: .55rem .9rem;
-  font-weight: 600;
-  font-size: .82rem;
-  cursor: pointer;
-  color: var(--md-sys-color-on-primary-container);
-  background: var(--md-sys-color-primary-container);
-  transition: opacity .15s;
-}
-
-.tonal-button:disabled {
-  cursor: not-allowed;
-  opacity: .45;
-}
-
-/* ===== 响应式 ===== */
 @media (max-width: 1100px) {
-  .stat-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-
   .history-layout {
     display: flex;
     flex-direction: column;
@@ -928,8 +1277,8 @@ h1 {
 
   .file-list-panel {
     border-right: 0;
-    border-bottom: 1px solid var(--md-sys-color-outline-variant);
-    max-height: 200px;
+    border-bottom: 1px solid var(--soft-border);
+    max-height: 220px;
   }
 
   .content-panel {
@@ -937,98 +1286,14 @@ h1 {
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 760px) {
   .hero-card {
     flex-direction: column;
-    align-items: stretch;
-    border-radius: 20px;
-    padding: 1.2rem;
+    border-radius: 22px;
   }
 
   .hero-actions {
-    display: flex;
-    justify-content: flex-end;
-  }
-
-  .stat-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: .5rem;
-  }
-
-  .stat-card.mini {
-    padding: .55rem;
-    border-radius: 14px;
-  }
-
-  .stat-card.mini strong {
-    font-size: 1.1rem;
-  }
-
-  .toolbar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: .5rem;
-  }
-
-  .toolbar-left {
-    order: 2;
-  }
-
-  .toolbar-right {
-    order: 1;
-    justify-content: flex-end;
-  }
-
-  .search-input {
-    max-width: 100%;
-  }
-
-  .log-container {
-    border-radius: 16px;
-    max-height: calc(100vh - 480px);
-    min-height: 300px;
-  }
-
-  .log-entry {
-    grid-template-columns: 1fr;
-    gap: .15rem;
-    padding: .5rem .6rem;
-    border-bottom: 1px solid var(--md-sys-color-outline-variant);
-    border-radius: 0;
-  }
-
-  .log-entry:last-child {
-    border-bottom: none;
-  }
-
-  .log-time {
-    font-size: .65rem;
-  }
-
-  .log-logger {
-    max-width: 100%;
-    font-size: .7rem;
-  }
-
-  .log-message {
-    font-size: .78rem;
-  }
-
-  .history-layout {
-    border-radius: 20px;
-  }
-
-  .file-list-panel {
-    max-height: 180px;
-    padding: .85rem;
-  }
-
-  .content-panel {
-    padding: .85rem;
-  }
-
-  .history-content {
-    font-size: .72rem;
+    justify-content: flex-start;
   }
 
   .tab-bar {
@@ -1038,20 +1303,85 @@ h1 {
   .tab-item {
     flex: 1;
     justify-content: center;
+    padding-inline: .7rem;
+  }
+
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .65rem;
+  }
+
+  .control-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-field {
+    width: auto;
+  }
+
+  .toolbar-right {
+    justify-content: flex-end;
+  }
+
+  .log-container {
+    min-height: 330px;
+    max-height: calc(100vh - 470px);
+    border-radius: 18px;
+  }
+
+  .log-entry {
+    grid-template-columns: 1fr;
+    gap: .18rem;
+    padding: .62rem .65rem;
+  }
+
+  .log-logger {
+    max-width: 100%;
+  }
+
+  .status-bar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .history-layout {
+    border-radius: 22px;
+  }
+
+  .content-panel,
+  .file-list-panel {
+    padding: .85rem;
+  }
+
+  .content-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .history-content-wrap {
+    min-height: 340px;
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 460px) {
   .stat-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .stat-card.mini:last-child {
-    grid-column: span 2;
+    grid-template-columns: 1fr;
   }
 
   h1 {
-    font-size: 1.6rem;
+    font-size: 2rem;
+  }
+
+  .hero-actions,
+  .toolbar-right {
+    width: 100%;
+  }
+
+  .hero-metric,
+  .ws-status,
+  .pill-action {
+    flex: 1;
   }
 }
 </style>
