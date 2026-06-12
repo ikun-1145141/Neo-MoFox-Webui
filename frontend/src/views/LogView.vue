@@ -78,9 +78,9 @@ const logStats = computed(() => {
 })
 
 const wsStatusText = computed(() => {
-  if (wsStatus.value === 'connected') return '实时连接已建立'
-  if (wsStatus.value === 'connecting') return '正在连接日志流'
-  return '日志流已断开'
+  if (wsStatus.value === 'connected') return '已连接'
+  if (wsStatus.value === 'connecting') return '连接中'
+  return '已断开'
 })
 
 const historyProgressText = computed(() => {
@@ -458,6 +458,12 @@ onUnmounted(() => {
             <span class="ws-dot"></span>
             <span>{{ wsStatusText }}</span>
           </div>
+          <button
+            class="hero-connect-button"
+            @click="wsStatus === 'connected' ? disconnectWs() : connectWs()"
+          >
+            {{ wsStatus === 'connected' ? '断开' : '连接' }}
+          </button>
         </div>
       </header>
 
@@ -492,18 +498,20 @@ onUnmounted(() => {
             </label>
 
             <div class="toolbar-right">
-              <button class="pill-action" :class="{ active: autoScroll }" @click="autoScroll = !autoScroll">
-                <Icon icon="material-symbols:vertical-align-bottom-rounded" width="18" height="18" />
-                自动滚动
-              </button>
-              <button
-                class="pill-action scroll-to-bottom-action"
-                :disabled="autoScroll || filteredLogs.length === 0"
-                @click="autoScroll = true; scrollToBottom()"
-              >
-                <Icon icon="material-symbols:arrow-downward-rounded" width="16" height="16" />
-                回到底部
-              </button>
+              <div class="scroll-action-row">
+                <button class="pill-action" :class="{ active: autoScroll }" @click="autoScroll = !autoScroll">
+                  <Icon icon="material-symbols:vertical-align-bottom-rounded" width="18" height="18" />
+                  自动滚动
+                </button>
+                <button
+                  class="pill-action scroll-to-bottom-action"
+                  :disabled="autoScroll || filteredLogs.length === 0"
+                  @click="autoScroll = true; scrollToBottom()"
+                >
+                  <Icon icon="material-symbols:arrow-downward-rounded" width="16" height="16" />
+                  回到底部
+                </button>
+              </div>
               <button class="icon-button" @click="clearLogs" title="清空日志">
                 <Icon icon="material-symbols:delete-outline-rounded" width="20" height="20" />
               </button>
@@ -673,9 +681,9 @@ input:focus-visible {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: .95rem;
-  padding: clamp(.85rem, 2vw, 1.25rem);
-  border-radius: 24px;
+  gap: .75rem;
+  padding: clamp(.62rem, 1.45vw, .95rem);
+  border-radius: 22px;
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -700,33 +708,33 @@ input:focus-visible {
 .eyebrow,
 .panel-kicker {
   color: var(--md-sys-color-primary);
-  font-size: .72rem;
+  font-size: .66rem;
   font-weight: 800;
   letter-spacing: .12em;
   text-transform: uppercase;
 }
 
 h1 {
-  margin-top: .2rem;
+  margin-top: .12rem;
   color: var(--md-sys-color-on-surface);
-  font-size: clamp(1.55rem, 3vw, 2.45rem);
-  line-height: 1;
+  font-size: clamp(1.32rem, 2.45vw, 2rem);
+  line-height: .98;
   letter-spacing: -.045em;
 }
 
 .hero-copy p {
   max-width: 34rem;
-  margin-top: .35rem;
+  margin-top: .22rem;
   color: var(--md-sys-color-on-surface-variant);
-  font-size: .9rem;
-  line-height: 1.45;
+  font-size: .82rem;
+  line-height: 1.32;
 }
 
 .hero-actions {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: flex-end;
-  gap: .75rem;
+  gap: .45rem;
   flex-wrap: wrap;
   min-width: 220px;
 }
@@ -737,36 +745,54 @@ h1 {
   align-items: center;
   border: 1px solid var(--soft-border);
   background: color-mix(in srgb, var(--md-sys-color-surface-container-lowest) 76%, transparent);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, .045);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, .04);
 }
 
 .hero-metric {
   flex-direction: column;
   align-items: flex-start;
-  gap: .05rem;
-  padding: .55rem .75rem;
-  border-radius: 16px;
+  gap: .02rem;
+  padding: .38rem .56rem;
+  border-radius: 13px;
 }
 
 .hero-metric span {
   color: var(--md-sys-color-on-surface-variant);
-  font-size: .72rem;
+  font-size: .64rem;
   font-weight: 700;
 }
 
 .hero-metric strong {
   color: var(--md-sys-color-on-surface);
-  font-size: 1.25rem;
+  font-size: 1rem;
   line-height: 1;
 }
 
 .ws-status {
-  gap: .5rem;
-  padding: .62rem .9rem;
+  gap: .38rem;
+  padding: .44rem .62rem;
   border-radius: var(--md-sys-shape-corner-full);
   color: var(--md-sys-color-on-surface-variant);
-  font-size: .86rem;
+  font-size: .74rem;
   font-weight: 700;
+}
+
+.hero-connect-button {
+  min-height: 31px;
+  padding: 0 .62rem;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-primary) 18%, var(--soft-border));
+  border-radius: var(--md-sys-shape-corner-full);
+  color: var(--md-sys-color-primary);
+  background: color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent);
+  font-size: .72rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform .16s ease, background .16s ease, color .16s ease;
+}
+
+.hero-connect-button:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--md-sys-color-primary) 13%, transparent);
 }
 
 .ws-dot {
@@ -851,7 +877,7 @@ h1 {
 
 .control-card {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(180px, 240px) auto;
+  grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px) auto;
   align-items: center;
   gap: .55rem;
   padding: .1rem;
@@ -932,7 +958,14 @@ h1 {
   align-items: center;
   justify-content: flex-end;
   gap: .45rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+}
+
+.scroll-action-row {
+  display: inline-flex;
+  align-items: center;
+  gap: .38rem;
+  flex: 0 0 auto;
 }
 
 .icon-button,
@@ -1232,7 +1265,8 @@ h1 {
 
 .history-content-wrap {
   flex: 1;
-  min-height: 0;
+  min-height: clamp(280px, 48dvh, 560px);
+  max-height: clamp(380px, 62dvh, 720px);
   overflow: auto;
   border: 1px solid var(--soft-border);
   border-radius: 20px;
@@ -1288,6 +1322,50 @@ h1 {
   }
 }
 
+@media (max-width: 820px) {
+  .control-card {
+    grid-template-columns: minmax(150px, 1fr) minmax(134px, 176px) auto;
+    gap: .4rem;
+  }
+
+  .search-field,
+  .level-select-field {
+    min-height: 38px;
+    padding-inline: .58rem;
+    border-radius: 12px;
+  }
+
+  .level-select-field {
+    gap: .38rem;
+  }
+
+  .level-select-field span {
+    font-size: .66rem;
+  }
+
+  .level-select-field select,
+  .search-field input {
+    font-size: .82rem;
+  }
+
+  .toolbar-right,
+  .scroll-action-row {
+    gap: .28rem;
+  }
+
+  .pill-action {
+    min-height: 36px;
+    padding-inline: .58rem;
+    font-size: .74rem;
+  }
+
+  .icon-button {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+  }
+}
+
 @media (max-width: 760px) {
   .log-page {
     height: auto;
@@ -1297,11 +1375,45 @@ h1 {
 
   .hero-card {
     flex-direction: column;
+    gap: .6rem;
+    padding: .78rem;
     border-radius: 22px;
+  }
+
+  h1 {
+    margin-top: .12rem;
+    font-size: clamp(1.32rem, 6vw, 1.75rem);
+  }
+
+  .hero-copy p {
+    margin-top: .24rem;
+    font-size: .82rem;
+    line-height: 1.35;
+  }
+
+  .eyebrow {
+    font-size: .66rem;
   }
 
   .hero-actions {
     justify-content: flex-start;
+    gap: .35rem;
+    min-width: 0;
+  }
+
+  .hero-metric,
+  .ws-status {
+    flex: 0 0 auto;
+  }
+
+  .hero-connect-button {
+    min-height: 29px;
+    padding-inline: .52rem;
+    font-size: .68rem;
+  }
+
+  .hero-connect-button:hover {
+    transform: none;
   }
 
   .tab-bar {
@@ -1322,27 +1434,63 @@ h1 {
   .control-card {
     grid-template-columns: 1fr;
     align-items: stretch;
+    gap: .45rem;
   }
 
   .search-field,
   .level-select-field {
     width: auto;
+    min-height: 38px;
   }
 
   .toolbar-right {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
     justify-content: stretch;
+    width: 100%;
+  }
+
+  .scroll-action-row {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .toolbar-right .pill-action,
+  .toolbar-right .icon-button {
+    background: color-mix(in srgb, var(--md-sys-color-surface-container-high) 72%, transparent);
   }
 
   .toolbar-right .pill-action {
-    width: 100%;
-    padding-inline: .55rem;
-    font-size: .78rem;
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: .48rem;
+    font-size: .72rem;
   }
 
   .toolbar-right .icon-button {
-    width: 100%;
+    flex: 0 0 38px;
+    width: 38px;
+    height: 38px;
+  }
+
+  .icon-button:hover,
+  .pill-action:hover:not(:disabled),
+  .scroll-action-row .pill-action:hover:not(:disabled),
+  .file-item:hover,
+  .tab-item:hover,
+  .log-entry:hover {
+    transform: none;
+  }
+
+  .toolbar-right .pill-action:hover:not(:disabled),
+  .toolbar-right .icon-button:hover {
+    background: color-mix(in srgb, var(--md-sys-color-surface-container-high) 72%, transparent);
+  }
+
+  .toolbar-right .pill-action:disabled:hover {
+    background: color-mix(in srgb, var(--md-sys-color-outline-variant) 28%, transparent);
+  }
+
+  .toolbar-right .pill-action.active:hover:not(:disabled) {
+    background: var(--md-sys-color-primary-container);
   }
 
   .realtime-panel {
@@ -1350,9 +1498,8 @@ h1 {
   }
 
   .log-container {
-    height: 420px;
     min-height: 0;
-    flex: 0 0 auto;
+    flex: 1;
     border-radius: 18px;
   }
 
@@ -1403,7 +1550,7 @@ h1 {
   }
 
   h1 {
-    font-size: 2rem;
+    font-size: 1.45rem;
   }
 
   .hero-actions,
@@ -1428,7 +1575,6 @@ h1 {
     padding: .6rem;
   }
 
-  .log-container,
   .history-content-wrap {
     height: 360px;
   }
@@ -1436,7 +1582,14 @@ h1 {
 
 @media (max-width: 360px) {
   .toolbar-right .pill-action {
-    grid-column: 1 / -1;
+    padding-inline: .34rem;
+    font-size: .68rem;
+  }
+
+  .toolbar-right .icon-button {
+    flex-basis: 34px;
+    width: 34px;
+    height: 34px;
   }
 }
 </style>
