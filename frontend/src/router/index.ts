@@ -52,6 +52,12 @@ const router = createRouter({
       meta: { requiresAuth: true, title: '请求体检视器', icon: 'material-symbols:plagiarism-outline-rounded' },
     },
     {
+      path: '/logs',
+      name: 'logs',
+      component: () => import('../views/LogView.vue'),
+      meta: { requiresAuth: true, title: '日志查看', icon: 'material-symbols:terminal-rounded' },
+    },
+    {
       path: '/settings',
       component: () => import('../views/SettingsView.vue'),
       meta: { requiresAuth: true, title: '设置', icon: 'material-symbols:settings-outline-rounded' },

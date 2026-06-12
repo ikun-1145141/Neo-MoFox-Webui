@@ -18,6 +18,7 @@ from .components.router.webui_router import WebuiSettingsRouter
 from .components.router.system_router import SystemRouter
 from .components.router.plugin_router import PluginRouter
 from .components.router.frontend_router import FrontendRouter
+from .components.router.log_router import LogRouter
 from .components.router.config import (
     MainConfigRouter,
     BotConfigRouter,
@@ -25,7 +26,7 @@ from .components.router.config import (
     McpConfigRouter,
     PluginConfigRouter,
 )
-from .components.handlers import WebuiStartupPanelHandler
+from .components.handlers import WebuiStartupPanelHandler, LogBroadcastHandler
 
 logger = get_logger("webui_plugin")
 
@@ -63,7 +64,9 @@ class WebuiPlugin(BasePlugin):
             SystemRouter,
             PluginRouter,
             FrontendRouter,
+            LogRouter,
             WebuiStartupPanelHandler,
+            LogBroadcastHandler,
             # 配置管理路由
             MainConfigRouter,
             BotConfigRouter,

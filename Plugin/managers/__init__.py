@@ -8,6 +8,7 @@ from .wallpaper_manager import WallpaperManager
 from .dashboard_manager import DashboardManager, get_dashboard_manager
 from .llm_metrics_manager import LLMMetricsManager, get_llm_metrics_manager
 from .request_inspector_manager import RequestInspectorManager, get_request_inspector_manager
+from .log_manager import LogManager, get_log_manager
 
 __all__ = [
     "ConfigManager",
@@ -18,4 +19,6 @@ __all__ = [
     "get_llm_metrics_manager",
     "RequestInspectorManager",
     "get_request_inspector_manager",
+    "LogManager",
+    "get_log_manager",
 ]
