@@ -842,7 +842,12 @@ function handleDialogSubmit(data: Record<string, any>) {
 /* ===== 编辑器内容 ===== */
 .editor-content {
   flex: 1;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  backdrop-filter: blur(16px);
 }
 
 /* ===== 表单模式 ===== */
@@ -854,8 +859,8 @@ function handleDialogSubmit(data: Record<string, any>) {
 
 .tab-bar {
   display: flex;
-  background: color-mix(in srgb, var(--md-sys-color-surface) 75%, transparent);
-  backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 80%, transparent);
+  backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
   padding: 0 24px;
 }
@@ -892,6 +897,8 @@ function handleDialogSubmit(data: Record<string, any>) {
   flex: 1;
   overflow-y: auto;
   padding: 24px;
+  background: color-mix(in srgb, var(--md-sys-color-surface) 80%, transparent);
+  backdrop-filter: blur(16px);
 }
 
 .config-section {
@@ -1155,6 +1162,10 @@ function handleDialogSubmit(data: Record<string, any>) {
     padding: 12px 16px;
   }
 
+  .toolbar-left {
+    width: 100%;
+  }
+
   .toolbar-right {
     width: 100%;
     justify-content: space-between;
@@ -1193,7 +1204,15 @@ function handleDialogSubmit(data: Record<string, any>) {
     margin-bottom: 16px;
   }
 
-  .add-btn {
+  .sticky-action-row {
+    position: static;
+    margin-top: 0;
+    margin-right: 0;
+    margin-bottom: 16px;
+    pointer-events: auto;
+  }
+
+  .sticky-action-row .add-btn {
     width: 100%;
     justify-content: center;
   }
@@ -1217,6 +1236,10 @@ function handleDialogSubmit(data: Record<string, any>) {
   .test-result {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .config-card {
+    padding: 16px;
   }
 }
 </style>

@@ -216,6 +216,7 @@ onMounted(() => {
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
   flex-shrink: 0;
   z-index: 10;
+  overflow-x: auto;
 }
 
 .tab-btn {
@@ -232,6 +233,8 @@ onMounted(() => {
   cursor: pointer;
   transition: all 0.2s;
   font-family: inherit;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .tab-btn:hover {

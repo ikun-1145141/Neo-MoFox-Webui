@@ -483,7 +483,12 @@ async function handleSave() {
 
 .editor-content {
   flex: 1;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  backdrop-filter: blur(16px);
 }
 
 .form-mode {
@@ -531,6 +536,8 @@ async function handleSave() {
   flex: 1;
   overflow-y: auto;
   padding: 24px;
+  background: color-mix(in srgb, var(--md-sys-color-surface) 80%, transparent);
+  backdrop-filter: blur(16px);
 }
 
 .config-section {
@@ -768,6 +775,101 @@ async function handleSave() {
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* ===== 移动端适配 ===== */
+@media screen and (max-width: 768px) {
+  .editor-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  .toolbar-left {
+    width: 100%;
+  }
+
+  .toolbar-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .mode-toggle-btn,
+  .save-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .tab-bar {
+    padding: 0;
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: none;
+  }
+
+  .tab-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab-button {
+    padding: 12px 16px;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .tab-content {
+    padding: 16px;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .sticky-action-row {
+    position: static;
+    margin-top: 0;
+    margin-right: 0;
+    margin-bottom: 16px;
+    pointer-events: auto;
+  }
+
+  .sticky-action-row .add-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .card-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .config-card {
+    padding: 16px;
+  }
+
+  .test-result {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .empty-state {
+    padding: 48px 16px;
   }
 }
 </style>
