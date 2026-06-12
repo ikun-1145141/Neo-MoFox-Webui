@@ -12,11 +12,11 @@ import Icon from '../components/common/Icon.vue'
 import { useToastStore } from '../utils/toast'
 import { getLogFiles, getLogContent } from '../api/modules/log'
 import { API_BASE_URL } from '../api/config'
-import type { RealtimeLogEntry, LogFileInfo, LogContentResponse } from '../api/types/log'
+import type { RealtimeLogEntry, LogFileInfo, LogContentResponse, StructuredLogLine } from '../api/types/log'
 
 type WsStatus = 'disconnected' | 'connecting' | 'connected'
 type HistoryLoadMode = 'replace' | 'prepend' | 'append'
-type HistoryMeta = Omit<LogContentResponse, 'content'>
+type HistoryMeta = Omit<LogContentResponse, 'content' | 'entries' | 'total_matches' | 'query'>
 
 const toastStore = useToastStore()
 
@@ -25,6 +25,7 @@ const activeTab = ref<'realtime' | 'history'>('realtime')
 const realtimeLogs = ref<RealtimeLogEntry[]>([])
 const wsStatus = ref<WsStatus>('disconnected')
 const autoScroll = ref(true)
+const atBottom = ref(true)
 const searchText = ref('')
 const selectedLevel = ref('ALL')
 const logContainerRef = ref<HTMLElement | null>(null)
@@ -33,7 +34,10 @@ const maxLogEntries = 2000
 
 const logFiles = ref<LogFileInfo[]>([])
 const selectedFile = ref<string>('')
+const fileSearchText = ref('')
+const historySearchText = ref('')
 const historyLines = ref<string[]>([])
+const historyEntries = ref<StructuredLogLine[]>([])
 const historyLoading = ref(false)
 const historyLoadingPrev = ref(false)
 const historyLoadingNext = ref(false)
@@ -77,6 +81,15 @@ const logStats = computed(() => {
   return stats
 })
 
+const filteredLogFiles = computed(() => {
+  const keyword = fileSearchText.value.trim().toLowerCase()
+  if (!keyword) return logFiles.value
+  return logFiles.value.filter((file) => {
+    const haystack = `${file.filename} ${file.modified_time} ${file.path}`.toLowerCase()
+    return haystack.includes(keyword)
+  })
+})
+
 const wsStatusText = computed(() => {
   if (wsStatus.value === 'connected') return '已连接'
   if (wsStatus.value === 'connecting') return '连接中'
@@ -89,6 +102,54 @@ const historyProgressText = computed(() => {
   const loadedSize = Math.max(0, historyEndOffset.value - historyStartOffset.value)
   return `${formatFileSize(loadedSize)} / ${formatFileSize(meta.total_size)}`
 })
+
+function visibleHistoryBadges(entry: StructuredLogLine): string[] {
+  return entry.badges.filter((badge) => badge !== entry.source)
+}
+
+function visibleHistoryLineParts(entry: StructuredLogLine): Array<{ text: string; hit: boolean }> {
+  if (!entry.search_matches.length) return [{ text: entry.raw, hit: false }]
+
+  const parts: Array<{ text: string; hit: boolean }> = []
+  let cursor = 0
+  for (const match of entry.search_matches) {
+    if (match.start > cursor) {
+      parts.push({ text: entry.raw.slice(cursor, match.start), hit: false })
+    }
+    parts.push({ text: entry.raw.slice(match.start, match.end), hit: true })
+    cursor = match.end
+  }
+  if (cursor < entry.raw.length) {
+    parts.push({ text: entry.raw.slice(cursor), hit: false })
+  }
+  return parts
+}
+
+function fallbackHistoryEntries(lines: string[]): StructuredLogLine[] {
+  return lines.map((line) => ({
+    raw: line,
+    timestamp: '',
+    level: 'INFO',
+    level_label: '信息',
+    tone: 'info',
+    color: '#0075de',
+    source: '',
+    message: line,
+    badges: [],
+    search_matches: [],
+  }))
+}
+
+function historyEntryStyle(entry: StructuredLogLine): Record<string, string> {
+  return {
+    '--history-entry-color': entry.color || levelColor(entry.level),
+    '--history-entry-bg': levelBg(entry.level),
+  }
+}
+
+function historyFilterLevels(): string[] {
+  return selectedLevel.value === 'ALL' ? [] : [selectedLevel.value]
+}
 
 function connectWs(): void {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
@@ -270,7 +331,9 @@ function scrollToBottom(): void {
 function handleRealtimeScroll(): void {
   const container = logContainerRef.value
   if (!container) return
-  autoScroll.value = isNearBottom(container)
+  const nearBottom = isNearBottom(container)
+  atBottom.value = nearBottom
+  autoScroll.value = nearBottom
 }
 
 function isNearTop(container: HTMLElement, threshold = 72): boolean {
@@ -327,7 +390,13 @@ async function loadFileContent(
   setHistoryLoading(mode, true)
 
   try {
-    const data = await getLogContent(filename, offset, historyChunkLimit)
+    const data = await getLogContent(
+      filename,
+      offset,
+      historyChunkLimit,
+      historySearchText.value.trim(),
+      historyFilterLevels(),
+    )
     applyHistoryChunk(data, mode)
 
     await nextTick()
@@ -358,13 +427,22 @@ function applyHistoryChunk(data: LogContentResponse, mode: HistoryLoadMode): voi
 
   if (mode === 'replace') {
     historyLines.value = data.content
+    historyEntries.value = data.entries?.length ? data.entries : fallbackHistoryEntries(data.content)
     historyStartOffset.value = data.offset
     historyEndOffset.value = data.next_offset
   } else if (mode === 'prepend') {
     historyLines.value = [...data.content, ...historyLines.value]
+    historyEntries.value = [
+      ...(data.entries?.length ? data.entries : fallbackHistoryEntries(data.content)),
+      ...historyEntries.value,
+    ]
     historyStartOffset.value = data.offset
   } else {
     historyLines.value = [...historyLines.value, ...data.content]
+    historyEntries.value = [
+      ...historyEntries.value,
+      ...(data.entries?.length ? data.entries : fallbackHistoryEntries(data.content)),
+    ]
     historyEndOffset.value = data.next_offset
   }
 
@@ -387,6 +465,7 @@ function extractHistoryMeta(data: LogContentResponse): HistoryMeta {
 function selectLogFile(filename: string): void {
   selectedFile.value = filename
   historyLines.value = []
+  historyEntries.value = []
   historyMeta.value = null
   historyStartOffset.value = 0
   historyEndOffset.value = 0
@@ -394,6 +473,19 @@ function selectLogFile(filename: string): void {
   historyHasNext.value = false
   loadedHistoryOffsets.value = new Set()
   loadFileContent(filename)
+}
+
+function refreshHistorySearch(): void {
+  if (!selectedFile.value) return
+  historyLines.value = []
+  historyEntries.value = []
+  historyMeta.value = null
+  historyStartOffset.value = 0
+  historyEndOffset.value = 0
+  historyHasPrev.value = false
+  historyHasNext.value = false
+  loadedHistoryOffsets.value = new Set()
+  loadFileContent(selectedFile.value)
 }
 
 function handleHistoryScroll(): void {
@@ -416,11 +508,21 @@ function formatFileSize(bytes: number): string {
 }
 
 function formatTimestamp(ts: string): string {
-  try {
-    return new Date(ts).toLocaleString()
-  } catch {
-    return ts
-  }
+  const normalized = ts.trim()
+  if (!normalized) return ''
+
+  const parsed = new Date(normalized)
+  if (Number.isNaN(parsed.getTime())) return normalized
+
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(parsed)
 }
 
 watch(activeTab, (tab) => {
@@ -505,7 +607,7 @@ onUnmounted(() => {
                 </button>
                 <button
                   class="pill-action scroll-to-bottom-action"
-                  :disabled="autoScroll || filteredLogs.length === 0"
+                  :disabled="autoScroll || atBottom || filteredLogs.length === 0"
                   @click="autoScroll = true; scrollToBottom()"
                 >
                   <Icon icon="material-symbols:arrow-downward-rounded" width="16" height="16" />
@@ -542,7 +644,7 @@ onUnmounted(() => {
                 :style="{ '--entry-level-color': levelColor(entry.level), '--entry-level-bg': levelBg(entry.level) }"
               >
                 <span class="shell-prompt">❯</span>
-                <span class="log-time">{{ entry.timestamp }}</span>
+                <span class="log-time">{{ formatTimestamp(entry.timestamp) }}</span>
                 <span class="log-level-badge">{{ entry.level }}</span>
                 <span class="log-logger">{{ entry.display || entry.logger_name || 'core' }}</span>
                 <span class="log-message">{{ entry.message }}</span>
@@ -552,7 +654,7 @@ onUnmounted(() => {
 
           <div class="status-bar">
             <span>共 {{ realtimeLogs.length }} 条 · 显示 {{ filteredLogs.length }} 条</span>
-            <span v-if="lastRealtimeAt">最后更新 {{ lastRealtimeAt }}</span>
+            <span v-if="lastRealtimeAt">最后更新 {{ formatTimestamp(lastRealtimeAt) }}</span>
           </div>
         </section>
       </div>
@@ -569,12 +671,16 @@ onUnmounted(() => {
                 <Icon icon="material-symbols:refresh-rounded" width="18" height="18" />
               </button>
             </div>
-            <div v-if="logFiles.length === 0" class="empty-state small">
-              <p>暂无日志文件</p>
+            <label class="history-search-field file-search-field">
+              <Icon icon="material-symbols:search-rounded" width="18" height="18" />
+              <input v-model="fileSearchText" placeholder="搜索日志文件..." />
+            </label>
+            <div v-if="filteredLogFiles.length === 0" class="empty-state small">
+              <p>{{ logFiles.length === 0 ? '暂无日志文件' : '没有匹配的日志文件' }}</p>
             </div>
             <div v-else class="file-list">
               <button
-                v-for="file in logFiles"
+                v-for="file in filteredLogFiles"
                 :key="file.filename"
                 class="file-item"
                 :class="{ active: selectedFile === file.filename }"
@@ -607,6 +713,17 @@ onUnmounted(() => {
                 <span class="content-meta">{{ historyProgressText }}</span>
               </div>
 
+              <div class="history-toolbar">
+                <label class="history-search-field">
+                  <Icon icon="material-symbols:find_in_page-outline-rounded" width="18" height="18" />
+                  <input v-model="historySearchText" placeholder="搜索当前日志内容..." @keyup.enter="refreshHistorySearch" />
+                </label>
+                <button class="pill-action" @click="refreshHistorySearch">
+                  <Icon icon="material-symbols:manage-search-rounded" width="18" height="18" />
+                  搜索内容
+                </button>
+              </div>
+
               <div class="history-content-wrap" ref="historyContainerRef" @scroll="handleHistoryScroll">
                 <div v-if="historyLoading" class="empty-state">
                   <Icon icon="material-symbols:progress-activity-rounded" width="36" height="36" />
@@ -616,7 +733,30 @@ onUnmounted(() => {
                   <div v-if="historyLoadingPrev" class="load-sentinel">正在加载上方内容...</div>
                   <div v-else-if="!historyHasPrev && historyLines.length > 0" class="load-sentinel muted">已到达文件开头</div>
 
-                  <pre class="history-content">{{ historyLines.join('\n') }}</pre>
+                  <div class="history-content">
+                    <article
+                      v-for="(entry, index) in historyEntries"
+                      :key="`${entry.raw}-${index}`"
+                      class="history-entry log-entry"
+                      :class="`tone-${entry.tone}`"
+                      :style="historyEntryStyle(entry)"
+                    >
+                      <span class="shell-prompt">❯</span>
+                      <span class="log-time history-time">{{ entry.timestamp ? formatTimestamp(entry.timestamp) : '——:——:——' }}</span>
+                      <span class="log-level-badge history-level">{{ entry.level }}</span>
+                      <span class="log-logger history-source" :title="entry.source || 'core'">{{ entry.source || 'core' }}</span>
+                      <code class="log-message history-message">
+                        <template v-for="(part, partIndex) in visibleHistoryLineParts(entry)" :key="partIndex">
+                          <mark v-if="part.hit">{{ part.text }}</mark>
+                          <span v-else>{{ part.text }}</span>
+                        </template>
+                      </code>
+                      <span v-for="badge in visibleHistoryBadges(entry)" :key="badge" class="history-badge">{{ badge }}</span>
+                    </article>
+                    <div v-if="historyEntries.length === 0" class="empty-state small">
+                      <p>没有匹配的日志内容</p>
+                    </div>
+                  </div>
 
                   <div v-if="historyLoadingNext" class="load-sentinel">正在加载下方内容...</div>
                   <div v-else-if="!historyHasNext && historyLines.length > 0" class="load-sentinel muted">已到达文件末尾</div>
@@ -1093,6 +1233,7 @@ h1 {
 
 .log-logger {
   flex: 0 1 160px;
+  min-width: 0;
   color: var(--md-sys-color-primary);
   font-size: 11.5px;
   font-weight: 800;
@@ -1263,6 +1404,38 @@ h1 {
   font-weight: 800;
 }
 
+.history-toolbar {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+}
+
+.history-search-field {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  min-height: 40px;
+  padding: .48rem .72rem;
+  border: 1px solid var(--soft-border);
+  border-radius: 14px;
+  color: var(--md-sys-color-on-surface-variant);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-lowest) 68%, transparent);
+}
+
+.file-search-field {
+  margin-bottom: .75rem;
+}
+
+.history-search-field input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: var(--md-sys-color-on-surface);
+  background: transparent;
+  font-size: .86rem;
+}
+
 .history-content-wrap {
   flex: 1;
   min-height: clamp(280px, 48dvh, 560px);
@@ -1270,21 +1443,77 @@ h1 {
   overflow: auto;
   border: 1px solid var(--soft-border);
   border-radius: 20px;
-  background: var(--glass-surface);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: transparent;
 }
 
 .history-content {
   min-height: 100%;
   margin: 0;
-  padding: 1rem;
+  padding: .55rem;
   color: var(--md-sys-color-on-surface);
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: .8rem;
-  line-height: 1.65;
+  font-family: Inter, 'Noto Sans SC', system-ui, sans-serif;
+  font-size: 12.5px;
+  line-height: 1.32;
+}
+
+.history-entry {
+  border-left: 3px solid var(--history-entry-color);
+}
+
+.history-entry + .history-entry {
+  margin-top: .22rem;
+}
+
+.history-level,
+.history-badge,
+.history-source {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  padding: .12rem .42rem;
+  border-radius: 999px;
+  font-family: Inter, 'Noto Sans SC', system-ui, sans-serif;
+  font-size: .68rem;
+  font-weight: 900;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.history-level {
+  color: var(--history-entry-color);
+  background: color-mix(in srgb, var(--history-entry-color) 12%, transparent);
+}
+
+.history-badge {
+  flex: 0 0 auto;
+  color: var(--md-sys-color-on-surface-variant);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high) 72%, transparent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-time {
+  color: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 78%, transparent);
+  font-family: Inter, 'Noto Sans SC', system-ui, sans-serif;
+  font-size: .7rem;
+  font-weight: 700;
+}
+
+.history-message {
+  min-width: 0;
+  color: var(--md-sys-color-on-surface);
+  background: transparent;
+  font: inherit;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.history-message mark {
+  border-radius: 5px;
+  padding: .02rem .12rem;
+  color: var(--md-sys-color-on-tertiary-container);
+  background: var(--md-sys-color-tertiary-container);
 }
 
 .load-sentinel {
@@ -1306,25 +1535,27 @@ h1 {
 @media (max-width: 1100px) {
   .history-layout {
     display: flex;
-    flex-direction: column;
+    flex-direction: column-reverse;
+    overflow: visible;
   }
 
   .file-list-panel {
     border-right: 0;
-    border-bottom: 1px solid var(--soft-border);
-    max-height: 220px;
+    border-top: 1px solid var(--soft-border);
+    max-height: 42dvh;
     flex-shrink: 0;
   }
 
   .content-panel {
-    flex: 1 0 460px;
+    flex: 1 0 auto;
+    min-height: 60dvh;
     max-height: none;
   }
 }
 
 @media (max-width: 820px) {
   .control-card {
-    grid-template-columns: minmax(150px, 1fr) minmax(134px, 176px) auto;
+    grid-template-columns: 1fr;
     gap: .4rem;
   }
 
@@ -1517,6 +1748,62 @@ h1 {
     max-width: 100%;
   }
 
+  .log-entry .log-logger,
+  .history-entry .history-source {
+    flex: 1 1 8rem;
+    max-width: min(100%, 12rem);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .content-header,
+  .history-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .history-entry {
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: .12rem .38rem;
+    padding: .22rem .34rem;
+    border-left-width: 2px;
+  }
+
+  .history-entry .history-badge {
+    display: none;
+  }
+
+  .history-entry .log-time {
+    max-width: 5.6rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .history-entry .log-level-badge {
+    min-width: 4.25rem;
+  }
+
+  .history-entry .history-source {
+    flex: 0 1 7.2rem;
+    max-width: 7.2rem;
+  }
+
+  .history-entry .history-message {
+    flex: 1 1 100%;
+    padding-left: .2rem;
+    line-height: 1.38;
+  }
+
+  .history-content-wrap {
+    min-height: 54dvh;
+    max-height: none;
+  }
+
   .status-bar {
     align-items: flex-start;
     flex-direction: column;
@@ -1577,6 +1864,14 @@ h1 {
 
   .history-content-wrap {
     height: 360px;
+  }
+}
+
+@media (max-width: 425px) {
+  .log-container {
+    height: clamp(260px, 46dvh, 340px);
+    min-height: 0;
+    flex: 0 0 auto;
   }
 }
 

@@ -56,11 +56,34 @@ class LogFileListResponse(BaseModel):
     log_dir: str = Field(description="日志目录路径")
 
 
+class LogSearchMatch(BaseModel):
+    """日志搜索命中区间。"""
+
+    start: int = Field(description="命中起始位置")
+    end: int = Field(description="命中结束位置")
+
+
+class StructuredLogLine(BaseModel):
+    """结构化日志行。"""
+
+    raw: str = Field(description="原始日志文本")
+    timestamp: str = Field(default="", description="日志时间")
+    level: str = Field(default="INFO", description="日志级别")
+    level_label: str = Field(default="信息", description="日志级别中文标签")
+    tone: str = Field(default="info", description="前端渲染色调")
+    color: str = Field(default="#0075de", description="前端强调色")
+    source: str = Field(default="", description="日志来源")
+    message: str = Field(description="日志正文")
+    badges: list[str] = Field(default_factory=list, description="日志标签")
+    search_matches: list[LogSearchMatch] = Field(default_factory=list, description="搜索命中")
+
+
 class LogContentResponse(BaseModel):
     """日志内容响应模型。
 
     Attributes:
         content: 日志内容文本行
+        entries: 结构化日志行
         offset: 当前偏移量
         size: 本次返回的字节数
         total_size: 日志文件总大小
@@ -68,9 +91,12 @@ class LogContentResponse(BaseModel):
         has_next: 是否可向后加载更多
         next_offset: 下次向后请求的偏移量
         prev_offset: 下次向前请求的偏移量
+        total_matches: 当前分块内搜索命中行数
+        query: 搜索关键词
     """
 
     content: list[str] = Field(description="日志内容文本行")
+    entries: list[StructuredLogLine] = Field(default_factory=list, description="结构化日志行")
     offset: int = Field(description="当前偏移量")
     size: int = Field(description="本次返回的字节数")
     total_size: int = Field(description="日志文件总大小")
@@ -78,6 +104,8 @@ class LogContentResponse(BaseModel):
     has_next: bool = Field(description="是否可向后加载更多")
     next_offset: int = Field(description="下次向后请求的偏移量")
     prev_offset: int = Field(description="下次向前请求的偏移量")
+    total_matches: int = Field(default=0, description="当前分块内搜索命中行数")
+    query: str = Field(default="", description="搜索关键词")
 
 
 # ========== Router ==========
@@ -234,6 +262,8 @@ class LogRouter(BaseRouter):
             filename: str = Query(description="日志文件名"),
             offset: int = Query(default=0, ge=0, description="偏移量（字节）"),
             limit: int = Query(default=65536, ge=1024, le=1048576, description="返回大小限制（字节）"),
+            query: str = Query(default="", max_length=128, description="日志内容搜索关键词"),
+            levels: list[str] | None = Query(default=None, description="日志级别过滤"),
         ) -> BaseResponse[LogContentResponse]:
             """获取日志文件内容（基于字节偏移量的分块获取）。
 
@@ -241,6 +271,8 @@ class LogRouter(BaseRouter):
                 filename: 日志文件名
                 offset: 偏移量（字节），0 表示从头开始
                 limit: 本次返回的内容大小限制（字节），默认 64KB
+                query: 日志内容搜索关键词
+                levels: 日志级别过滤
 
             Returns:
                 包含日志内容和分页信息的响应
@@ -251,6 +283,8 @@ class LogRouter(BaseRouter):
                     filename=filename,
                     offset=offset,
                     limit=limit,
+                    query=query,
+                    levels=levels,
                 )
                 return BaseResponse.ok(data=result, message="获取日志内容成功")
             except FileNotFoundError:

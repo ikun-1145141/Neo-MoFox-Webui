@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 from collections import deque
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +24,49 @@ DEFAULT_LOG_DIR = Path("logs")
 
 # 实时日志缓冲区大小
 LOG_BUFFER_SIZE = 200
+
+LOG_LINE_PATTERNS = (
+    re.compile(
+        r"^(?P<timestamp>\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d{1,6})?)"
+        r"\s*[|\-\]]\s*"
+        r"(?P<level>TRACE|DEBUG|INFO|SUCCESS|WARNING|WARN|ERROR|CRITICAL|FATAL)"
+        r"\s*[|\-\]]\s*"
+        r"(?:(?P<source>[\w.:-]+)\s*[|\-\]]\s*)?"
+        r"(?P<message>.*)$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^\[(?P<timestamp>\d{2}:\d{2}:\d{2})\]\s+"
+        r"(?P<source>[^|]+?)\s*\|\s*"
+        r"(?P<level>TRACE|DEBUG|INFO|SUCCESS|WARNING|WARN|ERROR|CRITICAL|FATAL)\s*\|\s*"
+        r"(?P<message>.*)$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^\[(?P<timestamp>[^\]]+)\]\s*"
+        r"\[(?P<level>TRACE|DEBUG|INFO|SUCCESS|WARNING|WARN|ERROR|CRITICAL|FATAL)\]\s*"
+        r"(?:\[(?P<source>[^\]]+)\]\s*)?"
+        r"(?P<message>.*)$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^(?P<level>TRACE|DEBUG|INFO|SUCCESS|WARNING|WARN|ERROR|CRITICAL|FATAL)"
+        r"\s*[:|\-]\s*(?P<message>.*)$",
+        re.IGNORECASE,
+    ),
+)
+
+LEVEL_STYLE_MAP: dict[str, tuple[str, str, str]] = {
+    "TRACE": ("trace", "#7c6f64", "跟踪"),
+    "DEBUG": ("debug", "#615d59", "调试"),
+    "INFO": ("info", "#0075de", "信息"),
+    "SUCCESS": ("success", "#1aae39", "成功"),
+    "WARNING": ("warning", "#dd5b00", "警告"),
+    "WARN": ("warning", "#dd5b00", "警告"),
+    "ERROR": ("error", "#d32f2f", "错误"),
+    "CRITICAL": ("critical", "#9f1239", "严重"),
+    "FATAL": ("critical", "#9f1239", "致命"),
+}
 
 
 class LogEntry(BaseModel):
@@ -62,11 +107,34 @@ class LogFileInfo(BaseModel):
     path: str = Field(description="相对路径")
 
 
+class LogSearchMatch(BaseModel):
+    """日志搜索命中区间。"""
+
+    start: int = Field(description="命中起始位置")
+    end: int = Field(description="命中结束位置")
+
+
+class StructuredLogLine(BaseModel):
+    """结构化日志行。"""
+
+    raw: str = Field(description="原始日志文本")
+    timestamp: str = Field(default="", description="日志时间")
+    level: str = Field(default="INFO", description="日志级别")
+    level_label: str = Field(default="信息", description="日志级别中文标签")
+    tone: str = Field(default="info", description="前端渲染色调")
+    color: str = Field(default="#0075de", description="前端强调色")
+    source: str = Field(default="", description="日志来源")
+    message: str = Field(description="日志正文")
+    badges: list[str] = Field(default_factory=list, description="日志标签")
+    search_matches: list[LogSearchMatch] = Field(default_factory=list, description="搜索命中")
+
+
 class LogContentResponse(BaseModel):
     """日志内容响应模型。
 
     Attributes:
         content: 日志内容（按行）
+        entries: 结构化日志行
         offset: 当前偏移量（字节）
         size: 本次实际返回的大小（字节）
         total_size: 日志文件总大小（字节）
@@ -74,9 +142,12 @@ class LogContentResponse(BaseModel):
         has_next: 是否可以向后（向下）加载更多
         next_offset: 下次向下请求的偏移量
         prev_offset: 下次向上请求的偏移量
+        total_matches: 当前分块内搜索命中行数
+        query: 搜索关键词
     """
 
     content: list[str] = Field(description="日志内容（按行）")
+    entries: list[StructuredLogLine] = Field(default_factory=list, description="结构化日志行")
     offset: int = Field(description="当前偏移量（字节）")
     size: int = Field(description="本次实际返回的大小（字节）")
     total_size: int = Field(description="日志文件总大小（字节）")
@@ -84,6 +155,8 @@ class LogContentResponse(BaseModel):
     has_next: bool = Field(description="是否可以向后加载更多")
     next_offset: int = Field(description="下次向下请求的偏移量")
     prev_offset: int = Field(description="下次向上请求的偏移量")
+    total_matches: int = Field(default=0, description="当前分块内搜索命中行数")
+    query: str = Field(default="", description="搜索关键词")
 
 
 class LogManager:
@@ -178,8 +251,6 @@ class LogManager:
         for file_path in self._log_dir.glob("*.log"):
             if file_path.is_file():
                 stat = file_path.stat()
-                from datetime import datetime, timezone
-
                 modified_time = datetime.fromtimestamp(
                     stat.st_mtime, tz=timezone.utc
                 ).isoformat()
@@ -201,6 +272,8 @@ class LogManager:
         filename: str,
         offset: int = 0,
         limit: int = 8192,
+        query: str = "",
+        levels: list[str] | None = None,
     ) -> LogContentResponse:
         """获取日志文件内容（基于字节偏移量）。
 
@@ -208,6 +281,8 @@ class LogManager:
             filename: 日志文件名
             offset: 起始偏移量（字节），0 表示从头开始
             limit: 本次返回的最大字节数
+            query: 日志内容搜索关键词
+            levels: 日志级别过滤列表
 
         Returns:
             日志内容响应
@@ -239,6 +314,7 @@ class LogManager:
                 has_next=False,
                 next_offset=total_size,
                 prev_offset=max(0, offset - limit),
+                query=query.strip(),
             )
 
         # 读取内容
@@ -248,6 +324,7 @@ class LogManager:
 
         actual_size = len(raw.encode("utf-8"))
         lines = raw.splitlines()
+        level_filter = {level.upper() for level in levels or [] if level.strip()}
 
         # 如果不是从文件开头读取，第一行可能是不完整的，去掉它
         if offset > 0 and lines:
@@ -267,11 +344,18 @@ class LogManager:
                             # 只有一行且不完整
                             lines = []
 
+        entries = [self._parse_log_line(line, query) for line in lines]
+        if level_filter:
+            entries = [entry for entry in entries if entry.level.upper() in level_filter]
+        if query.strip():
+            entries = [entry for entry in entries if entry.search_matches]
+
         next_offset = offset + actual_size
         prev_offset = max(0, offset - limit)
 
         return LogContentResponse(
-            content=lines,
+            content=[entry.raw for entry in entries],
+            entries=entries,
             offset=offset,
             size=actual_size,
             total_size=total_size,
@@ -279,7 +363,105 @@ class LogManager:
             has_next=next_offset < total_size,
             next_offset=next_offset,
             prev_offset=prev_offset,
+            total_matches=sum(1 for entry in entries if entry.search_matches),
+            query=query.strip(),
         )
+
+    def _parse_log_line(self, line: str, query: str = "") -> StructuredLogLine:
+        """将原始日志行解析为前端可渲染的结构化信息。
+
+        Args:
+            line: 原始日志行
+            query: 搜索关键词
+
+        Returns:
+            结构化日志行
+        """
+        timestamp = ""
+        level = "INFO"
+        source = ""
+        message = line
+
+        for pattern in LOG_LINE_PATTERNS:
+            match = pattern.match(line)
+            if match is None:
+                continue
+            groups = match.groupdict()
+            timestamp = str(groups.get("timestamp") or "")
+            level = str(groups.get("level") or "INFO").upper()
+            source = str(groups.get("source") or "")
+            message = str(groups.get("message") or line)
+            break
+
+        tone, color, level_label = LEVEL_STYLE_MAP.get(level, LEVEL_STYLE_MAP["INFO"])
+        badges = self._build_log_badges(line, level, source)
+        search_matches = self._find_search_matches(line, query)
+
+        return StructuredLogLine(
+            raw=line,
+            timestamp=timestamp,
+            level=level,
+            level_label=level_label,
+            tone=tone,
+            color=color,
+            source=source,
+            message=message,
+            badges=badges,
+            search_matches=search_matches,
+        )
+
+    def _build_log_badges(self, line: str, level: str, source: str) -> list[str]:
+        """基于日志内容生成提示标签。
+
+        Args:
+            line: 原始日志行
+            level: 日志级别
+            source: 日志来源
+
+        Returns:
+            前端可展示的标签列表
+        """
+        text = line.lower()
+        badges: list[str] = []
+        if source:
+            badges.append(source)
+        if "websocket" in text or "ws" in text:
+            badges.append("WebSocket")
+        if "http" in text or "api" in text:
+            badges.append("API")
+        if "exception" in text or "traceback" in text:
+            badges.append("异常栈")
+        if "timeout" in text or "超时" in text:
+            badges.append("超时")
+        if level in {"ERROR", "CRITICAL", "FATAL"}:
+            badges.append("需关注")
+        return list(dict.fromkeys(badges))[:4]
+
+    def _find_search_matches(self, line: str, query: str) -> list[LogSearchMatch]:
+        """查找日志行内关键词命中范围。
+
+        Args:
+            line: 原始日志行
+            query: 搜索关键词
+
+        Returns:
+            命中区间列表
+        """
+        keyword = query.strip()
+        if not keyword:
+            return []
+
+        matches: list[LogSearchMatch] = []
+        lowered_line = line.lower()
+        lowered_keyword = keyword.lower()
+        start = 0
+        while True:
+            index = lowered_line.find(lowered_keyword, start)
+            if index < 0:
+                break
+            matches.append(LogSearchMatch(start=index, end=index + len(keyword)))
+            start = index + len(keyword)
+        return matches
 
 
 # 全局单例

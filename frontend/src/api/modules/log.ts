@@ -25,14 +25,18 @@ export async function getLogFiles(): Promise<LogFileListResponse> {
  * @param filename - 日志文件名
  * @param offset - 偏移量（字节），0 表示从头开始
  * @param limit - 本次返回的最大字节数
+ * @param query - 日志内容搜索关键词
+ * @param levels - 日志级别过滤列表
  * @returns 日志内容分块响应
  */
 export async function getLogContent(
   filename: string,
   offset: number = 0,
-  limit: number = 65536
+  limit: number = 65536,
+  query: string = '',
+  levels: string[] = [],
 ): Promise<LogContentResponse> {
   return instance.get(`${LOG_PREFIX}/content`, {
-    params: { filename, offset, limit },
+    params: { filename, offset, limit, query, levels },
   })
 }
