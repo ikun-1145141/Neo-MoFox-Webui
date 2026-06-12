@@ -17,7 +17,7 @@
       <div class="editor-toolbar">
         <div class="toolbar-left">
           <h2 class="config-title">{{ title }}</h2>
-          <span v-if="configPath" class="config-path">{{ configPath }}</span>
+          <span v-if="configPath" class="config-path" :title="configPath">{{ displayConfigPath }}</span>
         </div>
 
         <div class="toolbar-right">
@@ -177,6 +177,15 @@ const currentSectionSchema = computed(() => {
     return []
   }
   return [sortedSchema.value[activeSectionIndex.value]]
+})
+
+// 配置路径显示文本，过长时使用中间省略号保留首尾关键信息
+const displayConfigPath = computed(() => {
+  if (!props.configPath || props.configPath.length <= 42) {
+    return props.configPath
+  }
+
+  return `${props.configPath.slice(0, 18)}...${props.configPath.slice(-21)}`
 })
 
 // 是否有未保存的更改
@@ -416,9 +425,11 @@ watch(codeContent, (newCode) => {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
 }
 
 .config-title {
+  flex-shrink: 0;
   margin: 0;
   font-size: 20px;
   font-weight: 600;
@@ -426,6 +437,12 @@ watch(codeContent, (newCode) => {
 }
 
 .config-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: min(420px, 45vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12px;
   color: var(--md-sys-color-outline);
   padding: 4px 8px;
@@ -553,6 +570,10 @@ watch(codeContent, (newCode) => {
 
   .toolbar-left {
     width: 100%;
+  }
+
+  .config-path {
+    max-width: 100%;
   }
 
   .toolbar-right {

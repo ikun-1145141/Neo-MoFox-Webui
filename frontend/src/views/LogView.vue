@@ -26,7 +26,7 @@ const realtimeLogs = ref<RealtimeLogEntry[]>([])
 const wsStatus = ref<WsStatus>('disconnected')
 const autoScroll = ref(true)
 const searchText = ref('')
-const selectedLevels = ref<Set<string>>(new Set())
+const selectedLevel = ref('ALL')
 const logContainerRef = ref<HTMLElement | null>(null)
 const lastRealtimeAt = ref<string>('')
 const maxLogEntries = 2000
@@ -53,8 +53,9 @@ const LOG_LEVELS = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] as const
 
 const filteredLogs = computed(() => {
   const keyword = searchText.value.trim().toLowerCase()
+  const levelFilter = selectedLevel.value
   return realtimeLogs.value.filter((entry) => {
-    if (selectedLevels.value.size > 0 && !selectedLevels.value.has(entry.level.toUpperCase())) {
+    if (levelFilter !== 'ALL' && entry.level.toUpperCase() !== levelFilter) {
       return false
     }
 
@@ -241,18 +242,14 @@ function appendRealtimeLog(value: unknown): void {
 
 function sendLevelFilter(): void {
   if (ws && ws.readyState === WebSocket.OPEN) {
-    const levels = selectedLevels.value.size > 0 ? Array.from(selectedLevels.value) : null
+    const levels = selectedLevel.value === 'ALL' ? null : [selectedLevel.value]
     ws.send(JSON.stringify({ type: 'set_level_filter', levels }))
   }
 }
 
-function toggleLevel(level: string): void {
-  if (selectedLevels.value.has(level)) {
-    selectedLevels.value.delete(level)
-  } else {
-    selectedLevels.value.add(level)
-  }
-  selectedLevels.value = new Set(selectedLevels.value)
+function updateLevelFilter(event: Event): void {
+  const target = event.target as HTMLSelectElement
+  selectedLevel.value = target.value
   sendLevelFilter()
 }
 
@@ -450,7 +447,7 @@ onUnmounted(() => {
         <div class="hero-copy">
           <span class="eyebrow">SYSTEM OBSERVABILITY</span>
           <h1>日志查看器</h1>
-          <p>实时追踪运行状态，快速检索历史日志，并通过滚动无缝加载上下文。</p>
+          <p>实时追踪运行状态，快速检索历史日志。</p>
         </div>
         <div class="hero-actions">
           <div class="hero-metric">
@@ -476,84 +473,80 @@ onUnmounted(() => {
       </div>
 
       <div v-if="activeTab === 'realtime'" class="realtime-section">
-        <div class="stat-grid">
-          <button
-            v-for="level in LOG_LEVELS"
-            :key="level"
-            class="stat-card mini"
-            :class="{ selected: selectedLevels.has(level) }"
-            :style="{ '--level-accent': levelColor(level), '--level-tint': levelBg(level) }"
-            @click="toggleLevel(level)"
-          >
-            <span class="stat-level">{{ level }}</span>
-            <strong>{{ logStats[level] || 0 }}</strong>
-          </button>
-        </div>
+        <section class="realtime-panel">
+          <div class="control-card">
+            <label class="search-field">
+              <Icon icon="material-symbols:search-rounded" width="19" height="19" />
+              <input v-model="searchText" placeholder="搜索消息、来源或显示名..." />
+            </label>
 
-        <div class="control-card">
-          <label class="search-field">
-            <Icon icon="material-symbols:search-rounded" width="19" height="19" />
-            <input v-model="searchText" placeholder="搜索消息、来源或显示名..." />
-          </label>
-          <div class="toolbar-right">
-            <button class="pill-action" :class="{ active: autoScroll }" @click="autoScroll = !autoScroll">
-              <Icon icon="material-symbols:vertical-align-bottom-rounded" width="18" height="18" />
-              自动滚动
-            </button>
-            <button class="icon-button" @click="clearLogs" title="清空日志">
-              <Icon icon="material-symbols:delete-outline-rounded" width="20" height="20" />
-            </button>
-            <button
-              class="icon-button"
-              @click="wsStatus === 'connected' ? disconnectWs() : connectWs()"
-              :title="wsStatus === 'connected' ? '断开' : '连接'"
-            >
-              <Icon
-                :icon="wsStatus === 'connected' ? 'material-symbols:link-off-rounded' : 'material-symbols:link-rounded'"
-                width="20"
-                height="20"
-              />
-            </button>
-          </div>
-        </div>
+            <label class="level-select-field">
+              <span>日志等级</span>
+              <select :value="selectedLevel" @change="updateLevelFilter">
+                <option value="ALL">全部等级</option>
+                <option v-for="level in LOG_LEVELS" :key="level" :value="level">
+                  {{ level }} · {{ logStats[level] || 0 }}
+                </option>
+              </select>
+              <Icon icon="material-symbols:keyboard-arrow-down-rounded" width="20" height="20" />
+            </label>
 
-        <div class="log-container" ref="logContainerRef" @scroll="handleRealtimeScroll">
-          <div class="terminal-topbar">
-            <div class="traffic-lights">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
-            <span>{{ wsStatus === 'connected' ? 'Live stream' : 'Stream paused' }}</span>
-          </div>
-
-          <div v-if="filteredLogs.length === 0" class="empty-state">
-            <Icon icon="material-symbols:terminal-rounded" width="48" height="48" />
-            <p>{{ wsStatus === 'connected' ? '等待新的日志输出...' : '实时日志服务未连接' }}</p>
-          </div>
-          <div v-else class="log-entries">
-            <div
-              v-for="(entry, idx) in filteredLogs"
-              :key="`${entry.timestamp}-${idx}`"
-              class="log-entry"
-              :style="{ '--entry-level-color': levelColor(entry.level), '--entry-level-bg': levelBg(entry.level) }"
-            >
-              <span class="log-time">{{ entry.timestamp }}</span>
-              <span class="log-level-badge">{{ entry.level }}</span>
-              <span class="log-logger">{{ entry.display || entry.logger_name || 'core' }}</span>
-              <span class="log-message">{{ entry.message }}</span>
+            <div class="toolbar-right">
+              <button class="pill-action" :class="{ active: autoScroll }" @click="autoScroll = !autoScroll">
+                <Icon icon="material-symbols:vertical-align-bottom-rounded" width="18" height="18" />
+                自动滚动
+              </button>
+              <button
+                class="pill-action scroll-to-bottom-action"
+                :disabled="autoScroll || filteredLogs.length === 0"
+                @click="autoScroll = true; scrollToBottom()"
+              >
+                <Icon icon="material-symbols:arrow-downward-rounded" width="16" height="16" />
+                回到底部
+              </button>
+              <button class="icon-button" @click="clearLogs" title="清空日志">
+                <Icon icon="material-symbols:delete-outline-rounded" width="20" height="20" />
+              </button>
+              <button
+                class="icon-button"
+                @click="wsStatus === 'connected' ? disconnectWs() : connectWs()"
+                :title="wsStatus === 'connected' ? '断开' : '连接'"
+              >
+                <Icon
+                  :icon="wsStatus === 'connected' ? 'material-symbols:link-off-rounded' : 'material-symbols:link-rounded'"
+                  width="20"
+                  height="20"
+                />
+              </button>
             </div>
           </div>
-        </div>
 
-        <div class="status-bar">
-          <span>共 {{ realtimeLogs.length }} 条 · 显示 {{ filteredLogs.length }} 条</span>
-          <span v-if="lastRealtimeAt">最后更新 {{ lastRealtimeAt }}</span>
-          <button v-if="!autoScroll" class="scroll-hint" @click="autoScroll = true; scrollToBottom()">
-            <Icon icon="material-symbols:arrow-downward-rounded" width="14" height="14" />
-            回到底部
-          </button>
-        </div>
+          <div class="log-container" ref="logContainerRef" @scroll="handleRealtimeScroll">
+            <div v-if="filteredLogs.length === 0" class="empty-state">
+              <Icon icon="material-symbols:terminal-rounded" width="48" height="48" />
+              <p>{{ wsStatus === 'connected' ? '等待新的日志输出...' : '实时日志服务未连接' }}</p>
+            </div>
+            <div v-else class="log-entries">
+              <div
+                v-for="(entry, idx) in filteredLogs"
+                :key="`${entry.timestamp}-${idx}`"
+                class="log-entry"
+                :style="{ '--entry-level-color': levelColor(entry.level), '--entry-level-bg': levelBg(entry.level) }"
+              >
+                <span class="shell-prompt">❯</span>
+                <span class="log-time">{{ entry.timestamp }}</span>
+                <span class="log-level-badge">{{ entry.level }}</span>
+                <span class="log-logger">{{ entry.display || entry.logger_name || 'core' }}</span>
+                <span class="log-message">{{ entry.message }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="status-bar">
+            <span>共 {{ realtimeLogs.length }} 条 · 显示 {{ filteredLogs.length }} 条</span>
+            <span v-if="lastRealtimeAt">最后更新 {{ lastRealtimeAt }}</span>
+          </div>
+        </section>
       </div>
 
       <div v-else class="history-section">
@@ -633,9 +626,13 @@ onUnmounted(() => {
 .log-page {
   --page-shadow: 0 18px 48px rgba(0, 0, 0, .08), 0 4px 18px rgba(0, 0, 0, .045), 0 1px 4px rgba(0, 0, 0, .035);
   --soft-border: color-mix(in srgb, var(--md-sys-color-outline-variant) 72%, transparent);
+  --glass-surface: color-mix(in srgb, var(--md-sys-color-surface-container-lowest) 72%, transparent);
   display: flex;
   flex-direction: column;
-  gap: 1.2rem;
+  gap: .75rem;
+  height: calc(100dvh - var(--app-top-bar-height, 64px) - var(--app-bottom-nav-height, 0px));
+  min-height: 0;
+  overflow: hidden;
 }
 
 h1,
@@ -650,6 +647,11 @@ input {
   font: inherit;
 }
 
+select:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+
 button:focus-visible,
 input:focus-visible {
   outline: 2px solid var(--md-sys-color-primary);
@@ -657,10 +659,8 @@ input:focus-visible {
 }
 
 .hero-card,
-.control-card,
-.log-container,
-.history-layout,
-.stat-card {
+.realtime-panel,
+.history-layout {
   border: 1px solid var(--soft-border);
   background: linear-gradient(145deg, color-mix(in srgb, var(--md-sys-color-surface-container-lowest) 92%, transparent), color-mix(in srgb, var(--md-sys-color-surface-container-low) 88%, transparent));
   box-shadow: var(--page-shadow);
@@ -672,21 +672,22 @@ input:focus-visible {
   position: relative;
   display: flex;
   justify-content: space-between;
-  align-items: stretch;
-  gap: 1.2rem;
-  padding: clamp(1.25rem, 3vw, 2rem);
-  border-radius: var(--md-sys-shape-corner-extra-large);
+  align-items: center;
+  gap: .95rem;
+  padding: clamp(.85rem, 2vw, 1.25rem);
+  border-radius: 24px;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .hero-card::before {
   content: '';
   position: absolute;
-  inset: -40% auto auto 58%;
-  width: 360px;
-  height: 360px;
+  inset: -80% auto auto 62%;
+  width: 260px;
+  height: 260px;
   border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--md-sys-color-primary) 28%, transparent), transparent 68%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--md-sys-color-primary) 24%, transparent), transparent 68%);
   pointer-events: none;
 }
 
@@ -706,19 +707,19 @@ input:focus-visible {
 }
 
 h1 {
-  margin-top: .35rem;
+  margin-top: .2rem;
   color: var(--md-sys-color-on-surface);
-  font-size: clamp(2rem, 4.6vw, 3.65rem);
-  line-height: .98;
-  letter-spacing: -.055em;
+  font-size: clamp(1.55rem, 3vw, 2.45rem);
+  line-height: 1;
+  letter-spacing: -.045em;
 }
 
 .hero-copy p {
-  max-width: 38rem;
-  margin-top: .7rem;
+  max-width: 34rem;
+  margin-top: .35rem;
   color: var(--md-sys-color-on-surface-variant);
-  font-size: 1rem;
-  line-height: 1.65;
+  font-size: .9rem;
+  line-height: 1.45;
 }
 
 .hero-actions {
@@ -742,9 +743,9 @@ h1 {
 .hero-metric {
   flex-direction: column;
   align-items: flex-start;
-  gap: .1rem;
-  padding: .7rem .9rem;
-  border-radius: 18px;
+  gap: .05rem;
+  padding: .55rem .75rem;
+  border-radius: 16px;
 }
 
 .hero-metric span {
@@ -755,7 +756,7 @@ h1 {
 
 .hero-metric strong {
   color: var(--md-sys-color-on-surface);
-  font-size: 1.6rem;
+  font-size: 1.25rem;
   line-height: 1;
 }
 
@@ -794,11 +795,12 @@ h1 {
 .tab-bar {
   display: inline-flex;
   align-self: flex-start;
-  gap: .28rem;
-  padding: .32rem;
+  gap: .25rem;
+  padding: .25rem;
   border: 1px solid var(--soft-border);
   border-radius: var(--md-sys-shape-corner-full);
   background: color-mix(in srgb, var(--md-sys-color-surface-container-high) 88%, transparent);
+  flex-shrink: 0;
 }
 
 .tab-item {
@@ -830,86 +832,85 @@ h1 {
 .realtime-section,
 .history-section {
   display: flex;
+  flex: 1;
+  min-height: 0;
   flex-direction: column;
-  gap: 1rem;
+  gap: .7rem;
 }
 
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: .8rem;
-}
-
-.stat-card.mini {
-  position: relative;
+.realtime-panel {
   display: flex;
+  flex: 1;
+  min-height: 0;
   flex-direction: column;
-  align-items: flex-start;
-  gap: .3rem;
-  min-height: 86px;
-  padding: .85rem;
-  border-radius: 20px;
-  color: var(--md-sys-color-on-surface);
-  cursor: pointer;
+  gap: .6rem;
+  padding: .65rem;
+  border-radius: 24px;
   overflow: hidden;
-  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
-}
-
-.stat-card.mini::after {
-  content: '';
-  position: absolute;
-  inset: auto .8rem .8rem auto;
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  background: var(--level-tint);
-}
-
-.stat-card.mini:hover {
-  transform: translateY(-2px);
-}
-
-.stat-card.mini.selected {
-  border-color: var(--level-accent);
-  background: linear-gradient(145deg, var(--level-tint), color-mix(in srgb, var(--md-sys-color-surface-container-lowest) 82%, transparent));
-}
-
-.stat-level {
-  position: relative;
-  z-index: 1;
-  color: var(--level-accent);
-  font-size: .72rem;
-  font-weight: 900;
-  letter-spacing: .08em;
-}
-
-.stat-card.mini strong {
-  position: relative;
-  z-index: 1;
-  color: var(--md-sys-color-on-surface);
-  font-size: 1.72rem;
-  line-height: 1;
 }
 
 .control-card {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(180px, 240px) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: .75rem;
-  padding: .75rem;
-  border-radius: 22px;
+  gap: .55rem;
+  padding: .1rem;
+  flex-shrink: 0;
 }
 
 .search-field {
   display: flex;
   align-items: center;
-  gap: .55rem;
-  width: min(100%, 460px);
-  padding: .72rem .9rem;
+  gap: .5rem;
+  width: 100%;
+  min-height: 42px;
+  padding: .55rem .8rem;
   border: 1px solid var(--soft-border);
-  border-radius: 16px;
+  border-radius: 14px;
   color: var(--md-sys-color-on-surface-variant);
-  background: var(--md-sys-color-surface-container-lowest);
+  background: var(--glass-surface);
+  backdrop-filter: blur(12px);
+}
+
+.level-select-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  min-height: 42px;
+  padding: .35rem .72rem;
+  border: 1px solid var(--soft-border);
+  border-radius: 14px;
+  color: var(--md-sys-color-on-surface-variant);
+  background: var(--glass-surface);
+  backdrop-filter: blur(12px);
+}
+
+.level-select-field span {
+  flex: 0 0 auto;
+  color: var(--md-sys-color-primary);
+  font-size: .72rem;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.level-select-field select {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  appearance: none;
+  color: var(--md-sys-color-on-surface);
+  background: transparent;
+  font-size: .9rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.level-select-field .icon {
+  flex: 0 0 auto;
+  pointer-events: none;
 }
 
 .search-field input {
@@ -935,8 +936,7 @@ h1 {
 }
 
 .icon-button,
-.pill-action,
-.scroll-hint {
+.pill-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -954,8 +954,7 @@ h1 {
 }
 
 .icon-button:hover,
-.pill-action:hover,
-.scroll-hint:hover {
+.pill-action:hover:not(:disabled) {
   transform: translateY(-1px);
   background: color-mix(in srgb, var(--md-sys-color-primary) 10%, transparent);
 }
@@ -977,96 +976,92 @@ h1 {
   font-weight: 800;
 }
 
+.pill-action:disabled {
+  color: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 48%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-outline-variant) 28%, transparent);
+  cursor: not-allowed;
+  opacity: .72;
+}
+
+.scroll-to-bottom-action {
+  white-space: nowrap;
+}
+
 .log-container {
-  min-height: 430px;
-  max-height: calc(100vh - 420px);
+  flex: 1;
+  min-height: 0;
   overflow: auto;
-  border-radius: 24px;
-  background: linear-gradient(180deg, #111318, #17191f);
-  color: #e8e8ef;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-primary) 18%, var(--soft-border));
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--md-sys-color-primary) 16%, transparent), transparent 32%),
+    linear-gradient(180deg, color-mix(in srgb, var(--md-sys-color-surface-container-lowest) 76%, transparent), color-mix(in srgb, var(--md-sys-color-surface-container-low) 68%, transparent));
+  color: var(--md-sys-color-on-surface);
   scroll-behavior: smooth;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .24), 0 16px 44px rgba(0, 0, 0, .08);
+  backdrop-filter: blur(22px) saturate(1.2);
+  -webkit-backdrop-filter: blur(22px) saturate(1.2);
 }
 
-.terminal-topbar {
-  position: sticky;
-  top: 0;
-  z-index: 2;
+.log-entry {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: .62rem .85rem;
-  border-bottom: 1px solid rgba(255, 255, 255, .08);
-  background: rgba(17, 19, 24, .88);
-  backdrop-filter: blur(14px);
-  color: rgba(255, 255, 255, .56);
-  font-size: .72rem;
-  font-weight: 800;
-  letter-spacing: .08em;
-  text-transform: uppercase;
+  align-items: baseline;
+  gap: .5rem;
+  font-family: Inter, 'Noto Sans SC', system-ui, sans-serif;
+  font-size: 12.5px;
+  line-height: 1.32;
 }
 
-.traffic-lights {
-  display: inline-flex;
-  gap: .4rem;
+.shell-prompt {
+  color: var(--md-sys-color-primary);
+  font-weight: 900;
 }
-
-.traffic-lights span {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
-.traffic-lights span:nth-child(1) { background: #ff5f56; }
-.traffic-lights span:nth-child(2) { background: #ffbd2e; }
-.traffic-lights span:nth-child(3) { background: #27c93f; }
 
 .log-entries {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: .65rem;
+  gap: .15rem;
+  padding: .55rem;
 }
 
 .log-entry {
-  display: grid;
-  grid-template-columns: minmax(132px, auto) auto minmax(112px, 180px) minmax(0, 1fr);
-  gap: .65rem;
-  align-items: baseline;
-  padding: .48rem .62rem;
-  border-left: 3px solid transparent;
+  padding: .22rem .42rem;
   border-radius: 12px;
-  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-  font-size: .8rem;
-  line-height: 1.55;
-  transition: background .15s ease, border-color .15s ease;
+  background: var(--entry-level-bg);
+  transition: background .12s ease, transform .12s ease;
 }
 
 .log-entry:hover {
-  border-left-color: var(--entry-level-color);
-  background: color-mix(in srgb, var(--entry-level-bg) 76%, rgba(255, 255, 255, .04));
+  transform: translateX(2px);
+  background: color-mix(in srgb, var(--entry-level-color) 13%, transparent);
+}
+
+.shell-prompt {
+  flex: 0 0 auto;
 }
 
 .log-time {
-  color: rgba(255, 255, 255, .46);
-  font-size: .72rem;
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 74%, transparent);
+  font-size: 11.5px;
+  font-weight: 700;
   white-space: nowrap;
 }
 
 .log-level-badge {
-  min-width: 58px;
-  padding: .12rem .45rem;
-  border-radius: 999px;
+  flex: 0 0 auto;
+  min-width: 66px;
   color: var(--entry-level-color);
-  background: var(--entry-level-bg);
-  font-size: .68rem;
+  font-size: 11px;
   font-weight: 900;
-  text-align: center;
+  letter-spacing: .04em;
   white-space: nowrap;
 }
 
 .log-logger {
-  color: #62aef0;
-  font-size: .74rem;
+  flex: 0 1 160px;
+  color: var(--md-sys-color-primary);
+  font-size: 11.5px;
   font-weight: 800;
   white-space: nowrap;
   overflow: hidden;
@@ -1074,7 +1069,8 @@ h1 {
 }
 
 .log-message {
-  color: rgba(255, 255, 255, .9);
+  min-width: 0;
+  color: var(--md-sys-color-on-surface);
   word-break: break-word;
   white-space: pre-wrap;
 }
@@ -1083,11 +1079,12 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: .75rem;
-  min-height: 34px;
-  padding: 0 .3rem;
+  gap: .65rem;
+  min-height: 26px;
+  padding: 0 .28rem;
   color: var(--md-sys-color-on-surface-variant);
-  font-size: .8rem;
+  font-size: .76rem;
+  flex-shrink: 0;
 }
 
 .scroll-hint {
@@ -1112,7 +1109,7 @@ h1 {
 }
 
 .log-container .empty-state {
-  color: rgba(255, 255, 255, .58);
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 .empty-state.small {
@@ -1129,16 +1126,17 @@ h1 {
 .history-layout {
   display: grid;
   grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
-  min-height: 58vh;
-  border-radius: var(--md-sys-shape-corner-extra-large);
+  flex: 1;
+  min-height: 0;
+  border-radius: 24px;
   overflow: hidden;
 }
 
 .file-list-panel {
   border-right: 1px solid var(--soft-border);
-  padding: 1rem;
+  padding: .85rem;
   overflow-y: auto;
-  max-height: calc(100vh - 310px);
+  min-height: 0;
 }
 
 .panel-header,
@@ -1215,11 +1213,11 @@ h1 {
 
 .content-panel {
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: .9rem;
-  padding: 1.1rem;
-  max-height: calc(100vh - 310px);
+  gap: .7rem;
+  padding: .85rem;
 }
 
 .content-meta {
@@ -1234,11 +1232,13 @@ h1 {
 
 .history-content-wrap {
   flex: 1;
-  min-height: 420px;
+  min-height: 0;
   overflow: auto;
   border: 1px solid var(--soft-border);
   border-radius: 20px;
-  background: var(--md-sys-color-surface-container-lowest);
+  background: var(--glass-surface);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 .history-content {
@@ -1279,14 +1279,22 @@ h1 {
     border-right: 0;
     border-bottom: 1px solid var(--soft-border);
     max-height: 220px;
+    flex-shrink: 0;
   }
 
   .content-panel {
+    flex: 1 0 460px;
     max-height: none;
   }
 }
 
 @media (max-width: 760px) {
+  .log-page {
+    height: auto;
+    min-height: calc(100dvh - var(--app-top-bar-height, 64px) - var(--app-bottom-nav-height, 0px));
+    overflow: visible;
+  }
+
   .hero-card {
     flex-direction: column;
     border-radius: 22px;
@@ -1312,28 +1320,50 @@ h1 {
   }
 
   .control-card {
-    flex-direction: column;
+    grid-template-columns: 1fr;
     align-items: stretch;
   }
 
-  .search-field {
+  .search-field,
+  .level-select-field {
     width: auto;
   }
 
   .toolbar-right {
-    justify-content: flex-end;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-content: stretch;
+  }
+
+  .toolbar-right .pill-action {
+    width: 100%;
+    padding-inline: .55rem;
+    font-size: .78rem;
+  }
+
+  .toolbar-right .icon-button {
+    width: 100%;
+  }
+
+  .realtime-panel {
+    min-height: 0;
   }
 
   .log-container {
-    min-height: 330px;
-    max-height: calc(100vh - 470px);
+    height: 420px;
+    min-height: 0;
+    flex: 0 0 auto;
     border-radius: 18px;
   }
 
+  .shell-command-line,
   .log-entry {
-    grid-template-columns: 1fr;
-    gap: .18rem;
-    padding: .62rem .65rem;
+    flex-wrap: wrap;
+    gap: .18rem .5rem;
+  }
+
+  .log-entry {
+    padding: .28rem .2rem;
   }
 
   .log-logger {
@@ -1346,6 +1376,7 @@ h1 {
   }
 
   .history-layout {
+    min-height: 0;
     border-radius: 22px;
   }
 
@@ -1360,13 +1391,15 @@ h1 {
   }
 
   .history-content-wrap {
-    min-height: 340px;
+    height: 440px;
+    min-height: 0;
+    flex: 0 0 auto;
   }
 }
 
 @media (max-width: 460px) {
-  .stat-grid {
-    grid-template-columns: 1fr;
+  .log-page {
+    gap: .6rem;
   }
 
   h1 {
@@ -1379,9 +1412,32 @@ h1 {
   }
 
   .hero-metric,
-  .ws-status,
-  .pill-action {
+  .ws-status {
     flex: 1;
+  }
+
+  .hero-card,
+  .realtime-panel,
+  .history-layout {
+    border-radius: 18px;
+  }
+
+  .realtime-panel,
+  .content-panel,
+  .file-list-panel {
+    padding: .6rem;
+  }
+
+  .log-container,
+  .history-content-wrap {
+    height: 360px;
+  }
+}
+
+@media (max-width: 360px) {
+  .toolbar-right .pill-action {
+    grid-column: 1 / -1;
   }
 }
 </style>
+
