@@ -40,6 +40,12 @@ const router = createRouter({
       meta: { requiresAuth: true, title: '插件详情', icon: 'material-symbols:extension-outline-rounded' },
     },
     {
+      path: '/chat',
+      name: 'chat',
+      component: () => import('../views/ChatView.vue'),
+      meta: { requiresAuth: true, title: '聊天监视', icon: 'material-symbols:chat-outline-rounded' },
+    },
+    {
       path: '/llm-metrics',
       name: 'llm-metrics',
       component: () => import('../views/llm-metrics/LLMMetricsView.vue'),

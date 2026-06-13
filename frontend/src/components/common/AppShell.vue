@@ -23,6 +23,7 @@ const { t } = useI18n()
 const navItems = [
   { labelKey: 'app.nav.home', icon: 'material-symbols:home-outline-rounded', name: 'home', path: '/' },
   { labelKey: 'app.nav.config', icon: 'material-symbols:tune-rounded', name: 'config', path: '/config' },
+  { labelKey: 'app.nav.chat', icon: 'material-symbols:chat-outline-rounded', name: 'chat', path: '/chat' },
   { labelKey: 'app.nav.plugins', icon: 'material-symbols:extension-outline-rounded', name: 'plugins', path: '/plugins' },
   { labelKey: 'app.nav.config-plugins', icon: 'material-symbols:settings-outline-rounded', name: 'config-plugins', path: '/config/plugins' },
   { labelKey: 'app.nav.llmMetrics', icon: 'material-symbols:bar-chart-rounded', name: 'llm-metrics', path: '/llm-metrics' },

@@ -59,8 +59,18 @@
             "dependencies": []
         },
         {
+            "component_type": "router",
+            "component_name": "chat",
+            "dependencies": []
+        },
+        {
             "component_type": "event_handler",
             "component_name": "log_broadcast",
+            "dependencies": []
+        },
+        {
+            "component_type": "event_handler",
+            "component_name": "webui_chat_broadcast",
             "dependencies": []
         }
     ],

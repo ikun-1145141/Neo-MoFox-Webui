@@ -10,6 +10,7 @@ from src.core.components.loader import register_plugin
 from src.app.plugin_system.api.log_api import get_logger
 
 from .components.router.auth_router import AuthRouter
+from .components.router.chat_router import ChatRouter
 from .components.router.dashboard_router import DashboardRouter
 from .components.router.llm_metrics_router import LLMMetricsRouter
 from .components.router.request_inspector_router import RequestInspectorRouter
@@ -26,7 +27,7 @@ from .components.router.config import (
     McpConfigRouter,
     PluginConfigRouter,
 )
-from .components.handlers import WebuiStartupPanelHandler, LogBroadcastHandler
+from .components.handlers import WebuiStartupPanelHandler, LogBroadcastHandler, ChatBroadcastHandler
 
 logger = get_logger("webui_plugin")
 
@@ -56,6 +57,7 @@ class WebuiPlugin(BasePlugin):
         """
         components: list[type] = [
             AuthRouter,
+            ChatRouter,
             DashboardRouter,
             LLMMetricsRouter,
             RequestInspectorRouter,
@@ -67,6 +69,7 @@ class WebuiPlugin(BasePlugin):
             LogRouter,
             WebuiStartupPanelHandler,
             LogBroadcastHandler,
+            ChatBroadcastHandler,
             # 配置管理路由
             MainConfigRouter,
             BotConfigRouter,
