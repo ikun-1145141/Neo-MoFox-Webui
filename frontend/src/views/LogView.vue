@@ -10,6 +10,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import AppShell from '../components/common/AppShell.vue'
 import Icon from '../components/common/Icon.vue'
 import { useToastStore } from '../utils/toast'
+import { useI18n } from '../utils/i18n'
 import { getLogFiles, getLogContent } from '../api/modules/log'
 import { API_BASE_URL } from '../api/config'
 import type { RealtimeLogEntry, LogFileInfo, LogContentResponse, StructuredLogLine } from '../api/types/log'
@@ -19,6 +20,7 @@ type HistoryLoadMode = 'replace' | 'prepend' | 'append'
 type HistoryMeta = Omit<LogContentResponse, 'content' | 'entries' | 'total_matches' | 'query'>
 
 const toastStore = useToastStore()
+const { t, locale } = useI18n()
 
 const activeTab = ref<'realtime' | 'history'>('realtime')
 
@@ -90,15 +92,11 @@ const filteredLogFiles = computed(() => {
   })
 })
 
-const wsStatusText = computed(() => {
-  if (wsStatus.value === 'connected') return '已连接'
-  if (wsStatus.value === 'connecting') return '连接中'
-  return '已断开'
-})
+const wsStatusText = computed(() => t(`log.status.${wsStatus.value}`))
 
 const historyProgressText = computed(() => {
   const meta = historyMeta.value
-  if (!meta) return '未加载日志内容'
+  if (!meta) return t('log.history.unloadedProgress')
   const loadedSize = Math.max(0, historyEndOffset.value - historyStartOffset.value)
   return `${formatFileSize(loadedSize)} / ${formatFileSize(meta.total_size)}`
 })
@@ -108,19 +106,20 @@ function visibleHistoryBadges(entry: StructuredLogLine): string[] {
 }
 
 function visibleHistoryLineParts(entry: StructuredLogLine): Array<{ text: string; hit: boolean }> {
-  if (!entry.search_matches.length) return [{ text: entry.raw, hit: false }]
+  const content = entry.message || entry.raw
+  if (!entry.search_matches.length || content !== entry.raw) return [{ text: content, hit: false }]
 
   const parts: Array<{ text: string; hit: boolean }> = []
   let cursor = 0
   for (const match of entry.search_matches) {
     if (match.start > cursor) {
-      parts.push({ text: entry.raw.slice(cursor, match.start), hit: false })
+      parts.push({ text: content.slice(cursor, match.start), hit: false })
     }
-    parts.push({ text: entry.raw.slice(match.start, match.end), hit: true })
+    parts.push({ text: content.slice(match.start, match.end), hit: true })
     cursor = match.end
   }
-  if (cursor < entry.raw.length) {
-    parts.push({ text: entry.raw.slice(cursor), hit: false })
+  if (cursor < content.length) {
+    parts.push({ text: content.slice(cursor), hit: false })
   }
   return parts
 }
@@ -130,7 +129,7 @@ function fallbackHistoryEntries(lines: string[]): StructuredLogLine[] {
     raw: line,
     timestamp: '',
     level: 'INFO',
-    level_label: '信息',
+    level_label: 'INFO',
     tone: 'info',
     color: '#0075de',
     source: '',
@@ -202,7 +201,7 @@ function connectWs(): void {
       event,
     })
     wsStatus.value = 'disconnected'
-    toastStore.show('实时日志连接异常，请检查后端服务', 'error')
+    toastStore.show(t('log.toast.wsError'), 'error')
   }
 }
 
@@ -371,7 +370,7 @@ async function loadLogFiles(): Promise<void> {
     const data = await getLogFiles()
     logFiles.value = data.files
   } catch {
-    toastStore.show('获取日志文件列表失败', 'error')
+    toastStore.show(t('log.toast.fileListFailed'), 'error')
   }
 }
 
@@ -408,7 +407,7 @@ async function loadFileContent(
       historyContainerRef.value.scrollTop = 0
     }
   } catch {
-    toastStore.show('获取日志内容失败', 'error')
+    toastStore.show(t('log.toast.contentFailed'), 'error')
   } finally {
     setHistoryLoading(mode, false)
   }
@@ -514,7 +513,7 @@ function formatTimestamp(ts: string): string {
   const parsed = new Date(normalized)
   if (Number.isNaN(parsed.getTime())) return normalized
 
-  return new Intl.DateTimeFormat('zh-CN', {
+  return new Intl.DateTimeFormat(locale.value, {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -543,40 +542,16 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <AppShell>
-    <section class="log-page">
-      <header class="hero-card">
-        <div class="hero-copy">
-          <span class="eyebrow">SYSTEM OBSERVABILITY</span>
-          <h1>日志查看器</h1>
-          <p>实时追踪运行状态，快速检索历史日志。</p>
-        </div>
-        <div class="hero-actions">
-          <div class="hero-metric">
-            <span>当前缓冲</span>
-            <strong>{{ realtimeLogs.length }}</strong>
-          </div>
-          <div class="ws-status" :class="wsStatus">
-            <span class="ws-dot"></span>
-            <span>{{ wsStatusText }}</span>
-          </div>
-          <button
-            class="hero-connect-button"
-            @click="wsStatus === 'connected' ? disconnectWs() : connectWs()"
-          >
-            {{ wsStatus === 'connected' ? '断开' : '连接' }}
-          </button>
-        </div>
-      </header>
-
-      <div class="tab-bar" role="tablist" aria-label="日志模式">
+  <AppShell no-padding>
+    <section class="log-page" :aria-label="t('routes.log')">
+      <div class="tab-bar" role="tablist" :aria-label="t('log.tabs.aria')">
         <button class="tab-item" :class="{ active: activeTab === 'realtime' }" @click="activeTab = 'realtime'">
           <Icon icon="material-symbols:stream-rounded" width="18" height="18" />
-          <span>实时日志</span>
+          <span>{{ t('log.tabs.realtime') }}</span>
         </button>
         <button class="tab-item" :class="{ active: activeTab === 'history' }" @click="activeTab = 'history'">
           <Icon icon="material-symbols:folder-open-outline-rounded" width="18" height="18" />
-          <span>历史日志</span>
+          <span>{{ t('log.tabs.history') }}</span>
         </button>
       </div>
 
@@ -585,13 +560,13 @@ onUnmounted(() => {
           <div class="control-card">
             <label class="search-field">
               <Icon icon="material-symbols:search-rounded" width="19" height="19" />
-              <input v-model="searchText" placeholder="搜索消息、来源或显示名..." />
+              <input v-model="searchText" :placeholder="t('log.realtime.searchPlaceholder')" />
             </label>
 
             <label class="level-select-field">
-              <span>日志等级</span>
+              <span>{{ t('log.realtime.levelLabel') }}</span>
               <select :value="selectedLevel" @change="updateLevelFilter">
-                <option value="ALL">全部等级</option>
+                <option value="ALL">{{ t('log.realtime.allLevels') }}</option>
                 <option v-for="level in LOG_LEVELS" :key="level" :value="level">
                   {{ level }} · {{ logStats[level] || 0 }}
                 </option>
@@ -600,10 +575,20 @@ onUnmounted(() => {
             </label>
 
             <div class="toolbar-right">
+              <div class="inline-status-group">
+                <div class="hero-metric compact">
+                  <span>{{ t('log.realtime.currentBuffer') }}</span>
+                  <strong>{{ realtimeLogs.length }}</strong>
+                </div>
+                <div class="ws-status" :class="wsStatus">
+                  <span class="ws-dot"></span>
+                  <span>{{ wsStatusText }}</span>
+                </div>
+              </div>
               <div class="scroll-action-row">
                 <button class="pill-action" :class="{ active: autoScroll }" @click="autoScroll = !autoScroll">
                   <Icon icon="material-symbols:vertical-align-bottom-rounded" width="18" height="18" />
-                  自动滚动
+                  {{ t('log.realtime.autoScroll') }}
                 </button>
                 <button
                   class="pill-action scroll-to-bottom-action"
@@ -611,16 +596,16 @@ onUnmounted(() => {
                   @click="autoScroll = true; scrollToBottom()"
                 >
                   <Icon icon="material-symbols:arrow-downward-rounded" width="16" height="16" />
-                  回到底部
+                  {{ t('log.realtime.backToBottom') }}
                 </button>
               </div>
-              <button class="icon-button" @click="clearLogs" title="清空日志">
+              <button class="icon-button" @click="clearLogs" :title="t('log.realtime.clearTitle')">
                 <Icon icon="material-symbols:delete-outline-rounded" width="20" height="20" />
               </button>
               <button
                 class="icon-button"
                 @click="wsStatus === 'connected' ? disconnectWs() : connectWs()"
-                :title="wsStatus === 'connected' ? '断开' : '连接'"
+                :title="wsStatus === 'connected' ? t('log.realtime.disconnectTitle') : t('log.realtime.connectTitle')"
               >
                 <Icon
                   :icon="wsStatus === 'connected' ? 'material-symbols:link-off-rounded' : 'material-symbols:link-rounded'"
@@ -634,7 +619,7 @@ onUnmounted(() => {
           <div class="log-container" ref="logContainerRef" @scroll="handleRealtimeScroll">
             <div v-if="filteredLogs.length === 0" class="empty-state">
               <Icon icon="material-symbols:terminal-rounded" width="48" height="48" />
-              <p>{{ wsStatus === 'connected' ? '等待新的日志输出...' : '实时日志服务未连接' }}</p>
+              <p>{{ wsStatus === 'connected' ? t('log.realtime.waitingLogs') : t('log.realtime.serviceDisconnected') }}</p>
             </div>
             <div v-else class="log-entries">
               <div
@@ -653,8 +638,8 @@ onUnmounted(() => {
           </div>
 
           <div class="status-bar">
-            <span>共 {{ realtimeLogs.length }} 条 · 显示 {{ filteredLogs.length }} 条</span>
-            <span v-if="lastRealtimeAt">最后更新 {{ formatTimestamp(lastRealtimeAt) }}</span>
+            <span>{{ t('log.realtime.totalSummary', { total: String(realtimeLogs.length), visible: String(filteredLogs.length) }) }}</span>
+            <span v-if="lastRealtimeAt">{{ t('log.realtime.lastUpdated', { time: formatTimestamp(lastRealtimeAt) }) }}</span>
           </div>
         </section>
       </div>
@@ -664,19 +649,19 @@ onUnmounted(() => {
           <aside class="file-list-panel">
             <div class="panel-header">
               <div>
-                <span class="panel-kicker">Archives</span>
-                <h3>日志文件</h3>
+                <span class="panel-kicker">{{ t('log.history.archives') }}</span>
+                <h3>{{ t('log.history.filesTitle') }}</h3>
               </div>
-              <button class="icon-button" @click="loadLogFiles" title="刷新">
+              <button class="icon-button" @click="loadLogFiles" :title="t('log.history.refreshTitle')">
                 <Icon icon="material-symbols:refresh-rounded" width="18" height="18" />
               </button>
             </div>
             <label class="history-search-field file-search-field">
               <Icon icon="material-symbols:search-rounded" width="18" height="18" />
-              <input v-model="fileSearchText" placeholder="搜索日志文件..." />
+              <input v-model="fileSearchText" :placeholder="t('log.history.fileSearchPlaceholder')" />
             </label>
             <div v-if="filteredLogFiles.length === 0" class="empty-state small">
-              <p>{{ logFiles.length === 0 ? '暂无日志文件' : '没有匹配的日志文件' }}</p>
+              <p>{{ logFiles.length === 0 ? t('log.history.emptyFiles') : t('log.history.noMatchedFiles') }}</p>
             </div>
             <div v-else class="file-list">
               <button
@@ -701,13 +686,13 @@ onUnmounted(() => {
           <main class="content-panel">
             <div v-if="!selectedFile" class="empty-state hero-empty">
               <Icon icon="material-symbols:folder-open-outline-rounded" width="54" height="54" />
-              <p>选择一个日志文件查看内容</p>
-              <span>选中文件后，在内容区域上下滚动即可自动加载更多。</span>
+              <p>{{ t('log.history.selectFileTitle') }}</p>
+              <span>{{ t('log.history.selectFileHint') }}</span>
             </div>
             <template v-else>
               <div class="content-header">
                 <div>
-                  <span class="panel-kicker">History viewer</span>
+                  <span class="panel-kicker">{{ t('log.history.viewer') }}</span>
                   <h3>{{ selectedFile }}</h3>
                 </div>
                 <span class="content-meta">{{ historyProgressText }}</span>
@@ -716,22 +701,22 @@ onUnmounted(() => {
               <div class="history-toolbar">
                 <label class="history-search-field">
                   <Icon icon="material-symbols:find_in_page-outline-rounded" width="18" height="18" />
-                  <input v-model="historySearchText" placeholder="搜索当前日志内容..." @keyup.enter="refreshHistorySearch" />
+                  <input v-model="historySearchText" :placeholder="t('log.history.contentSearchPlaceholder')" @keyup.enter="refreshHistorySearch" />
                 </label>
                 <button class="pill-action" @click="refreshHistorySearch">
                   <Icon icon="material-symbols:manage-search-rounded" width="18" height="18" />
-                  搜索内容
+                  {{ t('log.history.searchContent') }}
                 </button>
               </div>
 
               <div class="history-content-wrap" ref="historyContainerRef" @scroll="handleHistoryScroll">
                 <div v-if="historyLoading" class="empty-state">
                   <Icon icon="material-symbols:progress-activity-rounded" width="36" height="36" />
-                  <p>正在加载日志内容...</p>
+                  <p>{{ t('log.history.loadingContent') }}</p>
                 </div>
                 <template v-else>
-                  <div v-if="historyLoadingPrev" class="load-sentinel">正在加载上方内容...</div>
-                  <div v-else-if="!historyHasPrev && historyLines.length > 0" class="load-sentinel muted">已到达文件开头</div>
+                  <div v-if="historyLoadingPrev" class="load-sentinel">{{ t('log.history.loadingPrev') }}</div>
+                  <div v-else-if="!historyHasPrev && historyLines.length > 0" class="load-sentinel muted">{{ t('log.history.fileStart') }}</div>
 
                   <div class="history-content">
                     <article
@@ -754,12 +739,12 @@ onUnmounted(() => {
                       <span v-for="badge in visibleHistoryBadges(entry)" :key="badge" class="history-badge">{{ badge }}</span>
                     </article>
                     <div v-if="historyEntries.length === 0" class="empty-state small">
-                      <p>没有匹配的日志内容</p>
+                      <p>{{ t('log.history.noMatchedContent') }}</p>
                     </div>
                   </div>
 
-                  <div v-if="historyLoadingNext" class="load-sentinel">正在加载下方内容...</div>
-                  <div v-else-if="!historyHasNext && historyLines.length > 0" class="load-sentinel muted">已到达文件末尾</div>
+                  <div v-if="historyLoadingNext" class="load-sentinel">{{ t('log.history.loadingNext') }}</div>
+                  <div v-else-if="!historyHasNext && historyLines.length > 0" class="load-sentinel muted">{{ t('log.history.fileEnd') }}</div>
                 </template>
               </div>
             </template>
@@ -777,10 +762,10 @@ onUnmounted(() => {
   --glass-surface: color-mix(in srgb, var(--md-sys-color-surface-container-lowest) 72%, transparent);
   display: flex;
   flex-direction: column;
-  gap: .75rem;
   height: calc(100dvh - var(--app-top-bar-height, 64px) - var(--app-bottom-nav-height, 0px));
   min-height: 0;
   overflow: hidden;
+  background: transparent;
 }
 
 h1,
@@ -806,77 +791,21 @@ input:focus-visible {
   outline-offset: 2px;
 }
 
-.hero-card,
 .realtime-panel,
 .history-layout {
-  border: 1px solid var(--soft-border);
-  background: linear-gradient(145deg, color-mix(in srgb, var(--md-sys-color-surface-container-lowest) 92%, transparent), color-mix(in srgb, var(--md-sys-color-surface-container-low) 88%, transparent));
-  box-shadow: var(--page-shadow);
-  backdrop-filter: blur(18px) saturate(1.08);
-  -webkit-backdrop-filter: blur(18px) saturate(1.08);
+  border: 0;
+  background: color-mix(in srgb, var(--md-sys-color-surface) 75%, transparent);
+  box-shadow: none;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
-.hero-card {
-  position: relative;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: .75rem;
-  padding: clamp(.62rem, 1.45vw, .95rem);
-  border-radius: 22px;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.hero-card::before {
-  content: '';
-  position: absolute;
-  inset: -80% auto auto 62%;
-  width: 260px;
-  height: 260px;
-  border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--md-sys-color-primary) 24%, transparent), transparent 68%);
-  pointer-events: none;
-}
-
-.hero-copy,
-.hero-actions {
-  position: relative;
-  z-index: 1;
-}
-
-.eyebrow,
 .panel-kicker {
   color: var(--md-sys-color-primary);
   font-size: .66rem;
   font-weight: 800;
   letter-spacing: .12em;
   text-transform: uppercase;
-}
-
-h1 {
-  margin-top: .12rem;
-  color: var(--md-sys-color-on-surface);
-  font-size: clamp(1.32rem, 2.45vw, 2rem);
-  line-height: .98;
-  letter-spacing: -.045em;
-}
-
-.hero-copy p {
-  max-width: 34rem;
-  margin-top: .22rem;
-  color: var(--md-sys-color-on-surface-variant);
-  font-size: .82rem;
-  line-height: 1.32;
-}
-
-.hero-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: .45rem;
-  flex-wrap: wrap;
-  min-width: 220px;
 }
 
 .hero-metric,
@@ -917,24 +846,6 @@ h1 {
   font-weight: 700;
 }
 
-.hero-connect-button {
-  min-height: 31px;
-  padding: 0 .62rem;
-  border: 1px solid color-mix(in srgb, var(--md-sys-color-primary) 18%, var(--soft-border));
-  border-radius: var(--md-sys-shape-corner-full);
-  color: var(--md-sys-color-primary);
-  background: color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent);
-  font-size: .72rem;
-  font-weight: 800;
-  cursor: pointer;
-  transition: transform .16s ease, background .16s ease, color .16s ease;
-}
-
-.hero-connect-button:hover {
-  transform: translateY(-1px);
-  background: color-mix(in srgb, var(--md-sys-color-primary) 13%, transparent);
-}
-
 .ws-dot {
   width: 9px;
   height: 9px;
@@ -959,14 +870,16 @@ h1 {
 }
 
 .tab-bar {
-  display: inline-flex;
-  align-self: flex-start;
-  gap: .25rem;
-  padding: .25rem;
-  border: 1px solid var(--soft-border);
-  border-radius: var(--md-sys-shape-corner-full);
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-high) 88%, transparent);
+  display: flex;
+  gap: 8px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 75%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   flex-shrink: 0;
+  z-index: 10;
+  overflow-x: auto;
 }
 
 .tab-item {
@@ -1001,7 +914,7 @@ h1 {
   flex: 1;
   min-height: 0;
   flex-direction: column;
-  gap: .7rem;
+  padding: 0;
 }
 
 .realtime-panel {
@@ -1011,7 +924,7 @@ h1 {
   flex-direction: column;
   gap: .6rem;
   padding: .65rem;
-  border-radius: 24px;
+  border-radius: 0;
   overflow: hidden;
 }
 
@@ -1035,7 +948,7 @@ h1 {
   border-radius: 14px;
   color: var(--md-sys-color-on-surface-variant);
   background: var(--glass-surface);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(6px);
 }
 
 .level-select-field {
@@ -1049,7 +962,7 @@ h1 {
   border-radius: 14px;
   color: var(--md-sys-color-on-surface-variant);
   background: var(--glass-surface);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(6px);
 }
 
 .level-select-field span {
@@ -1099,6 +1012,18 @@ h1 {
   justify-content: flex-end;
   gap: .45rem;
   flex-wrap: nowrap;
+}
+
+.inline-status-group {
+  display: inline-flex;
+  align-items: center;
+  gap: .38rem;
+  flex: 0 0 auto;
+}
+
+.hero-metric.compact {
+  min-height: 40px;
+  padding: .32rem .58rem;
 }
 
 .scroll-action-row {
@@ -1161,19 +1086,21 @@ h1 {
 }
 
 .log-container {
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
+  height: 100%;
   overflow: auto;
+  overscroll-behavior: contain;
   border: 1px solid color-mix(in srgb, var(--md-sys-color-primary) 18%, var(--soft-border));
   border-radius: 22px;
   background:
     radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--md-sys-color-primary) 16%, transparent), transparent 32%),
-    linear-gradient(180deg, color-mix(in srgb, var(--md-sys-color-surface-container-lowest) 76%, transparent), color-mix(in srgb, var(--md-sys-color-surface-container-low) 68%, transparent));
+    linear-gradient(180deg, color-mix(in srgb, var(--md-sys-color-surface-container-lowest) 62%, transparent), color-mix(in srgb, var(--md-sys-color-surface-container-low) 54%, transparent));
   color: var(--md-sys-color-on-surface);
   scroll-behavior: smooth;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .24), 0 16px 44px rgba(0, 0, 0, .08);
-  backdrop-filter: blur(22px) saturate(1.2);
-  -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 10px 28px rgba(0, 0, 0, .05);
+  backdrop-filter: blur(10px) saturate(1.08);
+  -webkit-backdrop-filter: blur(10px) saturate(1.08);
 }
 
 .log-entry {
@@ -1222,8 +1149,8 @@ h1 {
 }
 
 .log-level-badge {
-  flex: 0 0 auto;
-  min-width: 66px;
+  flex: 0 0 66px;
+  width: 66px;
   color: var(--entry-level-color);
   font-size: 11px;
   font-weight: 900;
@@ -1232,7 +1159,8 @@ h1 {
 }
 
 .log-logger {
-  flex: 0 1 160px;
+  flex: 0 0 160px;
+  width: 160px;
   min-width: 0;
   color: var(--md-sys-color-primary);
   font-size: 11.5px;
@@ -1302,7 +1230,7 @@ h1 {
   grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
   flex: 1;
   min-height: 0;
-  border-radius: 24px;
+  border-radius: 0;
   overflow: hidden;
 }
 
@@ -1437,13 +1365,18 @@ h1 {
 }
 
 .history-content-wrap {
-  flex: 1;
-  min-height: clamp(280px, 48dvh, 560px);
-  max-height: clamp(380px, 62dvh, 720px);
+  flex: 1 1 0;
+  min-height: 0;
   overflow: auto;
-  border: 1px solid var(--soft-border);
+  overscroll-behavior: contain;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-primary) 16%, var(--soft-border));
   border-radius: 20px;
-  background: transparent;
+  background:
+    radial-gradient(circle at 14% 0%, color-mix(in srgb, var(--md-sys-color-primary) 12%, transparent), transparent 34%),
+    color-mix(in srgb, var(--md-sys-color-surface-container-lowest) 66%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 10px 28px rgba(0, 0, 0, .045);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .history-content {
@@ -1478,6 +1411,14 @@ h1 {
   font-weight: 900;
   line-height: 1.4;
   white-space: nowrap;
+}
+
+.history-level {
+  justify-content: center;
+}
+
+.history-source {
+  justify-content: flex-start;
 }
 
 .history-level {
@@ -1530,6 +1471,17 @@ h1 {
 .load-sentinel.muted {
   color: var(--md-sys-color-on-surface-variant);
   background: transparent;
+}
+
+@media (max-width: 1180px) {
+  .control-card {
+    grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px);
+  }
+
+  .toolbar-right {
+    grid-column: 1 / -1;
+    justify-content: space-between;
+  }
 }
 
 @media (max-width: 1100px) {
@@ -1604,32 +1556,9 @@ h1 {
     overflow: visible;
   }
 
-  .hero-card {
-    flex-direction: column;
-    gap: .6rem;
-    padding: .78rem;
-    border-radius: 22px;
-  }
-
-  h1 {
-    margin-top: .12rem;
-    font-size: clamp(1.32rem, 6vw, 1.75rem);
-  }
-
-  .hero-copy p {
-    margin-top: .24rem;
-    font-size: .82rem;
-    line-height: 1.35;
-  }
-
-  .eyebrow {
-    font-size: .66rem;
-  }
-
-  .hero-actions {
-    justify-content: flex-start;
-    gap: .35rem;
-    min-width: 0;
+  .realtime-section,
+  .history-section {
+    padding: 0;
   }
 
   .hero-metric,
@@ -1637,18 +1566,8 @@ h1 {
     flex: 0 0 auto;
   }
 
-  .hero-connect-button {
-    min-height: 29px;
-    padding-inline: .52rem;
-    font-size: .68rem;
-  }
-
-  .hero-connect-button:hover {
-    transform: none;
-  }
-
   .tab-bar {
-    align-self: stretch;
+    padding: 12px;
   }
 
   .tab-item {
@@ -1676,6 +1595,11 @@ h1 {
 
   .toolbar-right {
     justify-content: stretch;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .inline-status-group {
     width: 100%;
   }
 
@@ -1750,7 +1674,8 @@ h1 {
 
   .log-entry .log-logger,
   .history-entry .history-source {
-    flex: 1 1 8rem;
+    flex: 0 1 8rem;
+    width: auto;
     max-width: min(100%, 12rem);
     min-width: 0;
     overflow: hidden;
@@ -1811,7 +1736,7 @@ h1 {
 
   .history-layout {
     min-height: 0;
-    border-radius: 22px;
+    border-radius: 0;
   }
 
   .content-panel,
@@ -1832,15 +1757,6 @@ h1 {
 }
 
 @media (max-width: 460px) {
-  .log-page {
-    gap: .6rem;
-  }
-
-  h1 {
-    font-size: 1.45rem;
-  }
-
-  .hero-actions,
   .toolbar-right {
     width: 100%;
   }
@@ -1850,10 +1766,9 @@ h1 {
     flex: 1;
   }
 
-  .hero-card,
   .realtime-panel,
   .history-layout {
-    border-radius: 18px;
+    border-radius: 0;
   }
 
   .realtime-panel,
