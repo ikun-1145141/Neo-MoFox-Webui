@@ -829,6 +829,8 @@ const messages = {
         message: {
           unknownSender: '未知发送者',
           unsupported: '不支持的消息内容',
+          image: '[图片]',
+          voice: '[语音]',
         },
         composer: {
           placeholder: '输入要发送的文本，Enter 发送，Shift + Enter 换行',
@@ -1661,6 +1663,8 @@ const messages = {
         message: {
           unknownSender: 'Unknown sender',
           unsupported: 'Unsupported message content',
+          image: '[Image]',
+          voice: '[Voice]',
         },
         composer: {
           placeholder: 'Type a text message. Enter to send, Shift + Enter for newline',

@@ -277,7 +277,7 @@ function upsertStreamFromNotification(streamId: string, displayName: string, mes
   if (existing) {
     existing.display_name = displayName
     existing.last_active_time = message.time
-    existing.last_message_preview = message.processed_plain_text || message.content
+    existing.last_message_preview = messagePreview(message)
     existing.last_message_type = message.message_type
   }
   if (selectedStream.value?.stream_id === streamId) {
@@ -298,10 +298,20 @@ function chatTypeLabel(value: string): string {
 }
 
 function messageContent(message: ChatMessage): string {
+  if (message.message_type === 'image') return t('chat.message.image')
+  if (message.message_type === 'voice') return t('chat.message.voice')
+  return message.processed_plain_text || message.content || t('chat.message.unsupported')
+}
+
+function messagePreview(message: ChatMessage): string {
+  if (message.message_type === 'image') return t('chat.message.image')
+  if (message.message_type === 'voice') return t('chat.message.voice')
   return message.processed_plain_text || message.content || t('chat.message.unsupported')
 }
 
 function streamPreview(stream: ChatStreamInfo): string {
+  if (stream.last_message_type === 'image') return t('chat.message.image')
+  if (stream.last_message_type === 'voice') return t('chat.message.voice')
   return stream.last_message_preview || t('chat.streams.noPreview')
 }
 
@@ -472,7 +482,21 @@ function formatTime(timestamp: number): string {
                   <strong>{{ message.sender_name || t('chat.message.unknownSender') }}</strong>
                   <span>{{ formatTime(message.time) }}</span>
                 </div>
-                <p>{{ messageContent(message) }}</p>
+                <img
+                  v-if="message.message_type === 'image' && message.media"
+                  class="message-image"
+                  :src="message.media.data_url"
+                  :alt="messageContent(message)"
+                  loading="lazy"
+                />
+                <audio
+                  v-else-if="message.message_type === 'voice' && message.media"
+                  class="message-audio"
+                  :src="message.media.data_url"
+                  controls
+                  preload="metadata"
+                ></audio>
+                <p v-else>{{ messageContent(message) }}</p>
               </article>
             </div>
 
@@ -872,6 +896,21 @@ function formatTime(timestamp: number): string {
   word-break: break-word;
   line-height: 1.55;
   font-size: 0.9rem;
+}
+
+.message-image {
+  display: block;
+  max-width: min(100%, 360px);
+  max-height: 420px;
+  border-radius: 14px;
+  object-fit: contain;
+  background: var(--md-sys-color-surface-container-lowest);
+  border: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.message-audio {
+  width: min(100%, 320px);
+  max-width: 100%;
 }
 
 .composer {

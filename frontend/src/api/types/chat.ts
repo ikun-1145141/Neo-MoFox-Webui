@@ -33,6 +33,13 @@ export interface ChatStreamsResponse {
   groups: ChatStreamGroup[]
 }
 
+/** 前端可渲染的媒体消息内容 */
+export interface ChatMessageMedia {
+  mime_type: string
+  base64: string
+  data_url: string
+}
+
 /** 前端可渲染的聊天消息 */
 export interface ChatMessage {
   message_id: string
@@ -40,6 +47,7 @@ export interface ChatMessage {
   platform: string
   message_type: ChatMessageType
   content: string
+  media: ChatMessageMedia | null
   processed_plain_text: string | null
   reply_to: string | null
   sender_id: string | null

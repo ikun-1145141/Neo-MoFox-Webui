@@ -6,10 +6,15 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import json
+import mimetypes
+import re
 import time
 import uuid
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Literal, cast
 
 from pydantic import BaseModel, Field
@@ -25,6 +30,13 @@ logger = get_logger("webui.chat_manager", display="WebUI.ChatManager")
 SUPPORTED_MESSAGE_TYPES: frozenset[str] = frozenset({"text", "image", "voice"})
 DEFAULT_MESSAGE_LIMIT = 30
 MAX_MESSAGE_LIMIT = 100
+
+
+MEDIA_MESSAGE_TYPES: frozenset[str] = frozenset({"image", "voice"})
+BASE64_PATTERN = re.compile(r"^[A-Za-z0-9+/]+={0,2}$")
+DATA_URL_PATTERN = re.compile(r"^data:(?P<mime>[^;,]+)?;base64,(?P<data>.*)$", re.DOTALL)
+BASE64_URL_PREFIX = "base64://"
+VOICE_MIME_TYPE = "audio/wav"
 
 
 class ChatStreamInfo(BaseModel):
@@ -56,6 +68,14 @@ class ChatStreamsResponse(BaseModel):
     groups: list[ChatStreamGroup] = Field(description="分组聊天流列表")
 
 
+class ChatMessageMediaDTO(BaseModel):
+    """前端可渲染的媒体消息内容。"""
+
+    mime_type: str = Field(description="媒体 MIME 类型")
+    base64: str = Field(description="不含 data URL 前缀的 base64 内容")
+    data_url: str = Field(description="可直接用于 src 的 data URL")
+
+
 class ChatMessageDTO(BaseModel):
     """前端可渲染的聊天消息。"""
 
@@ -64,6 +84,7 @@ class ChatMessageDTO(BaseModel):
     platform: str = Field(default="", description="平台标识")
     message_type: Literal["text", "image", "voice"] = Field(description="消息类型")
     content: str = Field(default="", description="消息内容或媒体 base64/路径")
+    media: ChatMessageMediaDTO | None = Field(default=None, description="图片或语音媒体内容")
     processed_plain_text: str | None = Field(default=None, description="处理后的纯文本")
     reply_to: str | None = Field(default=None, description="引用消息 ID")
     sender_id: str | None = Field(default=None, description="发送者 ID")
@@ -317,12 +338,14 @@ class ChatManager:
         message_type = message.message_type.value
         if message_type not in SUPPORTED_MESSAGE_TYPES:
             message_type = "text"
+        content = self._normalize_content(message.content)
         return ChatMessageDTO(
             message_id=message.message_id,
             stream_id=message.stream_id,
             platform=message.platform,
             message_type=message_type,  # type: ignore[arg-type]
-            content=self._normalize_content(message.content),
+            content=content,
+            media=self._build_media_dto(message_type, message.content, content),
             processed_plain_text=message.processed_plain_text,
             reply_to=message.reply_to,
             sender_id=message.sender_id,
@@ -362,12 +385,14 @@ class ChatManager:
     def _message_record_to_dto(self, record: Messages) -> ChatMessageDTO:
         """将数据库消息记录转换为前端 DTO。"""
         message_type = record.message_type if record.message_type in SUPPORTED_MESSAGE_TYPES else "text"
+        content = self._normalize_content(record.content)
         return ChatMessageDTO(
             message_id=record.message_id,
             stream_id=record.stream_id,
             platform=record.platform or "",
             message_type=message_type,  # type: ignore[arg-type]
-            content=record.content,
+            content=content,
+            media=self._build_media_dto(message_type, record.content, content),
             processed_plain_text=record.processed_plain_text,
             reply_to=record.reply_to,
             sender_id=record.person_id,
@@ -400,11 +425,133 @@ class ChatManager:
     def _normalize_content(self, content: Any) -> str:
         """将消息内容规范化为前端字符串。"""
         if isinstance(content, str):
+            parsed = self._try_parse_json(content)
+            if parsed is not None:
+                return self._normalize_content(parsed)
             return content
         if isinstance(content, dict):
-            value = content.get("data") or content.get("path") or content.get("url") or content.get("text")
+            value = (
+                content.get("base64")
+                or content.get("data")
+                or content.get("file")
+                or content.get("path")
+                or content.get("url")
+                or content.get("text")
+            )
             return str(value or "")
         return str(content or "")
+
+    def _build_media_dto(
+        self,
+        message_type: str,
+        raw_content: Any,
+        normalized_content: str,
+    ) -> ChatMessageMediaDTO | None:
+        """从图片或语音消息内容构建媒体 DTO。"""
+        if message_type not in MEDIA_MESSAGE_TYPES:
+            return None
+
+        media_value = self._extract_media_value(raw_content) or normalized_content
+        media_value = media_value.strip()
+        if not media_value:
+            return None
+
+        data_url_match = DATA_URL_PATTERN.match(media_value)
+        if data_url_match:
+            mime_type = data_url_match.group("mime") or self._default_media_mime_type(message_type)
+            base64_data = data_url_match.group("data")
+            return ChatMessageMediaDTO(
+                mime_type=mime_type,
+                base64=base64_data,
+                data_url=f"data:{mime_type};base64,{base64_data}",
+            )
+
+        if media_value.startswith(BASE64_URL_PREFIX):
+            base64_data = media_value.removeprefix(BASE64_URL_PREFIX)
+            mime_type = self._guess_media_mime_type(message_type, "")
+            return ChatMessageMediaDTO(
+                mime_type=mime_type,
+                base64=base64_data,
+                data_url=f"data:{mime_type};base64,{base64_data}",
+            )
+
+        if self._looks_like_base64(media_value):
+            mime_type = self._guess_media_mime_type(message_type, media_value)
+            return ChatMessageMediaDTO(
+                mime_type=mime_type,
+                base64=media_value,
+                data_url=f"data:{mime_type};base64,{media_value}",
+            )
+
+        return None
+
+    def _extract_media_value(self, content: Any) -> str:
+        """从结构化消息内容中提取媒体数据。"""
+        if isinstance(content, str):
+            parsed = self._try_parse_json(content)
+            if parsed is not None:
+                return self._extract_media_value(parsed)
+            return content
+        if isinstance(content, dict):
+            value = (
+                content.get("base64")
+                or content.get("data")
+                or content.get("file")
+                or content.get("path")
+                or content.get("url")
+            )
+            return str(value or "")
+        return str(content or "")
+
+    def _try_parse_json(self, content: str) -> Any | None:
+        """尝试解析数据库中以 JSON 字符串保存的结构化消息。"""
+        stripped = content.strip()
+        if not stripped or stripped[0] not in "[{":
+            return None
+        try:
+            return json.loads(stripped)
+        except json.JSONDecodeError:
+            return None
+
+    def _looks_like_base64(self, value: str) -> bool:
+        """判断字符串是否像 base64 内容。"""
+        compact_value = "".join(value.split())
+        if len(compact_value) < 16 or len(compact_value) % 4 != 0:
+            return False
+        if not BASE64_PATTERN.fullmatch(compact_value):
+            return False
+        try:
+            base64.b64decode(compact_value, validate=True)
+        except ValueError:
+            return False
+        return True
+
+    def _guess_media_mime_type(self, message_type: str, base64_data: str) -> str:
+        """推断媒体 MIME 类型。"""
+        if message_type == "voice":
+            return VOICE_MIME_TYPE
+        if not base64_data:
+            return self._default_media_mime_type(message_type)
+        try:
+            header = base64.b64decode(base64_data[:64], validate=False)[:16]
+        except ValueError:
+            return self._default_media_mime_type(message_type)
+        if header.startswith(b"\x89PNG\r\n\x1a\n"):
+            return "image/png"
+        if header.startswith(b"\xff\xd8\xff"):
+            return "image/jpeg"
+        if header.startswith(b"GIF87a") or header.startswith(b"GIF89a"):
+            return "image/gif"
+        if header.startswith(b"RIFF") and header[8:12] == b"WEBP":
+            return "image/webp"
+        return self._default_media_mime_type(message_type)
+
+    def _default_media_mime_type(self, message_type: str) -> str:
+        """返回指定媒体消息类型的默认 MIME 类型。"""
+        if message_type == "voice":
+            return VOICE_MIME_TYPE
+        guessed = mimetypes.guess_type(f"fallback.{Path('image.png').suffix.lstrip('.')}")[0]
+        return guessed or "image/png"
 
     def _normalize_time(self, value: datetime | float) -> float:
         """将消息时间规范化为 Unix 时间戳。"""
