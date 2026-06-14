@@ -156,6 +156,9 @@ const formData = ref<Record<string, any>>({ ...props.modelValue })
 // 代码内容（TOML 字符串）
 const codeContent = ref<string>('')
 
+// 原始代码内容（用于代码模式检测变更）
+const originalCodeContent = ref<string>('')
+
 // 保存状态
 const isSaving = ref(false)
 const errorMessage = ref('')
@@ -190,6 +193,10 @@ const displayConfigPath = computed(() => {
 
 // 是否有未保存的更改
 const hasChanges = computed(() => {
+  if (editMode.value === 'code') {
+    return codeContent.value !== originalCodeContent.value
+  }
+
   return JSON.stringify(formData.value) !== JSON.stringify(originalData.value)
 })
 
@@ -215,6 +222,7 @@ onMounted(async () => {
     try {
       const rawToml = await loadRawToml()
       codeContent.value = rawToml
+      originalCodeContent.value = rawToml
     } catch (error: any) {
       console.warn('加载原始 TOML 失败:', error)
       errorMessage.value = error.message
@@ -254,6 +262,7 @@ async function toggleMode() {
         // 从后端重新加载原始 TOML
         const rawToml = await loadRawToml()
         codeContent.value = rawToml
+        originalCodeContent.value = rawToml
         errorMessage.value = ''
       } catch (error: any) {
         errorMessage.value = t('configEditor.errors.loadRawToml', { error: error.message })
@@ -303,6 +312,9 @@ async function handleSave() {
 
     // 更新原始数据
     originalData.value = { ...dataToSave }
+    if (editMode.value === 'code') {
+      originalCodeContent.value = codeContent.value
+    }
     
     // 显示成功提示
     toast.show(t('configEditor.save.success'), 'success')
