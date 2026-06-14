@@ -38,6 +38,7 @@ const logFiles = ref<LogFileInfo[]>([])
 const selectedFile = ref<string>('')
 const fileSearchText = ref('')
 const historySearchText = ref('')
+const isMobileFileMenuOpen = ref(false)
 const historyLines = ref<string[]>([])
 const historyEntries = ref<StructuredLogLine[]>([])
 const historyLoading = ref(false)
@@ -463,6 +464,7 @@ function extractHistoryMeta(data: LogContentResponse): HistoryMeta {
 
 function selectLogFile(filename: string): void {
   selectedFile.value = filename
+  isMobileFileMenuOpen.value = false
   historyLines.value = []
   historyEntries.value = []
   historyMeta.value = null
@@ -645,6 +647,54 @@ onUnmounted(() => {
       </div>
 
       <div v-else class="history-section">
+        <header class="history-mobile-top-bar">
+          <div class="history-mobile-title">
+            <button class="history-file-title-btn" type="button" @click="isMobileFileMenuOpen = !isMobileFileMenuOpen">
+              <h3>{{ selectedFile || t('log.history.filesTitle') }}</h3>
+              <Icon icon="material-symbols:expand-more-rounded" width="20" height="20" class="history-file-chevron" :class="{ open: isMobileFileMenuOpen }" />
+            </button>
+            <p>{{ historyProgressText }}</p>
+          </div>
+          <button class="icon-button" @click="loadLogFiles" :title="t('log.history.refreshTitle')">
+            <Icon icon="material-symbols:refresh-rounded" width="18" height="18" />
+          </button>
+        </header>
+
+        <button v-if="isMobileFileMenuOpen" class="history-mobile-menu-backdrop" type="button" aria-label="Close history file list" @click="isMobileFileMenuOpen = false"></button>
+        <aside class="history-mobile-file-menu" :class="{ open: isMobileFileMenuOpen }" aria-label="history log files">
+          <div class="panel-header">
+            <div>
+              <span class="panel-kicker">{{ t('log.history.archives') }}</span>
+              <h3>{{ t('log.history.filesTitle') }}</h3>
+            </div>
+          </div>
+          <label class="history-search-field file-search-field">
+            <Icon icon="material-symbols:search-rounded" width="18" height="18" />
+            <input v-model="fileSearchText" :placeholder="t('log.history.fileSearchPlaceholder')" />
+          </label>
+          <div v-if="filteredLogFiles.length === 0" class="empty-state small">
+            <p>{{ logFiles.length === 0 ? t('log.history.emptyFiles') : t('log.history.noMatchedFiles') }}</p>
+          </div>
+          <div v-else class="file-list">
+            <button
+              v-for="file in filteredLogFiles"
+              :key="file.filename"
+              class="file-item"
+              :class="{ active: selectedFile === file.filename }"
+              @click="selectLogFile(file.filename)"
+            >
+              <div class="file-item-main">
+                <Icon icon="material-symbols:description-outline-rounded" width="18" height="18" />
+                <span class="file-name" :title="file.filename">{{ file.filename }}</span>
+              </div>
+              <div class="file-item-meta">
+                <span>{{ formatFileSize(file.size) }}</span>
+                <span>{{ formatTimestamp(file.modified_time) }}</span>
+              </div>
+            </button>
+          </div>
+        </aside>
+
         <div class="history-layout">
           <aside class="file-list-panel">
             <div class="panel-header">
@@ -673,7 +723,7 @@ onUnmounted(() => {
               >
                 <div class="file-item-main">
                   <Icon icon="material-symbols:description-outline-rounded" width="18" height="18" />
-                  <span class="file-name">{{ file.filename }}</span>
+                  <span class="file-name" :title="file.filename">{{ file.filename }}</span>
                 </div>
                 <div class="file-item-meta">
                   <span>{{ formatFileSize(file.size) }}</span>
@@ -691,9 +741,9 @@ onUnmounted(() => {
             </div>
             <template v-else>
               <div class="content-header">
-                <div>
+                <div class="content-title-block">
                   <span class="panel-kicker">{{ t('log.history.viewer') }}</span>
-                  <h3>{{ selectedFile }}</h3>
+                  <h3 :title="selectedFile">{{ selectedFile }}</h3>
                 </div>
                 <span class="content-meta">{{ historyProgressText }}</span>
               </div>
@@ -1225,6 +1275,12 @@ input:focus-visible {
   font-size: .86rem;
 }
 
+.history-mobile-top-bar,
+.history-mobile-menu-backdrop,
+.history-mobile-file-menu {
+  display: none;
+}
+
 .history-layout {
   display: grid;
   grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
@@ -1247,10 +1303,17 @@ input:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  min-width: 0;
 }
 
 .panel-header {
   margin-bottom: .85rem;
+}
+
+.content-title-block {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .panel-header h3,
@@ -1259,6 +1322,14 @@ input:focus-visible {
   font-size: 1.08rem;
   font-weight: 900;
   letter-spacing: -.02em;
+}
+
+.content-header h3 {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .file-list {
@@ -1293,15 +1364,24 @@ input:focus-visible {
 }
 
 .file-item-main {
+  width: 100%;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: .5rem;
 }
 
+.file-item-main .iconify {
+  flex: 0 0 auto;
+}
+
 .file-name {
+  min-width: 0;
+  overflow: hidden;
   font-size: .86rem;
   font-weight: 800;
-  word-break: break-all;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .file-item-meta {
@@ -1485,22 +1565,114 @@ input:focus-visible {
 }
 
 @media (max-width: 1100px) {
+  .history-mobile-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--soft-border);
+    background: color-mix(in srgb, var(--md-sys-color-surface) 75%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    flex-shrink: 0;
+    z-index: 10;
+  }
+
+  .history-mobile-title {
+    min-width: 0;
+  }
+
+  .history-file-title-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    max-width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--md-sys-color-on-surface);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+  }
+
+  .history-file-title-btn h3 {
+    overflow: hidden;
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 900;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .history-file-chevron {
+    color: var(--md-sys-color-on-surface-variant);
+    transition: transform .18s ease;
+    flex: 0 0 auto;
+  }
+
+  .history-file-chevron.open {
+    transform: rotate(180deg);
+  }
+
+  .history-mobile-title p {
+    overflow: hidden;
+    margin: 0;
+    color: var(--md-sys-color-on-surface-variant);
+    font-size: .76rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .history-mobile-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    display: block;
+    border: 0;
+    background: rgba(0, 0, 0, .32);
+    animation: fade-in .15s ease;
+  }
+
+  .history-mobile-file-menu {
+    position: fixed;
+    top: 4.5rem;
+    left: .75rem;
+    right: .75rem;
+    z-index: 80;
+    display: block;
+    max-height: min(76vh, 620px);
+    overflow: auto;
+    padding: 1rem;
+    border: 1px solid var(--soft-border);
+    border-radius: 20px;
+    background: var(--md-sys-color-surface);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, .12), 0 2px 8px rgba(0, 0, 0, .08);
+    transform: translateY(-12px) scale(.98);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform .18s ease, opacity .18s ease;
+  }
+
+  .history-mobile-file-menu.open {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+    pointer-events: auto;
+  }
+
   .history-layout {
     display: flex;
-    flex-direction: column-reverse;
-    overflow: visible;
+    overflow: hidden;
   }
 
   .file-list-panel {
-    border-right: 0;
-    border-top: 1px solid var(--soft-border);
-    max-height: 42dvh;
-    flex-shrink: 0;
+    display: none;
   }
 
   .content-panel {
-    flex: 1 0 auto;
-    min-height: 60dvh;
+    flex: 1 1 0;
+    min-height: 0;
     max-height: none;
   }
 }
@@ -1801,6 +1973,11 @@ input:focus-visible {
     width: 34px;
     height: 34px;
   }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 </style>
 

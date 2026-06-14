@@ -418,6 +418,10 @@ onMounted(() => {
   color: var(--md-sys-color-on-surface-variant);
 }
 
+.editor-empty {
+  background: color-mix(in srgb, var(--md-sys-color-surface) 75%, transparent);
+}
+
 .editor-empty p,
 .editor-loading p,
 .editor-error p {
