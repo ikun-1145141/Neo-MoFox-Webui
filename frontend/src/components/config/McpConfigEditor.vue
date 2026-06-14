@@ -195,6 +195,7 @@ const activeTab = ref<McpTab>('stdio')
 const localData = ref<Record<string, any>>({ ...props.modelValue })
 const originalData = ref<Record<string, any>>({})
 const codeContent = ref('')
+const originalCodeContent = ref('')
 const isSaving = ref(false)
 const errorMessage = ref('')
 const testingServers = ref(new Set<string>())
@@ -217,7 +218,13 @@ const tabs = computed(() => [
 
 const activeTabConfig = computed(() => tabs.value.find((tab) => tab.key === activeTab.value) ?? tabs.value[0])
 
-const hasChanges = computed(() => JSON.stringify(localData.value) !== JSON.stringify(originalData.value))
+const hasChanges = computed(() => {
+  if (isCodeMode.value) {
+    return codeContent.value !== originalCodeContent.value
+  }
+
+  return JSON.stringify(localData.value) !== JSON.stringify(originalData.value)
+})
 
 const sectionMap: Record<McpTab, string> = {
   stdio: 'stdio_servers',
@@ -250,7 +257,9 @@ function normalizeFields(value: unknown) {
 
 onMounted(async () => {
   try {
-    codeContent.value = await getRawConfig('mcp')
+    const rawToml = await getRawConfig('mcp')
+    codeContent.value = rawToml
+    originalCodeContent.value = rawToml
   } catch (error: any) {
     errorMessage.value = error.message
   }
@@ -366,7 +375,9 @@ async function toggleEditMode() {
     }
   } else {
     try {
-      codeContent.value = await getRawConfig('mcp')
+      const rawToml = await getRawConfig('mcp')
+      codeContent.value = rawToml
+      originalCodeContent.value = rawToml
       errorMessage.value = ''
       isCodeMode.value = true
     } catch (error: any) {
@@ -385,6 +396,9 @@ async function handleSave() {
     emit('save', dataToSave)
     emit('update:modelValue', dataToSave)
     originalData.value = JSON.parse(JSON.stringify(dataToSave))
+    if (isCodeMode.value) {
+      originalCodeContent.value = codeContent.value
+    }
   } catch (error: any) {
     errorMessage.value = t('configEditor.save.failed', { error: error.message })
   } finally {

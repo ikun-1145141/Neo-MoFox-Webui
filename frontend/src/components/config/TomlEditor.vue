@@ -376,6 +376,8 @@ watch(
   color: var(--md-sys-color-on-surface);
   border-radius: 8px;
   padding: 8px 12px;
+  z-index: 1000;
+  position: fixed;
 }
 
 .editor-container :deep(.cm-diagnostic-error) {
