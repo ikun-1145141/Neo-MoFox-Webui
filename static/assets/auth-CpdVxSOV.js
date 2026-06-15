@@ -1,0 +1,1 @@
+import{c as e,f as t}from"./i18n-CeG0Y2qr.js";var n=t;function r(t){return e.post(`${n}/auth/login`,t)}function i(){return e.post(`${n}/auth/logout`)}export{i as n,r as t};
