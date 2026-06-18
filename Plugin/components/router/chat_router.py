@@ -9,11 +9,11 @@ import asyncio
 import json
 from typing import TYPE_CHECKING, Any
 
-from fastapi import HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import WebSocket, WebSocketDisconnect
 
 from src.app.plugin_system.api.log_api import get_logger
 from src.core.components.base.router import BaseRouter
-from src.core.utils.security import VerifiedDep, get_api_key
+from src.core.utils.security import VerifiedDep, verify_websocket_token
 
 from ...managers.chat_manager import SendMessageRequest, get_chat_manager
 from ...utils.response import BaseResponse
@@ -48,8 +48,8 @@ class ChatRouter(BaseRouter):
     def register_endpoints(self) -> None:
         """注册聊天相关端点。"""
 
-        @self.app.get("/streams", response_model=BaseResponse)
-        async def list_streams(_: VerifiedDep) -> BaseResponse:  # type: ignore[valid-type]
+        @self.app.get("/streams", response_model=BaseResponse, dependencies=[VerifiedDep])
+        async def list_streams() -> BaseResponse:
             """获取聊天流列表。"""
             chat_manager = get_chat_manager()
             return BaseResponse.ok(await chat_manager.list_streams())
@@ -57,7 +57,7 @@ class ChatRouter(BaseRouter):
         @self.app.websocket("/ws/notifications")
         async def websocket_notifications(websocket: WebSocket) -> None:
             """全局消息通知 WebSocket。"""
-            if not await self._authorize_websocket(websocket):
+            if not await verify_websocket_token(websocket):
                 return
             await websocket.accept()
 
@@ -84,7 +84,7 @@ class ChatRouter(BaseRouter):
         @self.app.websocket("/ws/streams/{stream_id}")
         async def websocket_stream(websocket: WebSocket, stream_id: str) -> None:
             """指定聊天流 WebSocket。"""
-            if not await self._authorize_websocket(websocket):
+            if not await verify_websocket_token(websocket):
                 return
             await websocket.accept()
 
@@ -107,20 +107,6 @@ class ChatRouter(BaseRouter):
                 logger.warning(f"指定流聊天 WS 断开: stream_id={stream_id}, error={exc}")
             finally:
                 await chat_manager.unregister_stream_client(stream_id, queue)
-
-    async def _authorize_websocket(self, websocket: WebSocket) -> bool:
-        """校验 WebSocket 查询参数 token。"""
-        token = websocket.query_params.get("token")
-        if token is None:
-            await websocket.close(code=1008, reason="缺少认证令牌")
-            return False
-
-        try:
-            await get_api_key(token)
-        except HTTPException as exc:
-            await websocket.close(code=1008, reason=str(exc.detail))
-            return False
-        return True
 
     async def _send_queue_messages(
         self,
