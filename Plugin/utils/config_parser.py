@@ -389,7 +389,7 @@ class ConfigParser:
             config_name=config_name,
             config_path=config_path,
             plugin_name=plugin_name,
-            schema=sections,
+            sections=sections,
             data=data,
         )
 
