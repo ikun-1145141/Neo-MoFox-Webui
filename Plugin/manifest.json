@@ -80,12 +80,7 @@
         },
         {
             "component_type": "router",
-            "component_name": "plugin-ui-discovery",
-            "dependencies": []
-        },
-        {
-            "component_type": "router",
-            "component_name": "plugin-ui-schema",
+            "component_name": "plugin-ui",
             "dependencies": []
         },
         {

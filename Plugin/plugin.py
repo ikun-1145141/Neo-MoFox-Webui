@@ -28,8 +28,7 @@ from .components.router.config import (
     PluginConfigRouter,
 )
 from .components.router.plugin_ui import (
-    PluginUIDiscoveryRouter,
-    PluginUISchemaRouter,
+    PluginUIRouter,
     PluginUIAssetRouter,
 )
 from .components.services.plugin_ui_service import PluginUIService
@@ -85,8 +84,7 @@ class WebuiPlugin(BasePlugin):
             PluginConfigRouter,
             # 插件 UI 扩展系统
             PluginUIService,
-            PluginUIDiscoveryRouter,
-            PluginUISchemaRouter,
+            PluginUIRouter,
             PluginUIAssetRouter,
         ]
         return components
