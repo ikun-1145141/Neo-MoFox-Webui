@@ -3,10 +3,12 @@
  * 插件页面渲染容器组件（双轨分发）。
  *
  * 根据 schema.mode 选择渲染 XmlRenderer 或 HtmlSandbox。
- * Phase F-1 阶段仅提供骨架，展示 schema 信息和占位。
+ * XML 模式直接渲染；HTML 模式仍为占位（Phase F-4）。
  */
 import { computed } from 'vue'
 import type { PageSchemaResponse, PageDetail } from '../../api/types/plugin-ui'
+import type { PluginUIVarStore } from '../../stores/plugin-ui-vars'
+import XmlRenderer from './XmlRenderer.vue'
 
 const props = defineProps<{
   /** 页面详情 */
@@ -15,6 +17,10 @@ const props = defineProps<{
   schema: PageSchemaResponse
   /** 是否为 fallback 模式（桌面版在移动端显示） */
   isFallback?: boolean
+  /** 变量池 Store（XML 模式需要） */
+  store?: PluginUIVarStore
+  /** 是否为移动端 */
+  isMobile?: boolean
 }>()
 
 /** 渲染模式标签 */
@@ -49,12 +55,14 @@ const modeLabel = computed(() => {
     <!-- 渲染区域（Phase F-2/F-4 接入 XmlRenderer / HtmlSandbox） -->
     <div class="plugin-page-content" :class="{ 'fallback-scroll': isFallback }">
       <div v-if="isFallback" class="plugin-page-content-inner" style="min-width: 1024px;">
-        <!-- XML 模式占位 -->
-        <div v-if="schema.mode === 'xml'" class="plugin-page-placeholder">
-          <span class="material-symbols-rounded placeholder-icon">code</span>
-          <p class="placeholder-text">XML 渲染器将在 Phase F-2 接入</p>
-          <pre class="placeholder-preview">{{ schema.xml?.slice(0, 500) }}{{ (schema.xml?.length ?? 0) > 500 ? '...' : '' }}</pre>
-        </div>
+        <!-- XML 模式：使用 XmlRenderer 渲染 -->
+        <XmlRenderer
+          v-if="schema.mode === 'xml' && schema.xml && store"
+          :xml="schema.xml"
+          :store="store"
+          :plugin-name="detail.plugin_name"
+          :is-mobile="isMobile"
+        />
         <!-- HTML 模式占位 -->
         <div v-else class="plugin-page-placeholder">
           <span class="material-symbols-rounded placeholder-icon">web</span>
@@ -64,11 +72,18 @@ const modeLabel = computed(() => {
       </div>
 
       <template v-else>
-        <!-- XML 模式占位 -->
-        <div v-if="schema.mode === 'xml'" class="plugin-page-placeholder">
+        <!-- XML 模式：使用 XmlRenderer 渲染 -->
+        <XmlRenderer
+          v-if="schema.mode === 'xml' && schema.xml && store"
+          :xml="schema.xml"
+          :store="store"
+          :plugin-name="detail.plugin_name"
+          :is-mobile="isMobile"
+        />
+        <!-- XML 模式但缺少 store（不应发生） -->
+        <div v-else-if="schema.mode === 'xml'" class="plugin-page-placeholder">
           <span class="material-symbols-rounded placeholder-icon">code</span>
-          <p class="placeholder-text">XML 渲染器将在 Phase F-2 接入</p>
-          <pre class="placeholder-preview">{{ schema.xml?.slice(0, 500) }}{{ (schema.xml?.length ?? 0) > 500 ? '...' : '' }}</pre>
+          <p class="placeholder-text">XML 渲染器需要变量池 Store</p>
         </div>
         <!-- HTML 模式占位 -->
         <div v-else class="plugin-page-placeholder">

@@ -13,6 +13,7 @@ import PluginNavList from '../components/plugin-ui/PluginNavList.vue'
 import PluginPageContainer from '../components/plugin-ui/PluginPageContainer.vue'
 import { listPluginPages, getPageDetail, getPageSchema } from '../api/modules/plugin-ui'
 import type { PageSummary, PageDetail, PageSchemaResponse } from '../api/types/plugin-ui'
+import { createPluginUIVarStore, type PluginUIVarStore } from '../stores/plugin-ui-vars'
 import { useI18n } from '../utils/i18n'
 
 const route = useRoute()
@@ -40,6 +41,9 @@ const contentError = ref<string | null>(null)
 const isFallback = ref(false)
 /** 是否为移动端视口 */
 const isMobile = ref(window.innerWidth < 768)
+
+/** 当前页面的变量池 Store */
+const currentStore = ref<PluginUIVarStore | null>(null)
 
 // === 生命周期 ===
 
@@ -95,12 +99,20 @@ async function loadPage(pluginName: string, pageId: string): Promise<void> {
   currentSchema.value = null
   isFallback.value = false
 
+  // 销毁旧 page scope
+  if (currentStore.value) {
+    currentStore.value.destroyPageScope()
+  }
+
   try {
     // 1. 获取页面详情
     const detail = await getPageDetail(pluginName, pageId)
     currentDetail.value = detail
 
-    // 2. 根据视口决定 variant
+    // 2. 创建变量池 Store
+    currentStore.value = createPluginUIVarStore(pluginName)
+
+    // 3. 根据视口决定 variant
     const variant = isMobile.value ? 'mobile' : 'desktop'
 
     // 3. 获取 schema
@@ -190,6 +202,8 @@ watch(
           :detail="currentDetail"
           :schema="currentSchema"
           :is-fallback="isFallback"
+          :store="currentStore ?? undefined"
+          :is-mobile="isMobile"
         />
       </div>
     </div>
