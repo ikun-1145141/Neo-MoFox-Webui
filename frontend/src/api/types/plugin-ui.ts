@@ -23,18 +23,6 @@ export interface HTMLAssets {
   assets_dir: string | null
 }
 
-// === 移动端 variant ===
-
-/** 移动端 UI 变体声明 */
-export interface MobileVariant {
-  /** 移动版的渲染模式（可与桌面不同） */
-  mode: PageMode
-  /** 当 mode=xml 时的 XML 字符串 */
-  xml: string | null
-  /** 当 mode=html 时的资源声明 */
-  assets: HTMLAssets | null
-}
-
 // === Discovery 列表项 ===
 
 /** 页面摘要信息（列表展示用，不含 schema） */
@@ -51,7 +39,7 @@ export interface PageSummary {
   description: string | null
   /** 排序权重（升序） */
   order: number
-  /** 桌面版渲染模式 */
+  /** 渲染模式（桌面端和移动端共用） */
   mode: PageMode
   /** 系统生成的路由路径 */
   route_path: string
@@ -63,8 +51,6 @@ export interface PageSummary {
 
 /** 页面详情信息（含 assets URL，不含 XML 内容） */
 export interface PageDetail extends PageSummary {
-  /** 移动端渲染模式 */
-  mobile_mode: PageMode | null
   /** 桌面端资源 URL */
   desktop_assets_urls: Record<string, string[]> | null
   /** 移动端资源 URL */
@@ -79,7 +65,7 @@ export interface PageSchemaResponse {
   plugin_name: string
   /** 页面唯一标识 */
   page_id: string
-  /** 当前 variant 的渲染模式 */
+  /** 渲染模式 */
   mode: PageMode
   /** XML 字符串（XML 模式） */
   xml: string | null

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import html
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -24,7 +25,7 @@ from .plugin_ui_constants import (
 from .plugin_ui_paths import resolve_safe, resolve_safe_dir
 
 if TYPE_CHECKING:
-    from .plugin_ui_types import HTMLAssets, MobileVariant, PageRegistration
+    from .plugin_ui_types import HTMLAssets, PageRegistration
 
 
 # --- 自定义异常 ---
@@ -101,8 +102,69 @@ EXPRESSION_GRAMMAR = r"""
     %ignore WS
 """
 
-# 占位符提取正则
-_PLACEHOLDER_RE = re.compile(r"\{([^}]+)\}")
+
+def _extract_placeholders(text: str) -> list[str]:
+    """使用深度计数方式从文本中提取占位符表达式。
+
+    与前端 parsePlaceholders 对齐，支持嵌套花括号。
+    例如 '{"name": "{username}"}' 会正确提取出最内层的 'username'，
+    而不会把 JSON 结构误识别为表达式。
+
+    仅提取最内层（叶子）占位符，因为外层带嵌套 { 的内容（如 JSON body）
+    本身不是表达式，真正的占位符表达式不允许包含裸花括号。
+
+    Args:
+        text: 待提取的源文本
+
+    Returns:
+        提取到的表达式字符串列表
+    """
+    results: list[str] = []
+    i = 0
+    length = len(text)
+
+    while i < length:
+        ch = text[i]
+
+        # 转义处理：\{ 和 \} 跳过
+        if ch == "\\" and i + 1 < length and text[i + 1] in ("{", "}"):
+            i += 2
+            continue
+
+        # 找到 { 开始
+        if ch == "{":
+            i += 1  # 跳过 {
+            depth = 1
+            expr = ""
+
+            while i < length and depth > 0:
+                if text[i] == "{":
+                    depth += 1
+                    expr += text[i]
+                elif text[i] == "}":
+                    depth -= 1
+                    if depth > 0:
+                        expr += text[i]
+                else:
+                    expr += text[i]
+                i += 1
+
+            # 只有不含嵌套 { 的才是真正的占位符表达式
+            # 如果 expr 内含 {，说明是 JSON 等结构，不是简单表达式
+            # 此时递归提取内部的真正占位符
+            if "{" in expr:
+                inner_placeholders = _extract_placeholders(expr)
+                results.extend(inner_placeholders)
+            else:
+                trimmed = expr.strip()
+                if trimmed:
+                    results.append(trimmed)
+            continue
+
+        i += 1
+
+    return results
+
 
 # style 属性中禁止的模式
 _STYLE_DANGEROUS_PATTERNS = [
@@ -143,7 +205,7 @@ def _get_lark_parser():
     """
     global _lark_parser
     if _lark_parser is None:
-        from lark import Lark  # type: ignore
+        from lark import Lark 
 
         _lark_parser = Lark(
             EXPRESSION_GRAMMAR,
@@ -187,29 +249,11 @@ class PluginUIValidators:
             if metadata.assets:
                 cls._validate_html_assets(metadata.assets)
 
-        # 移动版校验
-        if metadata.mobile:
-            cls._validate_mobile(metadata.mobile)
-
-    @classmethod
-    def _validate_mobile(cls, mobile: "MobileVariant") -> None:
-        """校验移动端 variant。
-
-        Args:
-            mobile: 移动端变体声明
-
-        Raises:
-            XMLValidationError: XML 校验失败
-            AssetPathError: 路径不合法
-            AssetMissingError: 文件不存在
-            AssetSizeError: 文件过大
-        """
-        from .plugin_ui_types import PageMode
-
-        if mobile.mode == PageMode.XML and mobile.xml:
-            cls._validate_xml(mobile.xml)
-        elif mobile.mode == PageMode.HTML and mobile.assets:
-            cls._validate_html_assets(mobile.assets)
+        # 移动版校验（移动端强制跟桌面端同 mode）
+        if metadata.mode == PageMode.XML and metadata.mobile_xml:
+            cls._validate_xml(metadata.mobile_xml)
+        elif metadata.mode == PageMode.HTML and metadata.mobile_assets:
+            cls._validate_html_assets(metadata.mobile_assets)
 
     # --- XML 校验 ---
 
@@ -335,6 +379,7 @@ class PluginUIValidators:
         """第三层：占位符表达式校验。
 
         提取 XML 中所有 {expression} 占位符并校验其语法安全性。
+        使用深度计数方式解析嵌套花括号，与前端 parsePlaceholders 逻辑对齐。
 
         Args:
             xml_content: XML 字符串
@@ -342,8 +387,8 @@ class PluginUIValidators:
         Raises:
             XMLValidationError: 表达式校验失败
         """
-        # 提取所有占位符
-        placeholders = _PLACEHOLDER_RE.findall(xml_content)
+        # 使用深度计数提取占位符，正确处理嵌套花括号
+        placeholders = _extract_placeholders(xml_content)
         for expr in placeholders:
             cls._validate_single_expression(expr.strip())
 
@@ -361,6 +406,9 @@ class PluginUIValidators:
         """
         if not expr:
             return
+
+        # XML 实体反转义（如 &lt; -> <, &gt; -> >, &amp; -> &）
+        expr = html.unescape(expr)
 
         # 处理取反前缀
         check_expr = expr.lstrip("!")

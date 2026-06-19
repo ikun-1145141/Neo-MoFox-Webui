@@ -206,8 +206,8 @@ class PluginUIAssetRouter(BaseRouter):
                 return page.assets
             return None
         elif variant == "mobile":
-            if page.mobile and page.mobile.mode == PageMode.HTML:
-                return page.mobile.assets
+            if page.mode == PageMode.HTML and page.mobile_assets:
+                return page.mobile_assets
             return None
         return None
 

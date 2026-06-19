@@ -14,6 +14,8 @@ from src.core.components.base.service import BaseService  # type: ignore
 
 from ...managers.plugin_ui_manager import get_plugin_ui_manager
 from ...utils.plugin_ui.plugin_ui_types import (
+    HTMLAssets,
+    PageMode,
     PageRegistration,
     PageSchemaResponse,
     PageSummary,
@@ -55,24 +57,88 @@ class PluginUIService(BaseService):
         super().__init__(plugin)
         self._manager = get_plugin_ui_manager()
 
-    async def register_ui_page(self, metadata: PageRegistration) -> RegisteredPage:
+    async def register_ui_page(
+        self,
+        *,
+        plugin_name: str,
+        page_id: str,
+        title: str,
+        mode: str,
+        icon: str | None = None,
+        description: str | None = None,
+        order: int = 100,
+        xml: str | None = None,
+        assets: dict | None = None,
+        mobile_xml: str | None = None,
+        mobile_assets: dict | None = None,
+    ) -> RegisteredPage:
         """注册一个插件 UI 页面。
 
         执行完整校验后注册到内存 Registry。同 key 视为更新。
+        所有参数均为基本类型，外部插件无需导入任何 WebUI 内部类型。
+
+        移动端强制与桌面端使用相同的渲染模式：
+        - mode="xml" 时只能传 mobile_xml，不能传 mobile_assets
+        - mode="html" 时只能传 mobile_assets，不能传 mobile_xml
 
         Args:
-            metadata: 页面注册元数据
+            plugin_name: 调用方插件名称
+            page_id: 同插件内唯一标识（小写字母、数字、连字符）
+            title: 页面显示名
+            mode: 渲染模式，"xml" 或 "html"（桌面端和移动端共用）
+            icon: Material Symbols 图标名，可选
+            description: 页面简介，可选
+            order: 排序权重（升序），默认 100
+            xml: XML 模式下的桌面端 XML 字符串
+            assets: HTML 模式下的桌面端资源声明 dict，结构：
+                {"entry_html": "path/to/index.html",
+                 "styles": ["path/to/style.css"],
+                 "scripts": ["path/to/main.js"],
+                 "assets_dir": "path/to/assets"}
+            mobile_xml: XML 模式下的移动端 XML 字符串（可选，空则 fallback 到桌面端）
+            mobile_assets: HTML 模式下的移动端资源声明 dict（可选，结构同 assets）
 
         Returns:
             加工后的 RegisteredPage 实例
 
         Raises:
-            ValueError: 模型校验失败
+            ValueError: 参数校验失败（含 mode 非法、mode 与移动端参数不匹配等）
             XMLValidationError: XML 校验失败
             AssetPathError: 路径不合法/穿越
             AssetMissingError: 文件不存在
             AssetSizeError: 文件超大
         """
+        # 校验 mode
+        try:
+            mode_enum = PageMode(mode)
+        except ValueError:
+            raise ValueError(
+                f"mode 参数非法: '{mode}'，必须为 'xml' 或 'html'"
+            )
+
+        # 构造桌面端 assets
+        assets_obj = HTMLAssets.model_validate(assets) if assets else None
+
+        # 构造移动端 assets
+        mobile_assets_obj = (
+            HTMLAssets.model_validate(mobile_assets) if mobile_assets else None
+        )
+
+        # 构造 PageRegistration（内部 model_validator 会校验 mode 与字段一致性）
+        metadata = PageRegistration(
+            plugin_name=plugin_name,
+            page_id=page_id,
+            title=title,
+            icon=icon,
+            description=description,
+            order=order,
+            mode=mode_enum,
+            xml=xml,
+            assets=assets_obj,
+            mobile_xml=mobile_xml,
+            mobile_assets=mobile_assets_obj,
+        )
+
         logger.debug(
             f"收到注册请求: {metadata.plugin_name}/{metadata.page_id}"
         )

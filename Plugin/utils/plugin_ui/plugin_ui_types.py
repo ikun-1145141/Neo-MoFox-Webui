@@ -10,7 +10,6 @@ import re
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -83,35 +82,6 @@ class HTMLAssets(BaseModel):
         return v
 
 
-class MobileVariant(BaseModel):
-    """移动端 UI 变体声明。
-
-    Attributes:
-        mode: 移动版的渲染模式（可与桌面不同）
-        xml: 当 mode=xml 时的 XML 字符串
-        assets: 当 mode=html 时的资源声明
-    """
-
-    mode: PageMode = Field(..., description="移动版的渲染模式")
-    xml: str | None = Field(default=None, description="XML 模式下的 XML 字符串")
-    assets: HTMLAssets | None = Field(default=None, description="HTML 模式下的资源声明")
-
-    @model_validator(mode="after")
-    def validate_mode_fields(self) -> "MobileVariant":
-        """校验 mode 与内容字段的一致性。"""
-        if self.mode == PageMode.XML:
-            if not self.xml:
-                raise ValueError("mobile.mode 为 xml 时，mobile.xml 不得为空")
-            if self.assets is not None:
-                raise ValueError("mobile.mode 为 xml 时，mobile.assets 必须为 None")
-        elif self.mode == PageMode.HTML:
-            if self.xml is not None:
-                raise ValueError("mobile.mode 为 html 时，mobile.xml 必须为 None")
-            if not self.assets:
-                raise ValueError("mobile.mode 为 html 时，mobile.assets 不得为空")
-        return self
-
-
 class PageRegistration(BaseModel):
     """页面注册入参（核心入参模型）。
 
@@ -122,10 +92,11 @@ class PageRegistration(BaseModel):
         icon: Material Symbols 图标名
         description: 页面简介
         order: 排序权重（升序），默认 100
-        mode: 桌面版渲染模式
-        xml: XML 模式下的 XML 字符串
-        assets: HTML 模式下的资源声明
-        mobile: 移动端三件套（可空，空则走 fallback）
+        mode: 渲染模式（桌面端和移动端共用）
+        xml: XML 模式下的 XML 字符串（桌面端）
+        assets: HTML 模式下的资源声明（桌面端）
+        mobile_xml: XML 模式下的移动端 XML 字符串（可空，空则移动端 fallback 到桌面端）
+        mobile_assets: HTML 模式下的移动端资源声明（可空，空则移动端 fallback 到桌面端）
     """
 
     plugin_name: str = Field(..., description="插件名称")
@@ -136,10 +107,17 @@ class PageRegistration(BaseModel):
         default=None, description="页面简介", max_length=MAX_DESCRIPTION_LENGTH
     )
     order: int = Field(default=100, description="排序权重，升序")
-    mode: PageMode = Field(..., description="桌面版渲染模式")
-    xml: str | None = Field(default=None, description="XML 模式下的 XML 字符串")
-    assets: HTMLAssets | None = Field(default=None, description="HTML 模式下的资源声明")
-    mobile: MobileVariant | None = Field(default=None, description="移动端三件套")
+    mode: PageMode = Field(..., description="渲染模式（桌面端和移动端共用）")
+    xml: str | None = Field(default=None, description="XML 模式下的 XML 字符串（桌面端）")
+    assets: HTMLAssets | None = Field(
+        default=None, description="HTML 模式下的资源声明（桌面端）"
+    )
+    mobile_xml: str | None = Field(
+        default=None, description="XML 模式下的移动端 XML 字符串"
+    )
+    mobile_assets: HTMLAssets | None = Field(
+        default=None, description="HTML 模式下的移动端资源声明"
+    )
 
     @field_validator("page_id")
     @classmethod
@@ -153,17 +131,26 @@ class PageRegistration(BaseModel):
 
     @model_validator(mode="after")
     def validate_mode_fields(self) -> "PageRegistration":
-        """校验桌面版 mode 与内容字段的一致性。"""
+        """校验 mode 与内容字段的一致性。
+
+        规则：
+        - mode=xml 时：xml 必填，assets 必须为 None，mobile_assets 必须为 None
+        - mode=html 时：assets 必填，xml 必须为 None，mobile_xml 必须为 None
+        """
         if self.mode == PageMode.XML:
             if not self.xml:
                 raise ValueError("mode 为 xml 时，xml 字段不得为空")
             if self.assets is not None:
                 raise ValueError("mode 为 xml 时，assets 必须为 None")
+            if self.mobile_assets is not None:
+                raise ValueError("mode 为 xml 时，mobile_assets 必须为 None")
         elif self.mode == PageMode.HTML:
             if self.xml is not None:
                 raise ValueError("mode 为 html 时，xml 字段必须为 None")
             if not self.assets:
                 raise ValueError("mode 为 html 时，assets 不得为空")
+            if self.mobile_xml is not None:
+                raise ValueError("mode 为 html 时，mobile_xml 必须为 None")
         return self
 
 
@@ -179,10 +166,11 @@ class RegisteredPage(BaseModel):
         icon: 图标名
         description: 页面简介
         order: 排序权重
-        mode: 桌面版渲染模式
-        xml: XML 字符串（XML 模式）
-        assets: 资源声明（HTML 模式）
-        mobile: 移动端三件套
+        mode: 渲染模式（桌面端和移动端共用）
+        xml: XML 字符串（桌面端，XML 模式）
+        assets: 资源声明（桌面端，HTML 模式）
+        mobile_xml: 移动端 XML 字符串（XML 模式）
+        mobile_assets: 移动端资源声明（HTML 模式）
         route_path: 系统生成的路由路径
         desktop_assets_urls: HTML 模式下桌面端资源绝对 URL
         mobile_assets_urls: HTML 模式下移动端资源绝对 URL
@@ -199,7 +187,8 @@ class RegisteredPage(BaseModel):
     mode: PageMode
     xml: str | None = None
     assets: HTMLAssets | None = None
-    mobile: MobileVariant | None = None
+    mobile_xml: str | None = None
+    mobile_assets: HTMLAssets | None = None
     route_path: str
     desktop_assets_urls: dict[str, list[str]] | None = None
     mobile_assets_urls: dict[str, list[str]] | None = None
@@ -207,6 +196,11 @@ class RegisteredPage(BaseModel):
     plugin_root: Path
 
     model_config = {"arbitrary_types_allowed": True}
+
+    @property
+    def has_mobile(self) -> bool:
+        """是否存在移动端变体内容。"""
+        return self.mobile_xml is not None or self.mobile_assets is not None
 
 
 class PageSummary(BaseModel):
@@ -219,7 +213,7 @@ class PageSummary(BaseModel):
         icon: 图标名
         description: 页面简介
         order: 排序权重
-        mode: 桌面版渲染模式
+        mode: 渲染模式
         route_path: 系统生成的路由路径
         has_mobile: 是否有移动端 variant
     """
@@ -245,10 +239,9 @@ class PageDetail(BaseModel):
         icon: 图标名
         description: 页面简介
         order: 排序权重
-        mode: 桌面版渲染模式
+        mode: 渲染模式（桌面端和移动端共用）
         route_path: 系统生成的路由路径
         has_mobile: 是否有移动端 variant
-        mobile_mode: 移动端渲染模式
         desktop_assets_urls: 桌面端资源 URL
         mobile_assets_urls: 移动端资源 URL
     """
@@ -262,7 +255,6 @@ class PageDetail(BaseModel):
     mode: PageMode
     route_path: str
     has_mobile: bool = False
-    mobile_mode: PageMode | None = None
     desktop_assets_urls: dict[str, list[str]] | None = None
     mobile_assets_urls: dict[str, list[str]] | None = None
 
@@ -273,7 +265,7 @@ class PageSchemaResponse(BaseModel):
     Attributes:
         plugin_name: 插件名称
         page_id: 页面唯一标识
-        mode: 当前 variant 的渲染模式
+        mode: 渲染模式
         xml: XML 字符串（XML 模式）
         assets_urls: 资源 URL 集合（HTML 模式）
     """

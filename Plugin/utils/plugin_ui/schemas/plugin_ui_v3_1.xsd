@@ -1,19 +1,30 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   Neo-MoFox WebUI Plugin UI Extension XSD Schema v3.1
-  
+
   定义插件 XML 声明式 UI 的文档结构约束。
-  根元素必须为 <page>，包含 <metadata>、可选 <definitions>、以及 <layout>。
+  根元素必须为 <page>，包含可选 <definitions> 和必选 <layout>。
+
+  前端渲染器行为参考：
+  - xml-renderer.ts：解析 XML → VNode 树
+  - api-template-engine.ts：<api> 模板解析与执行
+  - expression-evaluator.ts：安全表达式求值（支持 len/empty/keys/values/str/int/float/bool）
+  - pipe-executor.ts：管道指令执行（on-click="set: ... | api: ... | notify: ..."）
 -->
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
            elementFormDefault="unqualified"
            attributeFormDefault="unqualified">
 
-  <!-- 根元素 -->
+  <!-- ==================== 根元素 ==================== -->
+
   <xs:element name="page">
+    <xs:annotation>
+      <xs:documentation>
+        页面根元素。渲染时 xml-renderer 从此元素开始遍历子节点。
+      </xs:documentation>
+    </xs:annotation>
     <xs:complexType>
       <xs:sequence>
-        <xs:element name="metadata" type="MetadataType" minOccurs="1" maxOccurs="1"/>
         <xs:element name="definitions" type="DefinitionsType" minOccurs="0" maxOccurs="1"/>
         <xs:element name="layout" type="LayoutType" minOccurs="1" maxOccurs="1"/>
       </xs:sequence>
@@ -21,16 +32,15 @@
     </xs:complexType>
   </xs:element>
 
-  <!-- metadata 节：页面元信息 -->
-  <xs:complexType name="MetadataType">
-    <xs:sequence>
-      <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
-    </xs:sequence>
-    <xs:anyAttribute processContents="lax"/>
-  </xs:complexType>
+  <!-- ==================== definitions 段 ==================== -->
 
-  <!-- definitions 节：变量/API/模板定义 -->
   <xs:complexType name="DefinitionsType">
+    <xs:annotation>
+      <xs:documentation>
+        定义段：声明变量（var）、API 模板（api）、子模板（template）。
+        由 processDefinitions() 在渲染前预处理。
+      </xs:documentation>
+    </xs:annotation>
     <xs:sequence>
       <xs:choice minOccurs="0" maxOccurs="unbounded">
         <xs:element name="var" type="VarType"/>
@@ -42,10 +52,16 @@
 
   <!-- var 定义 -->
   <xs:complexType name="VarType">
+    <xs:annotation>
+      <xs:documentation>
+        变量声明。name 为变量路径，default 为初始值。
+        default 值会经过 JSON.parse 尝试解析，失败则视为字符串。
+        示例：default="0"（数字），default="'hello'"（字符串），default="[]"（数组）
+      </xs:documentation>
+    </xs:annotation>
     <xs:simpleContent>
       <xs:extension base="xs:string">
         <xs:attribute name="name" type="xs:string" use="required"/>
-        <xs:attribute name="type" type="xs:string" use="optional"/>
         <xs:attribute name="default" type="xs:string" use="optional"/>
       </xs:extension>
     </xs:simpleContent>
@@ -53,31 +69,396 @@
 
   <!-- api 定义 -->
   <xs:complexType name="ApiType">
+    <xs:annotation>
+      <xs:documentation>
+        API 模板声明。由 parseApiTemplateFromElement() 解析。
+        属性：
+        - id（必填）：唯一标识，管道指令中通过 "api: {id}" 触发
+        - method（可选，默认 GET）：HTTP 方法
+        - url（必填）：请求 URL，可含 {placeholder} 占位符
+        - body（可选）：请求体 JSON 模板，可含占位符
+        - response-to（可选）：将响应数据写入变量池的路径
+        - auto-fetch（可选）：值为 "true" 时页面加载自动执行
+        子元素：
+        - header：自定义请求头（name + value 属性）
+        - body：请求体内容（替代 body 属性）
+      </xs:documentation>
+    </xs:annotation>
     <xs:sequence>
-      <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
+      <xs:element name="header" minOccurs="0" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:simpleContent>
+            <xs:extension base="xs:string">
+              <xs:attribute name="name" type="xs:string" use="required"/>
+              <xs:attribute name="value" type="xs:string" use="optional"/>
+            </xs:extension>
+          </xs:simpleContent>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="body" type="xs:string" minOccurs="0" maxOccurs="1"/>
     </xs:sequence>
-    <xs:attribute name="name" type="xs:string" use="required"/>
-    <xs:attribute name="method" type="xs:string" use="optional"/>
-    <xs:attribute name="url" type="xs:string" use="optional"/>
-    <xs:attribute name="path" type="xs:string" use="optional"/>
-    <xs:anyAttribute processContents="lax"/>
+    <xs:attribute name="id" type="xs:string" use="required"/>
+    <xs:attribute name="method" use="optional">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="GET"/>
+          <xs:enumeration value="POST"/>
+          <xs:enumeration value="PUT"/>
+          <xs:enumeration value="PATCH"/>
+          <xs:enumeration value="DELETE"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="url" type="xs:string" use="required"/>
+    <xs:attribute name="body" type="xs:string" use="optional"/>
+    <xs:attribute name="response-to" type="xs:string" use="optional"/>
+    <xs:attribute name="auto-fetch" type="xs:string" use="optional"/>
   </xs:complexType>
 
   <!-- template 定义 -->
   <xs:complexType name="TemplateType">
+    <xs:annotation>
+      <xs:documentation>
+        子模板定义。通过 id 注册到 templates Map，可在渲染时复用。
+      </xs:documentation>
+    </xs:annotation>
     <xs:sequence>
       <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
     </xs:sequence>
-    <xs:attribute name="name" type="xs:string" use="required"/>
+    <xs:attribute name="id" type="xs:string" use="required"/>
     <xs:anyAttribute processContents="lax"/>
   </xs:complexType>
 
-  <!-- layout 节：UI 组件树 -->
+  <!-- ==================== layout 段 ==================== -->
+
   <xs:complexType name="LayoutType" mixed="true">
+    <xs:annotation>
+      <xs:documentation>
+        布局容器。渲染器将 layout 作为透传容器：直接渲染子节点，不渲染自身。
+        layout 下放置的是 UI 组件树。
+      </xs:documentation>
+    </xs:annotation>
     <xs:sequence>
       <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
     </xs:sequence>
     <xs:anyAttribute processContents="lax"/>
+  </xs:complexType>
+
+  <!-- ==================== 全局属性组 ==================== -->
+
+  <xs:attributeGroup name="GlobalAttrs">
+    <xs:annotation>
+      <xs:documentation>
+        所有 UI 组件可用的全局属性（xml-renderer.ts 中处理）：
+        - hidden：条件表达式，为 true 时不渲染。支持 {expression} 格式。
+        - disabled：条件表达式，为 true 时禁用。
+        - mobile-only：仅在移动端渲染。
+        - desktop-only：仅在桌面端渲染。
+        - on-click / on-change 等：管道指令事件绑定。
+        - bind:*：变量池双向绑定路径。
+      </xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="hidden" type="xs:string" use="optional"/>
+    <xs:attribute name="disabled" type="xs:string" use="optional"/>
+    <xs:attribute name="mobile-only" type="xs:string" use="optional"/>
+    <xs:attribute name="desktop-only" type="xs:string" use="optional"/>
+    <xs:attribute name="on-click" type="xs:string" use="optional"/>
+    <xs:attribute name="on-change" type="xs:string" use="optional"/>
+    <xs:attribute name="on-submit" type="xs:string" use="optional"/>
+  </xs:attributeGroup>
+
+  <!-- ==================== 布局组件 ==================== -->
+
+  <!-- vbox：垂直布局容器 -->
+  <xs:complexType name="VboxType" mixed="true">
+    <xs:sequence>
+      <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
+    </xs:sequence>
+    <xs:attribute name="gap" type="xs:string" use="optional"/>
+    <xs:attribute name="justify" type="xs:string" use="optional"/>
+    <xs:attribute name="align" type="xs:string" use="optional"/>
+    <xs:attribute name="padding" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- hbox：水平布局容器 -->
+  <xs:complexType name="HboxType" mixed="true">
+    <xs:sequence>
+      <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
+    </xs:sequence>
+    <xs:attribute name="gap" type="xs:string" use="optional"/>
+    <xs:attribute name="justify" type="xs:string" use="optional"/>
+    <xs:attribute name="align" type="xs:string" use="optional"/>
+    <xs:attribute name="wrap" type="xs:string" use="optional"/>
+    <xs:attribute name="padding" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- grid：网格布局容器 -->
+  <xs:complexType name="GridType" mixed="true">
+    <xs:sequence>
+      <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
+    </xs:sequence>
+    <xs:attribute name="columns" type="xs:string" use="optional"/>
+    <xs:attribute name="rows" type="xs:string" use="optional"/>
+    <xs:attribute name="gap" type="xs:string" use="optional"/>
+    <xs:attribute name="padding" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- card：卡片容器 -->
+  <xs:complexType name="CardType" mixed="true">
+    <xs:sequence>
+      <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
+    </xs:sequence>
+    <xs:attribute name="title" type="xs:string" use="optional"/>
+    <xs:attribute name="variant" use="optional">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="elevated"/>
+          <xs:enumeration value="outlined"/>
+          <xs:enumeration value="filled"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="padding" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- tabs：标签页容器 -->
+  <xs:complexType name="TabsType" mixed="true">
+    <xs:sequence>
+      <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
+    </xs:sequence>
+    <xs:attribute name="default-tab" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- dialog：对话框 -->
+  <xs:complexType name="DialogType" mixed="true">
+    <xs:sequence>
+      <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:string" use="optional"/>
+    <xs:attribute name="title" type="xs:string" use="optional"/>
+    <xs:attribute name="message" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- divider：分割线 -->
+  <xs:complexType name="DividerType">
+    <xs:attribute name="direction" use="optional">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="horizontal"/>
+          <xs:enumeration value="vertical"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="margin" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- spacer：弹性空间占位 -->
+  <xs:complexType name="SpacerType">
+    <xs:attribute name="height" type="xs:string" use="optional"/>
+    <xs:attribute name="width" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- ==================== 基础组件 ==================== -->
+
+  <!-- sys-text：文本显示 -->
+  <xs:complexType name="SysTextType" mixed="true">
+    <xs:sequence>
+      <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
+    </xs:sequence>
+    <xs:attribute name="variant" use="optional">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="body"/>
+          <xs:enumeration value="title"/>
+          <xs:enumeration value="subtitle"/>
+          <xs:enumeration value="caption"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="color" type="xs:string" use="optional"/>
+    <xs:attribute name="align" type="xs:string" use="optional"/>
+    <xs:attribute name="bold" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- sys-button：按钮 -->
+  <xs:complexType name="SysButtonType" mixed="true">
+    <xs:sequence>
+      <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
+    </xs:sequence>
+    <xs:attribute name="variant" use="optional">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="filled"/>
+          <xs:enumeration value="outlined"/>
+          <xs:enumeration value="text"/>
+          <xs:enumeration value="tonal"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="icon" type="xs:string" use="optional"/>
+    <xs:attribute name="loading" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- sys-icon-button：图标按钮 -->
+  <xs:complexType name="SysIconButtonType">
+    <xs:attribute name="icon" type="xs:string" use="optional"/>
+    <xs:attribute name="variant" use="optional">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="standard"/>
+          <xs:enumeration value="filled"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="loading" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- sys-icon：图标 -->
+  <xs:complexType name="SysIconType" mixed="true">
+    <xs:attribute name="name" type="xs:string" use="optional"/>
+    <xs:attribute name="size" type="xs:string" use="optional"/>
+    <xs:attribute name="color" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- sys-input：输入框 -->
+  <xs:complexType name="SysInputType">
+    <xs:attribute name="label" type="xs:string" use="optional"/>
+    <xs:attribute name="placeholder" type="xs:string" use="optional"/>
+    <xs:attribute name="type" type="xs:string" use="optional"/>
+    <xs:attribute name="value" type="xs:string" use="optional"/>
+    <xs:attribute name="error" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- sys-textarea：多行文本输入 -->
+  <xs:complexType name="SysTextareaType">
+    <xs:attribute name="label" type="xs:string" use="optional"/>
+    <xs:attribute name="placeholder" type="xs:string" use="optional"/>
+    <xs:attribute name="value" type="xs:string" use="optional"/>
+    <xs:attribute name="rows" type="xs:string" use="optional"/>
+    <xs:attribute name="error" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- sys-select：下拉选择 -->
+  <xs:complexType name="SysSelectType" mixed="true">
+    <xs:sequence>
+      <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
+    </xs:sequence>
+    <xs:attribute name="label" type="xs:string" use="optional"/>
+    <xs:attribute name="options" type="xs:string" use="optional"/>
+    <xs:attribute name="value" type="xs:string" use="optional"/>
+    <xs:attribute name="placeholder" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- sys-switch：开关 -->
+  <xs:complexType name="SysSwitchType">
+    <xs:attribute name="label" type="xs:string" use="optional"/>
+    <xs:attribute name="value" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- sys-slider：滑块 -->
+  <xs:complexType name="SysSliderType">
+    <xs:attribute name="label" type="xs:string" use="optional"/>
+    <xs:attribute name="value" type="xs:string" use="optional"/>
+    <xs:attribute name="min" type="xs:string" use="optional"/>
+    <xs:attribute name="max" type="xs:string" use="optional"/>
+    <xs:attribute name="step" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- sys-date-picker：日期选择 -->
+  <xs:complexType name="SysDatePickerType">
+    <xs:attribute name="label" type="xs:string" use="optional"/>
+    <xs:attribute name="value" type="xs:string" use="optional"/>
+    <xs:attribute name="type" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- sys-tag：标签 -->
+  <xs:complexType name="SysTagType" mixed="true">
+    <xs:attribute name="variant" use="optional">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="default"/>
+          <xs:enumeration value="primary"/>
+          <xs:enumeration value="error"/>
+          <xs:enumeration value="success"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="color" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- sys-badge：徽章 -->
+  <xs:complexType name="SysBadgeType" mixed="true">
+    <xs:attribute name="value" type="xs:string" use="optional"/>
+    <xs:attribute name="color" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- ==================== 高级组件 ==================== -->
+
+  <!-- sys-table：数据表格 -->
+  <xs:complexType name="SysTableType">
+    <xs:attribute name="data" type="xs:string" use="optional"/>
+    <xs:attribute name="columns" type="xs:string" use="optional"/>
+    <xs:attribute name="striped" type="xs:string" use="optional"/>
+    <xs:attribute name="page-size" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- sys-chart：图表（占位实现） -->
+  <xs:complexType name="SysChartType" mixed="true">
+    <xs:sequence>
+      <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
+    </xs:sequence>
+    <xs:attribute name="type" use="optional">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="line"/>
+          <xs:enumeration value="bar"/>
+          <xs:enumeration value="pie"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="data" type="xs:string" use="optional"/>
+    <xs:attribute name="height" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- sys-form：表单容器 -->
+  <xs:complexType name="SysFormType" mixed="true">
+    <xs:sequence>
+      <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
+    </xs:sequence>
+    <xs:attribute name="gap" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
+  </xs:complexType>
+
+  <!-- sys-list：列表 -->
+  <xs:complexType name="SysListType" mixed="true">
+    <xs:sequence>
+      <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
+    </xs:sequence>
+    <xs:attribute name="data" type="xs:string" use="optional"/>
+    <xs:attribute name="divider" type="xs:string" use="optional"/>
+    <xs:attributeGroup ref="GlobalAttrs"/>
   </xs:complexType>
 
 </xs:schema>

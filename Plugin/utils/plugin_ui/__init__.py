@@ -11,7 +11,6 @@ from .plugin_ui_constants import (
 from .plugin_ui_paths import resolve_safe
 from .plugin_ui_types import (
     HTMLAssets,
-    MobileVariant,
     PageDetail,
     PageMode,
     PageRegistration,
@@ -25,7 +24,6 @@ __all__ = [
     "ASSET_CACHE_MAX_AGE",
     "MAX_ASSET_SIZE_BYTES",
     "HTMLAssets",
-    "MobileVariant",
     "PageDetail",
     "PageMode",
     "PageRegistration",

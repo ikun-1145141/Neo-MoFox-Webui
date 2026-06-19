@@ -4,18 +4,12 @@
  *
  * 简化的标签切换组件。子元素通过 label 属性定义 tab 标题。
  */
-import { ref } from 'vue'
 
 defineProps<{
   /** 默认选中的 tab 索引 */
   defaultTab?: string
 }>()
 
-const activeIndex = ref(0)
-
-function setTab(index: number): void {
-  activeIndex.value = index
-}
 </script>
 
 <template>

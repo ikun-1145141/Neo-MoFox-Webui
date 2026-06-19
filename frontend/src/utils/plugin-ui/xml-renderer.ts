@@ -160,8 +160,19 @@ export function renderElementToVNodes(
   const vnodes: VNode[] = []
 
   for (const child of children) {
-    // 跳过 <definitions>
+    // 跳过 <definitions>（已在 processDefinitions 中处理）
     if (child.tagName === 'definitions') continue
+
+    // <layout> 作为透传容器：渲染其子节点而非自身
+    if (child.tagName === 'layout') {
+      for (const layoutChild of Array.from(child.children)) {
+        const vnode = renderSingleElement(layoutChild, context)
+        if (vnode) {
+          vnodes.push(vnode)
+        }
+      }
+      continue
+    }
 
     const vnode = renderSingleElement(child, context)
     if (vnode) {

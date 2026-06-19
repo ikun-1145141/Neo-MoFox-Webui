@@ -15,7 +15,6 @@ from src.app.plugin_system.api.log_api import get_logger  # type: ignore
 
 from ..utils.plugin_ui.plugin_ui_types import (
     HTMLAssets,
-    MobileVariant,
     PageDetail,
     PageMode,
     PageRegistration,
@@ -60,9 +59,9 @@ class PluginUIManager:
             reg.plugin_name, reg.page_id, "desktop", reg.assets
         )
         mobile_assets_urls = None
-        if reg.mobile and reg.mobile.mode == PageMode.HTML and reg.mobile.assets:
+        if reg.mode == PageMode.HTML and reg.mobile_assets:
             mobile_assets_urls = self._build_assets_urls(
-                reg.plugin_name, reg.page_id, "mobile", reg.mobile.assets
+                reg.plugin_name, reg.page_id, "mobile", reg.mobile_assets
             )
 
         page = RegisteredPage(
@@ -75,7 +74,8 @@ class PluginUIManager:
             mode=reg.mode,
             xml=reg.xml,
             assets=reg.assets,
-            mobile=reg.mobile,
+            mobile_xml=reg.mobile_xml,
+            mobile_assets=reg.mobile_assets,
             route_path=route_path,
             desktop_assets_urls=desktop_assets_urls,
             mobile_assets_urls=mobile_assets_urls,
@@ -171,7 +171,7 @@ class PluginUIManager:
                     order=page.order,
                     mode=page.mode,
                     route_path=page.route_path,
-                    has_mobile=page.mobile is not None,
+                    has_mobile=page.has_mobile,
                 )
             )
         pages.sort(key=lambda p: p.order)
@@ -201,8 +201,7 @@ class PluginUIManager:
             order=page.order,
             mode=page.mode,
             route_path=page.route_path,
-            has_mobile=page.mobile is not None,
-            mobile_mode=page.mobile.mode if page.mobile else None,
+            has_mobile=page.has_mobile,
             desktop_assets_urls=page.desktop_assets_urls,
             mobile_assets_urls=page.mobile_assets_urls,
         )
@@ -239,17 +238,17 @@ class PluginUIManager:
                 else None,
             )
         elif variant == "mobile":
-            if page.mobile is None:
+            if not page.has_mobile:
                 return None
             return PageSchemaResponse(
                 plugin_name=page.plugin_name,
                 page_id=page.page_id,
-                mode=page.mobile.mode,
-                xml=page.mobile.xml
-                if page.mobile.mode == PageMode.XML
+                mode=page.mode,
+                xml=page.mobile_xml
+                if page.mode == PageMode.XML
                 else None,
                 assets_urls=page.mobile_assets_urls
-                if page.mobile.mode == PageMode.HTML
+                if page.mode == PageMode.HTML
                 else None,
             )
         return None

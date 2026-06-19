@@ -59,9 +59,9 @@ XML_DEFINITION_TAGS: frozenset[str] = frozenset([
     "var", "api", "template",
 ])
 
-# XML 结构标签（metadata, definitions, layout）
+# XML 结构标签（definitions, layout）
 XML_STRUCTURE_TAGS: frozenset[str] = frozenset([
-    "page", "metadata", "definitions", "layout",
+    "page", "definitions", "layout",
 ])
 
 # 全部允许的 XML 标签合集
