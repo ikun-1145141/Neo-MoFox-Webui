@@ -104,8 +104,6 @@ const modeLabel = computed(() => {
   width: 100%;
   min-height: 0;
   background: color-mix(in srgb, var(--md-sys-color-surface) 75%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   overflow: hidden;
 }
 
@@ -132,6 +130,8 @@ const modeLabel = computed(() => {
   gap: 0.25rem;
   padding: 1.25rem 1.5rem;
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
+    backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   flex-shrink: 0;
 }
 

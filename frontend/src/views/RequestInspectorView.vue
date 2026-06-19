@@ -922,7 +922,7 @@ pre {
   min-height: 520px;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 899px) {
   .inspector-top-bar {
     display: flex;
   }
