@@ -26,6 +26,7 @@ const navItems = [
   { labelKey: 'app.nav.chat', icon: 'material-symbols:chat-outline-rounded', name: 'chat', path: '/chat' },
   { labelKey: 'app.nav.plugins', icon: 'material-symbols:extension-outline-rounded', name: 'plugins', path: '/plugins' },
   { labelKey: 'app.nav.config-plugins', icon: 'material-symbols:settings-outline-rounded', name: 'config-plugins', path: '/config/plugins' },
+  { labelKey: 'app.nav.pluginCenter', icon: 'material-symbols:dashboard-customize-outline-rounded', name: 'plugin-ui', path: '/plugin-ui' },
   { labelKey: 'app.nav.llmMetrics', icon: 'material-symbols:bar-chart-rounded', name: 'llm-metrics', path: '/llm-metrics' },
   { labelKey: 'app.nav.requestInspector', icon: 'material-symbols:plagiarism-outline-rounded', name: 'request-inspector', path: '/request-inspector' },
   { labelKey: 'app.nav.log', icon: 'material-symbols:terminal-rounded', name: 'logs', path: '/logs' },
