@@ -7,7 +7,7 @@
  * 请求前后自动向变量池写入 api.<id>.pending / error / last_response。
  */
 
-import instance from '../../api/base'
+import instance from '../../api/third-party'
 import type { PluginUIVarStore } from '../../stores/plugin-ui-vars'
 import { resolvePlaceholderSync } from './placeholder-parser'
 

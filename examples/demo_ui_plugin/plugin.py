@@ -54,8 +54,8 @@ _DASHBOARD_XML = """\
     <var name="items" default="[]" />
     <var name="featureEnabled" default="false" />
     <var name="volume" default="60" />
-    <api id="getItems" method="GET" url="/webui/api/demo-ui/items" response-to="items" auto-fetch="true" />
-    <api id="addItem" method="POST" url="/webui/api/demo-ui/items" body='{"name": "{username}"}' response-to="items" />
+    <api id="getItems" method="GET" url="/router/demo_ui_router/demo-ui/items" response-to="items" auto-fetch="true" />
+    <api id="addItem" method="POST" url="router/demo_ui_router/demo-ui/items" body='{"name": "{username}"}' response-to="items" />
   </definitions>
 
   <layout>

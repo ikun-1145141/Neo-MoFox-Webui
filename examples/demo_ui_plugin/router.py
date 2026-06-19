@@ -66,12 +66,12 @@ class DemoUIRouter(BaseRouter):
     def register_endpoints(self) -> None:
         """注册 FastAPI 端点。"""
 
-        @self.app.get("/webui/api/demo-ui/items")
+        @self.app.get("/demo-ui/items")
         async def list_items() -> BaseResponse:
             """获取所有条目列表。"""
             return BaseResponse(data=_items)
 
-        @self.app.post("/webui/api/demo-ui/items")
+        @self.app.post("/demo-ui/items")
         async def add_item(body: ItemCreate) -> BaseResponse:
             """添加一个新条目。"""
             global _next_id
@@ -86,7 +86,7 @@ class DemoUIRouter(BaseRouter):
             _next_id += 1
             return BaseResponse(data=_items, message="添加成功")
 
-        @self.app.delete("/webui/api/demo-ui/items/{item_id}")
+        @self.app.delete("/demo-ui/items/{item_id}")
         async def delete_item(item_id: int) -> BaseResponse:
             """删除指定条目。"""
             global _items

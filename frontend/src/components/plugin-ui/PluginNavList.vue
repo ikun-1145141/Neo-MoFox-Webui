@@ -140,6 +140,7 @@ function handleSelect(pluginName: string, pageId: string): void {
   backdrop-filter: blur(12px);
   overflow-y: auto;
   z-index: 5;
+  border-right: 1px solid var(--md-sys-color-outline-variant);
 }
 
 .plugin-nav-title {

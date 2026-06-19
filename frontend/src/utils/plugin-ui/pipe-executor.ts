@@ -163,6 +163,7 @@ async function executeNode(node: PipeNode, context: PipeContext): Promise<void> 
       const path = node.args.slice(0, eqIndex).trim()
       const valueStr = node.args.slice(eqIndex + 1).trim()
       const value = resolveValue(valueStr, store)
+      console.debug(`[PipeExecutor] set: ${path} = ${JSON.stringify(value)} (from "${valueStr}")`)
       store.set(path, value)
       break
     }
@@ -281,8 +282,20 @@ function resolveValue(valueStr: string, store: PluginUIVarStore): any {
   if (valueStr === 'null') return null
   if (/^-?\d+(\.\d+)?$/.test(valueStr)) return parseFloat(valueStr)
 
-  // JSON 对象/数组
-  if (valueStr.startsWith('{') || valueStr.startsWith('[')) {
+  // 纯占位符表达式 {expr}：直接求值并保留原始类型
+  if (valueStr.startsWith('{') && valueStr.endsWith('}')) {
+    // 检查是否为 JSON 对象字面量
+    try {
+      return JSON.parse(valueStr)
+    } catch {
+      // 不是合法 JSON → 当作表达式求值（保留原始类型，不字符串化）
+      const expr = valueStr.slice(1, -1).trim()
+      return safeEvaluate(expr, store, valueStr)
+    }
+  }
+
+  // JSON 数组
+  if (valueStr.startsWith('[')) {
     try {
       return JSON.parse(valueStr)
     } catch {
@@ -290,7 +303,7 @@ function resolveValue(valueStr: string, store: PluginUIVarStore): any {
     }
   }
 
-  // 含占位符的字符串
+  // 含占位符的混合字符串（如 "hello {name}"）
   if (valueStr.includes('{')) {
     return resolvePlaceholderSync(valueStr, store)
   }

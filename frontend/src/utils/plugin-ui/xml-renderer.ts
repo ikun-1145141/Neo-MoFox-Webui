@@ -109,15 +109,19 @@ export function processDefinitions(
         const name = child.getAttribute('name')
         const defaultValue = child.getAttribute('default')
         if (name) {
-          let value: any = null
-          if (defaultValue) {
-            try {
-              value = JSON.parse(defaultValue)
-            } catch {
-              value = defaultValue
+          // 仅当变量尚未存在时才写入默认值，避免 computed 重算时覆盖已修改的值
+          if (store.get(name) === undefined) {
+            let value: any = null
+            if (defaultValue) {
+              try {
+                value = JSON.parse(defaultValue)
+              } catch {
+                value = defaultValue
+              }
             }
+            console.debug(`[XmlRenderer] 初始化变量: ${name} =`, value)
+            store.set(name, value)
           }
-          store.set(name, value)
         }
         break
       }
@@ -201,6 +205,7 @@ function renderSingleElement(element: Element, context: XmlRenderContext): VNode
   const hiddenAttr = element.getAttribute('hidden')
   if (hiddenAttr) {
     const isHidden = evaluateCondition(hiddenAttr, store)
+    console.debug(`[XmlRenderer] hidden 条件: "${hiddenAttr}" → ${isHidden}`)
     if (isHidden) return null
   }
 
@@ -248,10 +253,17 @@ function resolveAttributes(
     const name = attr.name
     const value = attr.value
 
+    // hidden / mobile-only / desktop-only 已在 renderSingleElement 中处理，
+    // 不传递给子组件。hidden 若作为 HTML fallthrough 属性会导致元素被意外隐藏。
+    if (name === 'hidden' || name === 'mobile-only' || name === 'desktop-only') {
+      continue
+    }
+
     // 事件属性（on-click, on-change 等）→ 绑定管道执行
     if (name.startsWith('on-')) {
       const eventName = name.slice(3) // 'click', 'change' 等
       props[`on${capitalize(eventName)}`] = () => {
+        console.debug(`[XmlRenderer] 事件触发: ${name}="${value}"`)
         executePipe(value, pipeContext).catch((err: Error) => {
           console.warn(`[XmlRenderer] 管道执行失败 (${name}):`, err.message)
         })
@@ -373,3 +385,4 @@ function attrToProp(attr: string): string {
 function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1)
 }
+

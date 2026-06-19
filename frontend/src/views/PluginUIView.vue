@@ -119,6 +119,7 @@ async function loadPage(pluginName: string, pageId: string): Promise<void> {
     try {
       const schema = await getPageSchema(pluginName, pageId, variant)
       currentSchema.value = schema
+      console.log('Loaded page schema:', schema)
     } catch (err: any) {
       // 如果是移动端且后端返回 204（无 mobile variant），走 fallback
       if (variant === 'mobile' && err?.code === 204) {
@@ -225,7 +226,6 @@ watch(
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  padding: 1.5rem 2rem;
 }
 
 /* 状态占位 */
@@ -236,7 +236,7 @@ watch(
   justify-content: center;
   gap: 0.75rem;
   height: 100%;
-  padding: 2rem;
+  padding: 1.5rem 2rem;
 }
 
 .state-icon {
@@ -295,10 +295,6 @@ watch(
 @media (max-width: 900px) {
   .plugin-ui-layout {
     flex-direction: column;
-  }
-
-  .plugin-ui-content {
-    padding: 1rem;
   }
 }
 </style>

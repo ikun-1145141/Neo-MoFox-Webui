@@ -100,9 +100,13 @@ const modeLabel = computed(() => {
 .plugin-page-container {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
   height: 100%;
+  width: 100%;
   min-height: 0;
+  background: color-mix(in srgb, var(--md-sys-color-surface) 75%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  overflow: hidden;
 }
 
 /* Fallback 提示条 */
@@ -113,7 +117,6 @@ const modeLabel = computed(() => {
   padding: 0.5rem 1rem;
   background: var(--md-sys-color-tertiary-container);
   color: var(--md-sys-color-on-tertiary-container);
-  border-radius: 8px;
   font-size: 0.8125rem;
   font-weight: 500;
 }
@@ -127,6 +130,9 @@ const modeLabel = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  flex-shrink: 0;
 }
 
 .plugin-page-header-title {
@@ -168,6 +174,7 @@ const modeLabel = computed(() => {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  padding: 1.25rem 1.5rem;
 }
 
 .plugin-page-content.fallback-scroll {
@@ -216,5 +223,28 @@ const modeLabel = computed(() => {
   white-space: pre-wrap;
   word-break: break-all;
   margin: 0;
+}
+
+/* 移动端响应：header 缩小 */
+@media (max-width: 900px) {
+  .plugin-page-header {
+    padding: 0.75rem 1rem;
+  }
+
+  .plugin-page-header-icon {
+    font-size: 20px;
+  }
+
+  .plugin-page-header-name {
+    font-size: 1rem;
+  }
+
+  .plugin-page-header-desc {
+    font-size: 0.8125rem;
+  }
+
+  .plugin-page-content {
+    padding: 1rem;
+  }
 }
 </style>

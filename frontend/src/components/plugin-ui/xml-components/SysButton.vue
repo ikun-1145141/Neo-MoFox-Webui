@@ -22,7 +22,7 @@ const emit = defineEmits<{ (e: 'click'): void }>()
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.15s, background 0.15s;
+  transition: opacity 0.15s, background 0.15s, transform 0.1s;
 }
 
 .sys-button:disabled {
@@ -39,10 +39,22 @@ const emit = defineEmits<{ (e: 'click'): void }>()
   opacity: 0.9;
 }
 
+.sys-button--filled:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
 .sys-button--outlined {
   background: transparent;
   color: var(--md-sys-color-primary);
   border: 1px solid var(--md-sys-color-outline);
+}
+
+.sys-button--outlined:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent);
+}
+
+.sys-button--outlined:active:not(:disabled) {
+  transform: scale(0.95);
 }
 
 .sys-button--text {
@@ -50,9 +62,25 @@ const emit = defineEmits<{ (e: 'click'): void }>()
   color: var(--md-sys-color-primary);
 }
 
+.sys-button--text:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent);
+}
+
+.sys-button--text:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
 .sys-button--tonal {
   background: var(--md-sys-color-secondary-container);
   color: var(--md-sys-color-on-secondary-container);
+}
+
+.sys-button--tonal:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.sys-button--tonal:active:not(:disabled) {
+  transform: scale(0.95);
 }
 
 .sys-button-icon {
