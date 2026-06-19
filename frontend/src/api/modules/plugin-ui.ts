@@ -41,16 +41,20 @@ export function getPageDetail(pluginName: string, pageId: string): Promise<PageD
 /**
  * 获取页面渲染 schema（XML 内容或 HTML assets URL）。
  *
+ * 当页面存在但请求的 variant 缺失（例如请求 mobile 但插件未提供）时，
+ * 后端返回 code=200, data=null，本函数对应 resolve 为 null；
+ * 仅当页面本身不存在或网络错误时 reject。
+ *
  * @param pluginName - 插件名称
  * @param pageId - 页面标识
  * @param variant - 变体类型，desktop 或 mobile
- * @returns 页面渲染 schema
+ * @returns 页面渲染 schema；variant 缺失时为 null
  */
 export function getPageSchema(
   pluginName: string,
   pageId: string,
   variant: 'desktop' | 'mobile' = 'desktop'
-): Promise<PageSchemaResponse> {
+): Promise<PageSchemaResponse | null> {
   return instance.get(`/webui/api/plugin-ui/schema/${pluginName}/${pageId}`, {
     params: { variant }
   })

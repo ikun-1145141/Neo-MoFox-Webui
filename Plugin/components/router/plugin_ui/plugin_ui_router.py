@@ -142,21 +142,26 @@ class PluginUIRouter(BaseRouter):
                 plugin_name: 插件名称
                 page_id: 页面标识
                 variant: 变体类型
+
+            Returns:
+                成功时返回 schema 内容；当页面存在但请求的 variant 缺失
+                （例如请求 mobile 但插件未提供 mobile variant）时，
+                返回 code=200, data=None, message="no_variant"，
+                由前端决定是否回退到 desktop variant。
+                仅当页面本身不存在时才返回 code=404 错误。
             """
             schema = self._manager.get_schema(plugin_name, page_id, variant)  # type: ignore[arg-type]
 
             if schema is None:
-                # 区分：页面不存在 vs mobile variant 缺失
+                # 页面本身不存在 → 真错误
                 page = self._manager.get_detail(plugin_name, page_id)
                 if page is None:
                     return BaseResponse.error(
                         code=404,
                         message=f"页面不存在: {plugin_name}/{page_id}",
                     )
-                # 页面存在但 mobile variant 不存在
-                return BaseResponse.error(
-                    code=204,
-                    message="no_mobile_variant",
-                )
+                # 页面存在但请求的 variant 不存在 → 视为正常响应，data=None
+                # 让前端通过 detail.has_mobile 与该响应共同决定 fallback
+                return BaseResponse.ok(data=None, message="no_variant")
 
             return BaseResponse.ok(data=schema)

@@ -6,7 +6,7 @@
  * 采用左右布局：左侧侧边栏始终显示导航列表，右侧为内容区。
  * 通过 route.query.plugin 和 route.query.page 选择要渲染的插件页面。
  */
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppShell from '../components/common/AppShell.vue'
 import PluginNavList from '../components/plugin-ui/PluginNavList.vue'
@@ -19,6 +19,9 @@ import { useI18n } from '../utils/i18n'
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+
+/** 移动端视口判定阈值（像素）。与 CSS 媒体查询保持一致。 */
+const MOBILE_BREAKPOINT_PX = 768
 
 // === 侧边栏状态 ===
 
@@ -33,28 +36,87 @@ const listLoading = ref(false)
 const currentDetail = ref<PageDetail | null>(null)
 /** 当前页面的 schema */
 const currentSchema = ref<PageSchemaResponse | null>(null)
+/** 当前 schema 实际加载的 variant，用于断点切换时判断是否需要重拉 */
+const currentVariant = ref<'desktop' | 'mobile' | null>(null)
 /** 内容区是否正在加载 */
 const contentLoading = ref(false)
 /** 内容区错误信息 */
 const contentError = ref<string | null>(null)
-/** 是否为移动端 fallback 模式 */
+/** 是否为移动端 fallback 模式（请求 mobile 但走了 desktop schema） */
 const isFallback = ref(false)
-/** 是否为移动端视口 */
-const isMobile = ref(window.innerWidth < 768)
+/** 是否为移动端视口（响应式，跟随 matchMedia 实时更新） */
+const isMobile = ref(
+  window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT_PX - 1}px)`).matches,
+)
 
 /** 当前页面的变量池 Store */
 const currentStore = ref<PluginUIVarStore | null>(null)
 
+/** matchMedia 实例，用于添加/移除断点监听 */
+const mediaQuery: MediaQueryList = window.matchMedia(
+  `(max-width: ${MOBILE_BREAKPOINT_PX - 1}px)`,
+)
+
+/**
+ * 媒体查询变化处理器。
+ *
+ * 视口跨越断点时更新 isMobile，并在当前已加载的 variant 与新 variant
+ * 不匹配时重新拉取 schema（前提是该插件提供了对应 variant）。
+ */
+function handleMediaChange(event: MediaQueryListEvent): void {
+  const nextIsMobile = event.matches
+  if (nextIsMobile === isMobile.value) {
+    return
+  }
+  isMobile.value = nextIsMobile
+
+  // 当前没有已加载页面则不需要重拉
+  const detail = currentDetail.value
+  if (!detail) {
+    return
+  }
+
+  const desiredVariant: 'desktop' | 'mobile' = nextIsMobile ? 'mobile' : 'desktop'
+  // 已经是目标 variant，不需要重拉
+  if (currentVariant.value === desiredVariant) {
+    return
+  }
+  // 切到 mobile 但插件没有 mobile variant，沿用当前 desktop schema 即可
+  if (desiredVariant === 'mobile' && !detail.has_mobile) {
+    isFallback.value = true
+    return
+  }
+
+  void loadPage(detail.plugin_name, detail.page_id)
+}
+
 // === 生命周期 ===
 
 onMounted(async () => {
-  // 监听窗口大小变化
-  window.addEventListener('resize', () => {
-    isMobile.value = window.innerWidth < 768
-  })
+  // 监听视口断点切换；优先使用 addEventListener，老 Safari 回退到 addListener
+  if (typeof mediaQuery.addEventListener === 'function') {
+    mediaQuery.addEventListener('change', handleMediaChange)
+  } else {
+    // @ts-expect-error 兼容旧版 Safari
+    mediaQuery.addListener(handleMediaChange)
+  }
 
   // 加载页面列表
   await loadPageList()
+})
+
+onBeforeUnmount(() => {
+  if (typeof mediaQuery.removeEventListener === 'function') {
+    mediaQuery.removeEventListener('change', handleMediaChange)
+  } else {
+    // @ts-expect-error 兼容旧版 Safari
+    mediaQuery.removeListener(handleMediaChange)
+  }
+  // 销毁残留 page scope
+  if (currentStore.value) {
+    currentStore.value.destroyPageScope()
+    currentStore.value = null
+  }
 })
 
 /** 加载所有已注册的插件页面 */
@@ -81,6 +143,7 @@ watch(
     if (!pluginName || !pageId) {
       currentDetail.value = null
       currentSchema.value = null
+      currentVariant.value = null
       contentError.value = null
       isFallback.value = false
       return
@@ -88,15 +151,24 @@ watch(
 
     await loadPage(pluginName, pageId)
   },
-  { immediate: true }
+  { immediate: true },
 )
 
-/** 加载指定插件页面的内容 */
+/**
+ * 加载指定插件页面的内容。
+ *
+ * 流程：
+ * 1. 拉取 detail 获取 has_mobile 等元信息；
+ * 2. 根据当前视口与 has_mobile 决定直接请求 desktop 还是 mobile schema，
+ *    避免无意义的"先 mobile 再 fallback"二次请求；
+ * 3. 后端在 variant 缺失时返回 data=null（非错误），作为额外保险再回退到 desktop。
+ */
 async function loadPage(pluginName: string, pageId: string): Promise<void> {
   contentLoading.value = true
   contentError.value = null
   currentDetail.value = null
   currentSchema.value = null
+  currentVariant.value = null
   isFallback.value = false
 
   // 销毁旧 page scope
@@ -112,28 +184,41 @@ async function loadPage(pluginName: string, pageId: string): Promise<void> {
     // 2. 创建变量池 Store
     currentStore.value = createPluginUIVarStore(pluginName)
 
-    // 3. 根据视口决定 variant
-    const variant = isMobile.value ? 'mobile' : 'desktop'
-
-    // 3. 获取 schema
-    try {
-      const schema = await getPageSchema(pluginName, pageId, variant)
-      currentSchema.value = schema
-      console.log('Loaded page schema:', schema)
-    } catch (err: any) {
-      // 如果是移动端且后端返回 204（无 mobile variant），走 fallback
-      if (variant === 'mobile' && err?.code === 204) {
-        isFallback.value = true
-        const desktopSchema = await getPageSchema(pluginName, pageId, 'desktop')
-        currentSchema.value = desktopSchema
-      } else {
-        throw err
-      }
+    // 3. 由 detail.has_mobile 与视口共同决定首选 variant
+    const wantsMobile = isMobile.value && detail.has_mobile
+    const preferredVariant: 'desktop' | 'mobile' = wantsMobile ? 'mobile' : 'desktop'
+    // 视口需要 mobile 但插件未提供，则视为 fallback
+    if (isMobile.value && !detail.has_mobile) {
+      isFallback.value = true
     }
+
+    // 4. 拉取首选 variant 的 schema
+    let schema: PageSchemaResponse | null = await getPageSchema(
+      pluginName,
+      pageId,
+      preferredVariant,
+    )
+    let actualVariant: 'desktop' | 'mobile' = preferredVariant
+
+    // 5. 防御性回退：理论上若 detail.has_mobile=true 则不应触发，
+    //    仅在后端注册表与 variant 文件状态不一致时兜底
+    if (schema === null && preferredVariant === 'mobile') {
+      isFallback.value = true
+      schema = await getPageSchema(pluginName, pageId, 'desktop')
+      actualVariant = 'desktop'
+    }
+
+    if (schema === null) {
+      throw new Error(t('pluginUI.loadFailed'))
+    }
+
+    currentSchema.value = schema
+    currentVariant.value = actualVariant
   } catch (err: any) {
-    contentError.value = err?.message || '加载页面失败'
+    contentError.value = err?.message || t('pluginUI.loadFailed')
     currentDetail.value = null
     currentSchema.value = null
+    currentVariant.value = null
   } finally {
     contentLoading.value = false
   }
@@ -157,7 +242,7 @@ watch(
     activePlugin.value = (q.plugin as string) || null
     activePage.value = (q.page as string) || null
   },
-  { immediate: true }
+  { immediate: true },
 )
 </script>
 
@@ -178,7 +263,7 @@ watch(
         <!-- 加载中 -->
         <div v-if="contentLoading" class="plugin-ui-state">
           <span class="material-symbols-rounded state-icon spinning">progress_activity</span>
-          <p class="state-text">正在加载插件页面...</p>
+          <p class="state-text">{{ t('pluginUI.loading') }}</p>
         </div>
 
         <!-- 错误状态 -->
@@ -186,15 +271,15 @@ watch(
           <span class="material-symbols-rounded state-icon">error</span>
           <p class="state-text">{{ contentError }}</p>
           <button class="state-retry-btn" @click="loadPage(activePlugin!, activePage!)">
-            重试
+            {{ t('pluginUI.retry') }}
           </button>
         </div>
 
         <!-- 空状态（无选择） -->
         <div v-else-if="!currentDetail || !currentSchema" class="plugin-ui-state">
           <span class="material-symbols-rounded state-icon">widgets</span>
-          <h3 class="state-title">{{ t('app.nav.pluginCenter') || '插件中心' }}</h3>
-          <p class="state-text">从左侧列表选择一个插件页面开始使用</p>
+          <h3 class="state-title">{{ t('pluginUI.emptyTitle') }}</h3>
+          <p class="state-text">{{ t('pluginUI.emptyHint') }}</p>
         </div>
 
         <!-- 正常渲染 -->

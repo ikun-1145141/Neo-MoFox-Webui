@@ -11,15 +11,16 @@ const messages = {
     app: {
       nav: {
         home: '主页',
-        config: '配置',
-        plugins: '插件管理',
-        'config-plugins': '插件配置',
-        llmMetrics: 'LLM 统计',
-        requestInspector: '请求检视',
-        chat: '聊天监视',
-        log: '日志',
-        settings: '设置',
-      },
+          config: '配置',
+          plugins: '插件管理',
+          'config-plugins': '插件配置',
+          llmMetrics: 'LLM 统计',
+          requestInspector: '请求检视',
+          chat: '聊天监视',
+          log: '日志',
+          settings: '设置',
+          pluginCenter: '插件中心',
+        },
       actions: {
         restart: '重启',
         shutdown: '关闭',
@@ -60,6 +61,7 @@ const messages = {
       'config-plugins': '插件配置',
       plugins: '插件管理',
       'plugin-detail': '插件详情',
+      'plugin-ui': '插件中心',
       'llm-metrics': 'LLM 统计',
       'request-inspector': '请求体检视器',
       log: '日志查看',
@@ -878,6 +880,14 @@ const messages = {
           sendFailed: '消息发送失败',
         },
       },
+      pluginUI: {
+        loading: '正在加载插件页面...',
+        retry: '重试',
+        loadFailed: '加载页面失败',
+        emptyTitle: '插件中心',
+        emptyHint: '从左侧列表选择一个插件页面开始使用',
+        searchPlaceholder: '搜索插件页面...',
+      },
   },
   'en-US': {
     app: {
@@ -891,6 +901,7 @@ const messages = {
         chat: 'Chat Monitor',
         log: 'Logs',
         settings: 'Settings',
+        pluginCenter: 'Plugin Center',
       },
       actions: {
         restart: 'Restart',
@@ -932,6 +943,7 @@ const messages = {
       'config-plugins': 'Plugin Config',
       plugins: 'Plugin Management',
       'plugin-detail': 'Plugin Detail',
+      'plugin-ui': 'Plugin Center',
       'llm-metrics': 'LLM Metrics',
       'request-inspector': 'Request Inspector',
       log: 'Log Viewer',
@@ -1749,6 +1761,14 @@ const messages = {
         toast: {
           sendFailed: 'Failed to send message',
         },
+      },
+      pluginUI: {
+        loading: 'Loading plugin page...',
+        retry: 'Retry',
+        loadFailed: 'Failed to load page',
+        emptyTitle: 'Plugin Center',
+        emptyHint: 'Select a plugin page from the list on the left to start',
+        searchPlaceholder: 'Search plugin pages...',
       },
   },
 } as const
