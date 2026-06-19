@@ -72,10 +72,30 @@
             "component_type": "event_handler",
             "component_name": "webui_chat_broadcast",
             "dependencies": []
+        },
+        {
+            "component_type": "service",
+            "component_name": "plugin_ui",
+            "dependencies": []
+        },
+        {
+            "component_type": "router",
+            "component_name": "plugin-ui-discovery",
+            "dependencies": []
+        },
+        {
+            "component_type": "router",
+            "component_name": "plugin-ui-schema",
+            "dependencies": []
+        },
+        {
+            "component_type": "router",
+            "component_name": "plugin-ui-asset",
+            "dependencies": []
         }
     ],
     "entry_point": "plugin.py",
     "min_core_version": "1.0.0",
-    "python_dependencies": [],
+    "python_dependencies": ["lxml", "pydantic", "python-multipart"],
     "dependencies_required": true
 }

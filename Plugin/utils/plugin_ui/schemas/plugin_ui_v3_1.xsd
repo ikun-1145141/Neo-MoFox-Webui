@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Neo-MoFox WebUI Plugin UI Extension XSD Schema v3.1
+  
+  定义插件 XML 声明式 UI 的文档结构约束。
+  根元素必须为 <page>，包含 <metadata>、可选 <definitions>、以及 <layout>。
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           elementFormDefault="unqualified"
+           attributeFormDefault="unqualified">
+
+  <!-- 根元素 -->
+  <xs:element name="page">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="metadata" type="MetadataType" minOccurs="1" maxOccurs="1"/>
+        <xs:element name="definitions" type="DefinitionsType" minOccurs="0" maxOccurs="1"/>
+        <xs:element name="layout" type="LayoutType" minOccurs="1" maxOccurs="1"/>
+      </xs:sequence>
+      <xs:attribute name="version" type="xs:string" use="optional"/>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- metadata 节：页面元信息 -->
+  <xs:complexType name="MetadataType">
+    <xs:sequence>
+      <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
+    </xs:sequence>
+    <xs:anyAttribute processContents="lax"/>
+  </xs:complexType>
+
+  <!-- definitions 节：变量/API/模板定义 -->
+  <xs:complexType name="DefinitionsType">
+    <xs:sequence>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element name="var" type="VarType"/>
+        <xs:element name="api" type="ApiType"/>
+        <xs:element name="template" type="TemplateType"/>
+      </xs:choice>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- var 定义 -->
+  <xs:complexType name="VarType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute name="name" type="xs:string" use="required"/>
+        <xs:attribute name="type" type="xs:string" use="optional"/>
+        <xs:attribute name="default" type="xs:string" use="optional"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <!-- api 定义 -->
+  <xs:complexType name="ApiType">
+    <xs:sequence>
+      <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
+    </xs:sequence>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+    <xs:attribute name="method" type="xs:string" use="optional"/>
+    <xs:attribute name="url" type="xs:string" use="optional"/>
+    <xs:attribute name="path" type="xs:string" use="optional"/>
+    <xs:anyAttribute processContents="lax"/>
+  </xs:complexType>
+
+  <!-- template 定义 -->
+  <xs:complexType name="TemplateType">
+    <xs:sequence>
+      <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
+    </xs:sequence>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+    <xs:anyAttribute processContents="lax"/>
+  </xs:complexType>
+
+  <!-- layout 节：UI 组件树 -->
+  <xs:complexType name="LayoutType" mixed="true">
+    <xs:sequence>
+      <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
+    </xs:sequence>
+    <xs:anyAttribute processContents="lax"/>
+  </xs:complexType>
+
+</xs:schema>

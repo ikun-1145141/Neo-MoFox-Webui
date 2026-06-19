@@ -9,6 +9,7 @@ from .dashboard_manager import DashboardManager, get_dashboard_manager
 from .llm_metrics_manager import LLMMetricsManager, get_llm_metrics_manager
 from .request_inspector_manager import RequestInspectorManager, get_request_inspector_manager
 from .log_manager import LogManager, get_log_manager
+from .plugin_ui_manager import PluginUIManager, get_plugin_ui_manager
 
 __all__ = [
     "ConfigManager",
@@ -21,4 +22,6 @@ __all__ = [
     "get_request_inspector_manager",
     "LogManager",
     "get_log_manager",
+    "PluginUIManager",
+    "get_plugin_ui_manager",
 ]

@@ -86,6 +86,7 @@
 Plugin/
 ├── components/
 │   ├── router/
+|       ├── plugin_ui
 │   │   ├── plugin_ui_discovery_router.py   # 新增：GET /webui/api/plugin-ui/list, /detail
 │   │   ├── plugin_ui_schema_router.py      # 新增：GET /webui/api/plugin-ui/schema
 │   │   └── plugin_ui_asset_router.py       # 新增：GET /webui/static/plugin-ui/{...}
@@ -95,6 +96,7 @@ Plugin/
 ├── managers/
 │   └── plugin_ui_manager.py                # 新增：Registry 内核 + 校验入口
 └── utils/
+├───  plugin_ui
     ├── plugin_ui_types.py                  # 新增：Pydantic 模型集合
     ├── plugin_ui_validators.py             # 新增：XML/HTML 校验器
     └── plugin_ui_paths.py                  # 新增：插件目录定位 + 路径穿越防御

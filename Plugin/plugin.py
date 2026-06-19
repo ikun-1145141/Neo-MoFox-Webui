@@ -27,6 +27,12 @@ from .components.router.config import (
     McpConfigRouter,
     PluginConfigRouter,
 )
+from .components.router.plugin_ui import (
+    PluginUIDiscoveryRouter,
+    PluginUISchemaRouter,
+    PluginUIAssetRouter,
+)
+from .components.services.plugin_ui_service import PluginUIService
 from .components.handlers import WebuiStartupPanelHandler, LogBroadcastHandler, ChatBroadcastHandler
 
 logger = get_logger("webui_plugin")
@@ -40,6 +46,7 @@ class WebuiPlugin(BasePlugin):
     - 设置管理 API
     - 静态文件服务（未来）
     - Git 更新管理（未来）
+    - 插件 UI 扩展系统
     """
 
     plugin_name: str = "neo-mofox-webui"
@@ -76,6 +83,11 @@ class WebuiPlugin(BasePlugin):
             ModelConfigRouter,
             McpConfigRouter,
             PluginConfigRouter,
+            # 插件 UI 扩展系统
+            PluginUIService,
+            PluginUIDiscoveryRouter,
+            PluginUISchemaRouter,
+            PluginUIAssetRouter,
         ]
         return components
 
@@ -85,7 +97,9 @@ class WebuiPlugin(BasePlugin):
         logger.info("API 路径: /api/webui")
         logger.info("认证路径: /api/auth")
         logger.info("插件管理路径: /api/plugin")
+        logger.info("插件 UI 扩展路径: /webui/api/plugin-ui")
 
     async def on_plugin_unloaded(self) -> None:
         """插件卸载钩子。"""
         logger.info("WebUI 插件即将卸载")
+        # 不做 Registry 清理——内存态生死跟进程走，进程退出天然清空

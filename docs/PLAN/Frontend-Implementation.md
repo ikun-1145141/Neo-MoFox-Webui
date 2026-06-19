@@ -26,7 +26,7 @@
 2. [前端目录结构变更](#2-前端目录结构变更)
 3. [TypeScript 类型定义](#3-typescript-类型定义)
 4. [API 模块（plugin-ui.ts）](#4-api-模块plugin-uits)
-5. [动态路由注册](#5-动态路由注册)
+5. [路由与 View 层结构](#5-路由与-view-层结构)
 6. [响应式变量池 Store](#6-响应式变量池-store)
 7. [占位符解析器](#7-占位符解析器)
 8. [XML 渲染器](#8-xml-渲染器)
@@ -35,7 +35,7 @@
 11. [Web Components 组件库](#11-web-components-组件库)
 12. [fetch 代理与请求拦截](#12-fetch-代理与请求拦截)
 13. [移动端适配与 fallback](#13-移动端适配与-fallback)
-14. [插件页面导航（plugin-page-picker）](#14-插件页面导航plugin-page-picker)
+14. [插件导航列表（PluginNavList 侧边栏）](#14-插件导航列表pluginnavlist-侧边栏)
 15. [测试策略](#15-测试策略)
 16. [里程碑（Phase 划分）](#16-里程碑phase-划分)
 
@@ -50,7 +50,7 @@
 | 模块 | 作用 | 落点 |
 |---|---|---|
 | API 模块 | 与后端 Discovery / Schema / Asset Router 通信 | `src/api/modules/plugin-ui.ts` + `src/api/types/plugin-ui.ts` |
-| 动态路由 | 按 Discovery 结果注册 `/plugins/{name}/{page}` 路由 | `src/router/plugin-ui-routes.ts` |
+| 路由配置 | `/plugins` 静态路由，通过查询参数 `?plugin=xxx&page=xxx` 选择内容 | `src/router/index.ts`（新增条目） |
 | 变量池 Store | 响应式 page / plugin / global 三级 scope | `src/stores/plugin-ui-vars.ts` |
 | 占位符解析器 | `{var.path}` / `{!x}` / `{len(list) > 5}` 解析与响应式绑定 | `src/utils/plugin-ui/placeholder-parser.ts` |
 | XML 渲染器 | XML 字符串 → Vue 组件树 | `src/utils/plugin-ui/xml-renderer.ts` |
@@ -58,8 +58,7 @@
 | sys 桥接对象 | HTML 轨唯一交互通道 | `src/utils/plugin-ui/sys-bridge.ts` |
 | Web Components 库 | `<sys-*>` 自定义元素（命令式 API） | `src/components/plugin-ui/web-components/` |
 | 内置 Vue 组件 | XML 轨用的 Vue 组件映射 | `src/components/plugin-ui/xml-components/` |
-| 插件页面容器 | 承载 XML / HTML 渲染结果的 View | `src/views/PluginPageView.vue` |
-| 导航组件 | `<plugin-page-picker>`（WebUI 官方组件） | `src/components/plugin-ui/PluginPagePicker.vue` |
+| 插件 UI View | 导航壳 + 内容区一体化 View（无参数=导航列表，有参数=渲染插件页面） | `src/views/PluginUIView.vue` |
 
 ### 1.2 与设计文档的对应关系
 
@@ -68,7 +67,7 @@
 | §2.1 变量池 | [§6 响应式变量池 Store](#6-响应式变量池-store) |
 | §2.2 占位符语法 | [§7 占位符解析器](#7-占位符解析器) |
 | §2.3 双轨 UI | §8 XML 渲染器 + §9 HTML 沙箱 |
-| §3 注册与 Discovery | §4 API 模块 + §5 动态路由 |
+| §3 注册与 Discovery | §4 API 模块 + §5 路由与导航 |
 | §4 XML 声明式 UI | §8 XML 渲染器 + §11 Web Components |
 | §5 HTML/Web Components | §9 HTML 沙箱 + §10 sys 桥接 + §11 Web Components |
 | §6 管道指令（仅 XML） | §8.4 管道指令执行引擎 |
@@ -103,8 +102,8 @@ src/
 │       └── plugin-ui.ts                    # 新增：与后端模型 1:1 对应的 TS 类型
 ├── components/
 │   └── plugin-ui/                          # 新增子目录
-│       ├── PluginPagePicker.vue            # 新增：WebUI 官方导航组件
 │       ├── PluginPageContainer.vue         # 新增：页面渲染容器（双轨分发）
+│       ├── PluginNavList.vue               # 新增：导航列表子组件（展示所有插件 page 卡片）
 │       ├── XmlRenderer.vue                 # 新增：XML → Vue 组件树
 │       ├── HtmlSandbox.vue                 # 新增：Shadow DOM + sys 注入
 │       ├── MobileFallback.vue              # 新增：横向滚动 fallback 壳
@@ -128,8 +127,6 @@ src/
 │           ├── sys-dialog.ts
 │           ├── ... (完整列表见 §11)
 │           └── register-all.ts             # 统一 customElements.define
-├── router/
-│   └── plugin-ui-routes.ts                 # 新增：动态路由注册逻辑
 ├── stores/
 │   └── plugin-ui-vars.ts                   # 新增：响应式变量池（无 Pinia，用 reactive）
 ├── utils/
@@ -143,10 +140,12 @@ src/
 │       ├── api-template-engine.ts          # API 模板解析与执行
 │       └── expression-evaluator.ts         # 安全表达式求值器
 └── views/
-    └── PluginPageView.vue                  # 新增：/plugins/:name/:page 路由对应 View
+    └── PluginUIView.vue                    # 新增：/plugins 路由对应 View（导航壳 + 内容区）
 ```
 
 > 现有文件**不动**（AppShell.vue 后续可能要在侧边栏添加"插件中心"入口，但这是 UI 层变化，不影响架构）。
+>
+> **注意**：不再有独立的 `plugin-ui-routes.ts`。路由配置直接在 `router/index.ts` 中新增一条静态路由即可。
 
 ---
 
@@ -244,17 +243,18 @@ export function getPageSchema(
 
 ---
 
-## 5. 动态路由注册
-
-落点：[`src/router/plugin-ui-routes.ts`](../../frontend/src/router/plugin-ui-routes.ts:1)
+## 5. 路由与 View 层结构
 
 ### 5.1 设计思路
 
-设计文档要求"路径系统自管理"——前端不硬编码每个插件 page 的路由，而是：
+采用**侧边导航列表 + 内容区**布局：
 
-1. 在 [`src/router/index.ts`](../../frontend/src/router/index.ts:1) 中注册一条**通配路由**：`/plugins/:pluginName/:pageId`
-2. 该路由对应的 View（`PluginPageView.vue`）在 `onMounted` 时调 Discovery API 验证有效性
-3. 无效的 `pluginName:pageId` 组合重定向到 404 或插件中心
+- 路由固定为 `/plugins`，不使用动态路由段
+- 通过查询参数 `?plugin=xxx&page=xxx` 选择要渲染的插件页面
+- View 采用左右布局：**左侧侧边栏始终显示导航列表**，右侧为内容区
+- 无查询参数时，右侧内容区显示欢迎/空状态提示
+- 有查询参数时，右侧内容区渲染对应插件页面
+- 用户在侧边栏选择某个 page 后，通过 `router.push({ query: { plugin, page } })` 跳转，侧边栏选中态更新，右侧内容区切换
 
 ### 5.2 路由配置变更
 
@@ -262,31 +262,67 @@ export function getPageSchema(
 
 ```typescript
 {
-  path: '/plugins/:pluginName/:pageId',
-  name: 'plugin-page',
-  component: () => import('../views/PluginPageView.vue'),
-  meta: { requiresAuth: true, title: '插件页面' },
-  props: true
+  path: '/plugins',
+  name: 'plugin-ui',
+  component: () => import('../views/PluginUIView.vue'),
+  meta: { requiresAuth: true, title: '插件中心' }
 }
 ```
 
-### 5.3 PluginPageView.vue 行为
+无需 `props: true`，View 内部直接读取 `route.query.plugin` 和 `route.query.page`。
+
+### 5.3 PluginUIView.vue 布局
 
 ```
-props: { pluginName: string, pageId: string }
+┌──────────────────────────────────────────────────┐
+│                   PluginUIView                    │
+├──────────────┬───────────────────────────────────┤
+│              │                                   │
+│  PluginNav   │         内容区                     │
+│  List        │                                   │
+│  (侧边栏)    │  无 query: 空状态/欢迎页            │
+│              │  有 query: 插件页面渲染             │
+│  - 插件A     │                                   │
+│    - page1 ← │  ┌─────────────────────────────┐  │
+│    - page2   │  │  <XmlRenderer> 或            │  │
+│  - 插件B     │  │  <HtmlSandbox>              │  │
+│    - page1   │  │                             │  │
+│              │  └─────────────────────────────┘  │
+│  [搜索框]    │                                   │
+│              │                                   │
+├──────────────┴───────────────────────────────────┤
+└──────────────────────────────────────────────────┘
+```
 
+### 5.4 PluginUIView.vue 行为
+
+```
 onMounted:
-  1. 调 getPageDetail(pluginName, pageId)
-  2. 判断 viewport 是否 < 768px（移动端）
-  3. 调 getPageSchema(pluginName, pageId, variant)
-     - variant=mobile 返回 204/null → 进入 fallback 模式
-  4. 根据 schema.mode 选择 <XmlRenderer> 或 <HtmlSandbox>
-  5. 创建 page scope 变量池
-  6. 渲染
+  1. 调 listPluginPages() 获取所有已注册 page → 填充侧边栏
 
-onUnmounted:
-  7. 销毁 page scope 变量池
-  8. HTML 沙箱清理（移除 Shadow DOM、解绑 fetch 代理）
+侧边栏（始终可见）:
+  - 按 plugin_name 分组展示 page 列表
+  - 当前选中项高亮（根据 route.query 匹配）
+  - 支持搜索/过滤
+  - 点击项 → router.push({ query: { plugin: xxx, page: xxx } })
+
+内容区（watch route.query 驱动）:
+  watch(route.query):
+    1. 若无 plugin/page 参数 → 显示空状态
+    2. 读取 plugin = route.query.plugin, page = route.query.page
+    3. 调 getPageDetail(plugin, page)
+       - 失败 → 内容区显示错误提示
+    4. 判断 viewport 是否 < 768px（移动端）
+    5. 调 getPageSchema(plugin, page, variant)
+       - variant=mobile 返回 204/null → 进入 fallback 模式
+    6. 根据 schema.mode 选择 <XmlRenderer> 或 <HtmlSandbox>
+    7. 创建 page scope 变量池
+    8. 渲染内容
+
+  query 变化时（切换页面）:
+    9. 销毁旧 page scope 变量池
+    10. HTML 沙箱清理（移除 Shadow DOM、解绑 fetch 代理）
+    11. 重新执行步骤 2-8
 ```
 
 ---
@@ -811,7 +847,7 @@ window.addEventListener('resize', () => {
 
 ### 13.2 schema 拉取策略
 
-`PluginPageView.vue` 根据 `isMobile` 决定 variant：
+`PluginUIView.vue` 根据 `isMobile` 决定 variant：
 
 ```typescript
 const variant = isMobile.value ? 'mobile' : 'desktop'
@@ -859,23 +895,24 @@ XML 渲染器在映射节点时检查这两个属性：
 
 ---
 
-## 14. 插件页面导航（plugin-page-picker）
+## 14. 插件导航列表（PluginNavList 侧边栏）
 
-落点：[`src/components/plugin-ui/PluginPagePicker.vue`](../../frontend/src/components/plugin-ui/PluginPagePicker.vue:1)
+落点：[`src/components/plugin-ui/PluginNavList.vue`](../../frontend/src/components/plugin-ui/PluginNavList.vue:1)
 
-设计文档明确：这是 **WebUI 官方组件**，用于"插件中心"等宿主页面浏览/选择插件 page，**不在插件可用标签清单内**。
+作为 `PluginUIView.vue` 左侧侧边栏**始终显示**的子组件，负责展示所有已注册插件 page 的分组列表。**不在插件可用标签清单内**（纯 WebUI 官方组件）。
 
 ### 14.1 功能
 
-- 调用 `listPluginPages()` 获取所有已注册 page
-- 按 `plugin_name` 分组展示
-- 每个 page 卡片展示 `title / icon / description`
-- 点击跳转到 `/plugins/{plugin_name}/{page_id}`
-- 支持搜索/过滤
+- 接收 `PageSummary[]` 数据（由父 View 调 `listPluginPages()` 后传入）
+- 按 `plugin_name` 分组展示树形列表（插件名作为分组标题，page 作为子项）
+- 每个 page 项显示 `icon + title`，hover 显示 `description`
+- 当前选中项高亮（根据父 View 传入的 `activePlugin` + `activePage` prop 判断）
+- 点击 emit `select` 事件，父 View 负责 `router.push({ query: { plugin, page } })`
+- 顶部搜索框支持按 title / plugin_name 过滤
 
 ### 14.2 放置位置
 
-可在现有 [`PluginsView.vue`](../../frontend/src/views/PluginsView.vue:1)（插件管理页面）中引入此组件，或新建独立的"插件中心"View。
+作为 [`PluginUIView.vue`](../../frontend/src/views/PluginUIView.vue:1) 的侧边栏子组件，始终渲染在 View 左侧。
 
 ---
 
@@ -892,8 +929,8 @@ XML 渲染器在映射节点时检查这两个属性：
 | `fetch-proxy.ts` | Token 注入、X-Plugin-Name 注入、BaseResponse 解包、错误 Toast 触发 |
 | `plugin-ui-vars.ts` | page/plugin/global scope 隔离、global 只读、`destroyPageScope` 清理 |
 | Web Components | 各组件的 `setValue/getValue`、事件触发、`disable/enable`、响应式更新 |
-| `PluginPageView.vue` | 正常渲染、404 跳转、mobile fallback 切换 |
-| `PluginPagePicker.vue` | 列表展示、搜索过滤、跳转链接 |
+| `PluginUIView.vue` | 无参数导航列表、带参数渲染、无效参数错误提示、mobile fallback 切换 |
+| `PluginNavList.vue` | 列表展示、分组、搜索过滤、点击 emit |
 
 测试框架：Vitest + @vue/test-utils + happy-dom。
 
@@ -901,13 +938,14 @@ XML 渲染器在映射节点时检查这两个属性：
 
 ## 16. 里程碑（Phase 划分）
 
-### Phase F-1：类型 + API + 路由 + 变量池（1 周）
+### Phase F-1：类型 + API + 路由 + 变量池
 
 - `src/api/types/plugin-ui.ts`
 - `src/api/modules/plugin-ui.ts`
-- `src/router/plugin-ui-routes.ts`（通配路由）
+- `src/router/index.ts`（新增 `/plugins` 静态路由条目）
 - `src/stores/plugin-ui-vars.ts`
-- `src/views/PluginPageView.vue`（骨架）
+- `src/views/PluginUIView.vue`（导航壳 + 内容区骨架）
+- `src/components/plugin-ui/PluginNavList.vue`
 - 单元测试：API mock + 变量池 CRUD
 
 ### Phase F-2：占位符 + 表达式引擎 + XML 渲染器骨架（1.5 周）
@@ -938,10 +976,9 @@ XML 渲染器在映射节点时检查这两个属性：
 - `register-all.ts`
 - 集成测试
 
-### Phase F-5：移动端 + 导航 + 联调（1 周）
+### Phase F-5：移动端 + 联调
 
 - `src/components/plugin-ui/MobileFallback.vue`
-- `src/components/plugin-ui/PluginPagePicker.vue`
 - 移动端视口检测 + fallback 切换
 - 与后端联调（Discovery → Schema → Asset 全链路）
 - `mobile-only` / `desktop-only` 属性支持
