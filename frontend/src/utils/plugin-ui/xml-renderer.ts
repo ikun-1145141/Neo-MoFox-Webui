@@ -116,7 +116,13 @@ export function processDefinitions(
               try {
                 value = JSON.parse(defaultValue)
               } catch {
-                value = defaultValue
+                // 处理单引号包裹的字符串字面量（如 '' 或 'hello'）
+                const singleQuoteMatch = defaultValue.match(/^'(.*)'$/)
+                if (singleQuoteMatch) {
+                  value = singleQuoteMatch[1]
+                } else {
+                  value = defaultValue
+                }
               }
             }
             console.debug(`[XmlRenderer] 初始化变量: ${name} =`, value)
@@ -277,10 +283,27 @@ function resolveAttributes(
       continue
     }
 
-    // bind:xxx 属性 → 变量池双向绑定路径
+    // bind:xxx 属性 → 变量池双向绑定（读 + 写）
     if (name.startsWith('bind:')) {
-      const bindPath = name.slice(5)
-      props[`bind_${bindPath}`] = value
+      const bindPath = name.slice(5) // e.g. 'value'
+      const varPath = value          // e.g. 'username'
+
+      // 读方向：从 store 取值作为 prop
+      props[attrToProp(bindPath)] = store.get(varPath) ?? ''
+      // 绑定路径也传给组件（组件内部可能需要）
+      props[`bind_${bindPath}`] = varPath
+
+      // 写方向：监听 change 事件，把新值写回 store
+      const eventPropName = `on${capitalize('change')}`
+      // 如果已经有显式的 on-change 管道指令，包裹它
+      const existingHandler = props[eventPropName]
+      props[eventPropName] = (newValue: any) => {
+        store.set(varPath, newValue)
+        // 如果有显式 on-change 处理器，也调用
+        if (typeof existingHandler === 'function') {
+          existingHandler(newValue)
+        }
+      }
       continue
     }
 

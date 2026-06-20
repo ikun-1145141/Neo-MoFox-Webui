@@ -10,6 +10,7 @@
 import instance from '../../api/third-party'
 import type { PluginUIVarStore } from '../../stores/plugin-ui-vars'
 import { resolvePlaceholderSync } from './placeholder-parser'
+import { safeEvaluate } from './expression-evaluator'
 
 // === 类型定义 ===
 
@@ -134,12 +135,7 @@ export class ApiTemplateEngine {
       // 解析 body 中的占位符
       let resolvedBody: any = null
       if (template.body) {
-        const bodyStr = resolvePlaceholderSync(template.body, this.store)
-        try {
-          resolvedBody = JSON.parse(bodyStr)
-        } catch {
-          resolvedBody = bodyStr
-        }
+        resolvedBody = this.resolveBodyTemplate(template.body)
       }
 
       // 解析 headers 中的占位符
@@ -189,6 +185,75 @@ export class ApiTemplateEngine {
   async executeAutoFetch(): Promise<void> {
     const autoFetchTemplates = [...this.templates.values()].filter(t => t.autoFetch)
     await Promise.allSettled(autoFetchTemplates.map(t => this.execute(t.id)))
+  }
+
+  /**
+   * 解析 body 模板中的占位符。
+   *
+   * 由于占位符语法 {expr} 与 JSON 花括号冲突，直接对整个 body 模板
+   * 执行字符串级占位符解析会导致 JSON 结构被误判为表达式。
+   *
+   * 策略：先尝试 JSON.parse 模板字符串，如果成功则递归遍历每个字符串值
+   * 单独做占位符解析；如果 JSON.parse 失败（非 JSON 格式），则回退到
+   * 普通字符串占位符解析。
+   *
+   * @param bodyTemplate - 含占位符的 body 模板字符串
+   * @returns 解析后的对象或字符串
+   */
+  private resolveBodyTemplate(bodyTemplate: string): any {
+    try {
+      // 尝试将模板作为 JSON 解析（此时占位符还未替换，但 JSON 结构可辨识）
+      const parsed = JSON.parse(bodyTemplate)
+      // 递归解析 JSON 中的字符串值占位符
+      return this.resolveJsonValues(parsed)
+    } catch {
+      // 非合法 JSON（可能是纯占位符表达式如 "{someObj}"），回退到字符串级解析
+      const resolved = resolvePlaceholderSync(bodyTemplate, this.store)
+      try {
+        return JSON.parse(resolved)
+      } catch {
+        return resolved
+      }
+    }
+  }
+
+  /**
+   * 递归解析 JSON 值中的占位符表达式。
+   *
+   * - 字符串值：执行占位符替换。如果整个字符串是单个占位符 "{expr}"，
+   *   则返回表达式的原始类型（数字、布尔、对象等），而非字符串化结果。
+   * - 数组：逐元素递归。
+   * - 对象：逐值递归。
+   * - 其他类型：原样返回。
+   *
+   * @param value - JSON 值
+   * @returns 解析后的值
+   */
+  private resolveJsonValues(value: any): any {
+    if (typeof value === 'string') {
+      // 检查是否为纯占位符（整个字符串就是一个 {expr}）
+      const pureExprMatch = value.match(/^\{(.+)\}$/)
+      if (pureExprMatch && !value.includes('}{')) {
+        // 纯表达式：返回原始类型
+        return safeEvaluate(pureExprMatch[1], this.store, '')
+      }
+      // 含混合文本+占位符，或不含占位符：做字符串模板替换
+      return resolvePlaceholderSync(value, this.store)
+    }
+
+    if (Array.isArray(value)) {
+      return value.map(item => this.resolveJsonValues(item))
+    }
+
+    if (value !== null && typeof value === 'object') {
+      const resolved: Record<string, any> = {}
+      for (const [key, val] of Object.entries(value)) {
+        resolved[key] = this.resolveJsonValues(val)
+      }
+      return resolved
+    }
+
+    return value
   }
 
   /**
@@ -256,10 +321,13 @@ export function parseApiTemplateFromElement(element: Element): ApiTemplate {
   let body: string | null = null
   const bodyEl = element.querySelector('body')
   if (bodyEl) {
+    console.debug(`[parseApiTemplate] id="${id}" 从 <body> 子元素获取 body:`, bodyEl.textContent)
     body = bodyEl.textContent || null
   } else {
     body = element.getAttribute('body') || null
+    console.debug(`[parseApiTemplate] id="${id}" 从 body 属性获取 body:`, JSON.stringify(body), '| element.getAttribute("body") raw:', element.getAttribute('body'))
   }
+  console.debug(`[parseApiTemplate] id="${id}" 最终 body:`, JSON.stringify(body))
 
   // 解析 headers
   const headers: Record<string, string> = {}
