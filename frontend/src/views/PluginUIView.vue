@@ -121,7 +121,6 @@ onMounted(async () => {
   if (typeof mediaQuery.addEventListener === 'function') {
     mediaQuery.addEventListener('change', handleMediaChange)
   } else {
-    // @ts-expect-error 兼容旧版 Safari
     mediaQuery.addListener(handleMediaChange)
   }
 
@@ -133,7 +132,6 @@ onBeforeUnmount(() => {
   if (typeof mediaQuery.removeEventListener === 'function') {
     mediaQuery.removeEventListener('change', handleMediaChange)
   } else {
-    // @ts-expect-error 兼容旧版 Safari
     mediaQuery.removeListener(handleMediaChange)
   }
   // 销毁残留 page scope
