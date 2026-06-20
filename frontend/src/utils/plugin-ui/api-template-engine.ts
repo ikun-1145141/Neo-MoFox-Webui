@@ -29,6 +29,21 @@ export interface ApiTemplate {
   responseMapping: string | null
   /** 是否自动触发（页面加载时即执行） */
   autoFetch: boolean
+  /**
+   * 是否使用原始响应模式（跳过 BaseResponse 拦截器）。
+   *
+   * 当设置为 true 时，响应拦截器不会按 `{ code, data, message }` 结构解析，
+   * 而是直接将 HTTP 响应体原文写入变量池。用户可通过 response-to 指定的
+   * 变量路径访问完整响应对象，然后在模板中使用点路径取值。
+   *
+   * XML 用法示例：
+   * ```xml
+   * <api id="weather" method="GET" url="https://api.example.com/weather"
+   *      raw-response="true" response-to="weather_data" />
+   * ```
+   * 之后可通过 `{weather_data.temperature}` 等点路径访问响应字段。
+   */
+  rawResponse: boolean
 }
 
 /** API 执行结果 */
@@ -138,7 +153,8 @@ export class ApiTemplateEngine {
         template.method,
         resolvedUrl,
         resolvedBody,
-        resolvedHeaders
+        resolvedHeaders,
+        template.rawResponse
       )
 
       // 写入成功状态
@@ -182,20 +198,23 @@ export class ApiTemplateEngine {
    * @param url - 请求 URL
    * @param body - 请求体
    * @param headers - 附加请求头
+   * @param rawResponse - 是否跳过 BaseResponse 拦截器，直接返回原始响应体
    * @returns 响应数据
    */
   private async makeRequest(
     method: string,
     url: string,
     body: any,
-    headers: Record<string, string>
+    headers: Record<string, string>,
+    rawResponse: boolean = false
   ): Promise<any> {
-    const config: any = { headers }
+    const config: any = { headers, __rawResponse: rawResponse }
 
     switch (method) {
       case 'GET':
         return instance.get(url, config)
       case 'POST':
+        console.debug(`[ApiTemplateEngine] 发起 POST 请求: ${url} with body`, body, 'and headers', headers)
         return instance.post(url, body, config)
       case 'PUT':
         return instance.put(url, body, config)
@@ -231,6 +250,7 @@ export function parseApiTemplateFromElement(element: Element): ApiTemplate {
   const url = element.getAttribute('url') || ''
   const responseMapping = element.getAttribute('response-to') || null
   const autoFetch = element.getAttribute('auto-fetch') === 'true'
+  const rawResponse = element.getAttribute('raw-response') === 'true'
 
   // 解析 body（子元素或 body 属性）
   let body: string | null = null
@@ -252,5 +272,5 @@ export function parseApiTemplateFromElement(element: Element): ApiTemplate {
     }
   }
 
-  return { id, method, url, body, headers, responseMapping, autoFetch }
+  return { id, method, url, body, headers, responseMapping, autoFetch, rawResponse }
 }

@@ -286,7 +286,14 @@ function resolveAttributes(
 
     // 普通属性 → 解析占位符
     if (hasPlaceholders(value)) {
-      props[attrToProp(name)] = resolvePlaceholderSync(value, store)
+      // 若属性值是纯占位符（整体为 {expr}），保留求值结果的原始类型
+      // 这样对象类型可直接传入组件 prop，无需序列化为字符串再反解析
+      const pureExprMatch = value.match(/^\{([^}]+)\}$/)
+      if (pureExprMatch) {
+        props[attrToProp(name)] = safeEvaluate(pureExprMatch[1].trim(), store, '')
+      } else {
+        props[attrToProp(name)] = resolvePlaceholderSync(value, store)
+      }
     } else {
       props[attrToProp(name)] = value
     }

@@ -12,6 +12,10 @@
  * `response.data`（通过传入 `transformResponse` 或自行处理 catch 块）。
  * 这是有意保留的行为，以便和主系统调用风格一致；如未来确认需要放宽
  * 业务校验，可在此文件单独调整拦截器，而不影响主实例。
+ *
+ * Raw 模式：当请求配置中设置 `__rawResponse: true` 时，响应拦截器将跳过
+ * BaseResponse 校验，直接返回 axios 原始 response.data（即 HTTP 响应体原文）。
+ * 这使得插件 XML API 模板可以对接不遵循 BaseResponse 协议的第三方接口。
  */
 
 import axios from 'axios'
@@ -51,8 +55,14 @@ thirdPartyInstance.interceptors.request.use((config) => {
 })
 
 // 响应拦截器：与主实例保持一致的业务错误统一处理
+// 当请求配置中 __rawResponse 为 true 时跳过 BaseResponse 解析，直接返回原始响应体
 thirdPartyInstance.interceptors.response.use(
   (response) => {
+    // Raw 模式：跳过 BaseResponse 校验，直接透传 HTTP 响应体
+    if ((response.config as any).__rawResponse) {
+      return response.data
+    }
+
     const res = response.data as BaseResponse
     if (res.code !== 200) {
       console.error('Third-party API Error:', res)

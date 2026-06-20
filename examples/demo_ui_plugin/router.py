@@ -96,7 +96,7 @@ class DemoUIRouter(BaseRouter):
                 return BaseResponse(code=404, message=f"条目 {item_id} 不存在")
             return BaseResponse(data=_items, message="删除成功")
 
-        @self.app.get("/webui/api/demo-ui/stats")
+        @self.app.get("/demo-ui/stats")
         async def get_stats() -> BaseResponse:
             """获取统计信息。"""
             return BaseResponse(
@@ -105,3 +105,28 @@ class DemoUIRouter(BaseRouter):
                     "latest_item": _items[-1]["name"] if _items else None,
                 }
             )
+
+        @self.app.get("/demo-ui/chart-data")
+        async def get_chart_data() -> dict[str, Any]:
+            """返回图表数据（raw-response 演示端点）。
+
+            该端点不遵循 BaseResponse 协议，直接返回裸 JSON 对象。
+            前端 XML 中需使用 raw-response="true" 接收完整响应体。
+
+            返回的数据结构可直接作为 sys-chart 组件的简化格式使用。
+            """
+            import random
+
+            # 模拟 7 天的系统监控数据
+            days = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+            cpu_data = [random.randint(20, 85) for _ in range(7)]
+            mem_data = [random.randint(40, 90) for _ in range(7)]
+
+            return {
+                "xAxis": days,
+                "series": [
+                    {"name": "CPU 使用率(%)", "data": cpu_data},
+                    {"name": "内存使用率(%)", "data": mem_data},
+                ],
+                "title": "系统资源监控（最近 7 天）",
+            }

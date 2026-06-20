@@ -79,6 +79,10 @@
         - body（可选）：请求体 JSON 模板，可含占位符
         - response-to（可选）：将响应数据写入变量池的路径
         - auto-fetch（可选）：值为 "true" 时页面加载自动执行
+        - raw-response（可选）：值为 "true" 时跳过 BaseResponse 拦截器，
+          直接将 HTTP 响应体原文写入变量池。适用于不遵循 {code, data, message}
+          协议的第三方接口。用户可通过 response-to 指定的变量路径访问完整
+          响应对象，然后在模板中使用点路径取值（如 {weather_data.temperature}）。
         子元素：
         - header：自定义请求头（name + value 属性）
         - body：请求体内容（替代 body 属性）
@@ -113,6 +117,7 @@
     <xs:attribute name="body" type="xs:string" use="optional"/>
     <xs:attribute name="response-to" type="xs:string" use="optional"/>
     <xs:attribute name="auto-fetch" type="xs:string" use="optional"/>
+    <xs:attribute name="raw-response" type="xs:string" use="optional"/>
   </xs:complexType>
 
   <!-- template 定义 -->
@@ -423,7 +428,18 @@
     <xs:attributeGroup ref="GlobalAttrs"/>
   </xs:complexType>
 
-  <!-- sys-chart：图表（占位实现） -->
+  <!-- sys-chart：基于 ECharts 的图表组件 -->
+  <!--
+    data 属性接收 JSON 字符串，支持两种格式：
+
+    【简化格式】配合 type 属性使用：
+    - line/bar: { "xAxis": [...], "series": [{ "name": "...", "data": [...] }], "title": "..." }
+    - pie:      { "series": [{ "name": "...", "value": 123 }], "title": "..." }
+    - scatter:  { "series": [{ "name": "...", "data": [[x,y], ...] }], "title": "..." }
+    - radar:    { "indicator": [{ "name": "...", "max": 100 }], "series": [{ "name": "...", "data": [...] }], "title": "..." }
+
+    【完整 ECharts option 格式】不设 type，data 中传入 { "option": { ... } }
+  -->
   <xs:complexType name="SysChartType" mixed="true">
     <xs:sequence>
       <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
@@ -434,11 +450,22 @@
           <xs:enumeration value="line"/>
           <xs:enumeration value="bar"/>
           <xs:enumeration value="pie"/>
+          <xs:enumeration value="scatter"/>
+          <xs:enumeration value="radar"/>
         </xs:restriction>
       </xs:simpleType>
     </xs:attribute>
     <xs:attribute name="data" type="xs:string" use="optional"/>
     <xs:attribute name="height" type="xs:string" use="optional"/>
+    <xs:attribute name="theme" use="optional">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="light"/>
+          <xs:enumeration value="dark"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="loading" type="xs:string" use="optional"/>
     <xs:attributeGroup ref="GlobalAttrs"/>
   </xs:complexType>
 

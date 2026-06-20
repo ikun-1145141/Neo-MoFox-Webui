@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import html
+import json
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -164,6 +165,33 @@ def _extract_placeholders(text: str) -> list[str]:
         i += 1
 
     return results
+
+
+def _extract_json_strings(obj: object) -> list[str]:
+    """递归提取 JSON 对象中所有字符串值。
+
+    用于从 JSON 字面量中提取可能的占位符表达式。
+    仅提取字符串叶子值，跳过数字、布尔值和 null。
+    对于对象键不做提取（键不是占位符的合法位置）。
+
+    Args:
+        obj: JSON 解析后的 Python 对象
+
+    Returns:
+        所有字符串值的列表
+    """
+    strings: list[str] = []
+
+    if isinstance(obj, str):
+        strings.append(obj)
+    elif isinstance(obj, list):
+        for item in obj:
+            strings.extend(_extract_json_strings(item))
+    elif isinstance(obj, dict):
+        for value in obj.values():
+            strings.extend(_extract_json_strings(value))
+
+    return strings
 
 
 # style 属性中禁止的模式
@@ -378,8 +406,10 @@ class PluginUIValidators:
     def _validate_xml_expressions(cls, xml_content: str) -> None:
         """第三层：占位符表达式校验。
 
-        提取 XML 中所有 {expression} 占位符并校验其语法安全性。
-        使用深度计数方式解析嵌套花括号，与前端 parsePlaceholders 逻辑对齐。
+        基于 XML 元素树进行上下文感知校验，区分不同属性值的语义：
+        - <var> 的 default 属性：JSON 字面量，只校验字符串值内的占位符
+        - <api> 的 body 属性：JSON 模板，只校验字符串值内的占位符
+        - 其他属性和文本内容：按普通占位符提取校验
 
         Args:
             xml_content: XML 字符串
@@ -387,10 +417,93 @@ class PluginUIValidators:
         Raises:
             XMLValidationError: 表达式校验失败
         """
-        # 使用深度计数提取占位符，正确处理嵌套花括号
-        placeholders = _extract_placeholders(xml_content)
-        for expr in placeholders:
-            cls._validate_single_expression(expr.strip())
+        try:
+            doc = etree.fromstring(xml_content.encode("utf-8"))
+        except etree.XMLSyntaxError as e:
+            raise XMLValidationError(f"XML 语法错误: {e}") from e
+
+        cls._validate_element_expressions(doc)
+
+    @classmethod
+    def _validate_element_expressions(cls, element: etree._Element) -> None:
+        """递归校验 XML 元素及其子元素中的占位符表达式。
+
+        根据元素类型和属性名采用不同的占位符提取策略。
+
+        Args:
+            element: lxml Element 节点
+
+        Raises:
+            XMLValidationError: 表达式校验失败
+        """
+        tag = etree.QName(element.tag).localname if isinstance(element.tag, str) else str(element.tag)
+
+        # 校验当前元素的属性
+        for attr_name, attr_value in element.attrib.items():
+            local_attr = etree.QName(attr_name).localname if "{" in attr_name else attr_name
+
+            if tag == "var" and local_attr == "default":
+                # <var> 的 default 是 JSON 字面量，只提取字符串值内的占位符
+                cls._validate_json_value_placeholders(attr_value, tag, local_attr)
+            elif tag == "api" and local_attr == "body":
+                # <api> 的 body 是 JSON 模板，只提取字符串值内的占位符
+                cls._validate_json_value_placeholders(attr_value, tag, local_attr)
+            else:
+                # 其他属性按普通占位符提取
+                placeholders = _extract_placeholders(attr_value)
+                for expr in placeholders:
+                    cls._validate_single_expression(expr.strip())
+
+        # 校验元素的文本内容
+        if element.text:
+            placeholders = _extract_placeholders(element.text)
+            for expr in placeholders:
+                cls._validate_single_expression(expr.strip())
+
+        # 校验元素的 tail 文本（闭合标签后的文本）
+        if element.tail:
+            placeholders = _extract_placeholders(element.tail)
+            for expr in placeholders:
+                cls._validate_single_expression(expr.strip())
+
+        # 递归处理子元素
+        for child in element:
+            if isinstance(child.tag, str):  # 跳过注释节点
+                cls._validate_element_expressions(child)
+
+    @classmethod
+    def _validate_json_value_placeholders(cls, value: str, tag: str, attr_name: str) -> None:
+        """校验 JSON 字面量属性值中的占位符表达式。
+
+        先尝试 JSON 解析，如果成功则只对字符串值提取占位符；
+        如果解析失败则回退到普通占位符提取（兼容纯字符串 default 值）。
+
+        Args:
+            value: 属性值字符串
+            tag: 所在标签名
+            attr_name: 属性名
+
+        Raises:
+            XMLValidationError: 表达式校验失败
+        """
+        # XML 实体反转义
+        unescaped = html.unescape(value)
+
+        try:
+            parsed = json.loads(unescaped)
+        except (json.JSONDecodeError, ValueError):
+            # 非 JSON，按普通文本提取占位符（如 default="'hello'"）
+            placeholders = _extract_placeholders(value)
+            for expr in placeholders:
+                cls._validate_single_expression(expr.strip())
+            return
+
+        # JSON 解析成功，递归提取所有字符串值中的占位符
+        string_values = _extract_json_strings(parsed)
+        for s in string_values:
+            placeholders = _extract_placeholders(s)
+            for expr in placeholders:
+                cls._validate_single_expression(expr.strip())
 
     @classmethod
     def _validate_single_expression(cls, expr: str) -> None:
