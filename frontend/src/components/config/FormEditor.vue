@@ -447,10 +447,10 @@ function getFieldComponent(inputType: string, fieldType?: string) {
 <style scoped>
 .form-editor {
   padding: 16px;
-  flex: 1;
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  min-height: 100%;
 }
 
 .empty-state {

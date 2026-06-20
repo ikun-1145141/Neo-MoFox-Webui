@@ -76,7 +76,7 @@
     </div>
 
     <!-- 编辑器内容区 -->
-    <div class="editor-content">
+    <div class="editor-content" :class="{ 'form-mode': editMode === 'form' }">
       <!-- 代码模式 -->
       <TomlEditor
         v-if="editMode === 'code'"
@@ -365,7 +365,7 @@ watch(codeContent, (newCode) => {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  background: color-mix(in srgb, var(--md-sys-color-surface) 78%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 75%, transparent);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
   flex-shrink: 0;
@@ -376,8 +376,8 @@ watch(codeContent, (newCode) => {
   display: flex;
   gap: 4px;
   padding: 8px 16px;
-  background: color-mix(in srgb, var(--md-sys-color-surface) 72%, transparent);
-  backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 80%, transparent);
+  backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
   flex-shrink: 0;
   overflow-x: auto;
@@ -535,8 +535,14 @@ watch(codeContent, (newCode) => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: color-mix(in srgb, var(--md-sys-color-surface) 80%, transparent);
   backdrop-filter: blur(16px);
+}
+
+/* 表单模式：由滚动容器承载半透明背景。
+   背景绘制在容器 padding box 上，不随内容滚动，
+   且覆盖包括滚动条在内的整个区域，使滚动条浮于背景之上。 */
+.editor-content.form-mode {
+  background: color-mix(in srgb, var(--md-sys-color-surface) 80%, transparent);
 }
 
 /* 错误提示 */
