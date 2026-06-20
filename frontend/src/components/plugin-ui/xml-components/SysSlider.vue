@@ -1,14 +1,21 @@
 <script setup lang="ts">
 /** SysSlider - 滑块组件。 */
-defineProps<{ label?: string; value?: string; min?: string; max?: string; step?: string; disabled?: boolean }>()
+defineProps<{
+  label?: string
+  value?: string | number
+  min?: string | number
+  max?: string | number
+  step?: string | number
+  disabled?: boolean
+}>()
 const emit = defineEmits<{ (e: 'change', value: number): void }>()
 function handleInput(event: Event): void { emit('change', parseFloat((event.target as HTMLInputElement).value)) }
 </script>
 <template>
   <div class="sys-slider-wrapper">
     <label v-if="label" class="sys-slider-label">{{ label }}</label>
-    <input type="range" class="sys-slider" :value="value || '50'" :min="min || '0'" :max="max || '100'"
-      :step="step || '1'" :disabled="disabled" @input="handleInput" />
+    <input type="range" class="sys-slider" :value="value ?? 50" :min="min ?? 0" :max="max ?? 100"
+      :step="step ?? 1" :disabled="disabled" @input="handleInput" />
   </div>
 </template>
 <style scoped>

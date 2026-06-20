@@ -121,10 +121,15 @@ const vnodes = computed<VNode[]>(() => {
 })
 
 // === 自动执行 autoFetch API ===
+// 注意：监听 props.xml 而非 vnodes。因为 vnodes computed 内部通过
+// store.get() 读取了变量池，若监听 vnodes，executeAutoFetch 写入
+// api.*.pending 等状态会导致 vnodes 重算，进而再次触发 watch，形成无限循环。
+// 此处手动访问 vnodes.value 强制 computed 求值，确保 processDefinitions
+// 已将 <api> 模板注册到 apiEngine 后再执行 autoFetch。
 watch(
   () => props.xml,
   () => {
-    // XML 变化时重新执行 autoFetch
+    void vnodes.value
     apiEngine.executeAutoFetch()
   },
   { immediate: true }

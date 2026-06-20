@@ -1,12 +1,17 @@
 <script setup lang="ts">
 /** SysSwitch - 开关组件。 */
-defineProps<{ label?: string; value?: string; disabled?: boolean }>()
+const props = defineProps<{ label?: string; value?: string | boolean; disabled?: boolean }>()
 const emit = defineEmits<{ (e: 'change', value: boolean): void }>()
 function handleChange(event: Event): void { emit('change', (event.target as HTMLInputElement).checked) }
+/** 将 value 解析为布尔值，支持 string 和 boolean 类型。 */
+function isChecked(): boolean {
+  if (typeof props.value === 'boolean') return props.value
+  return props.value === 'true'
+}
 </script>
 <template>
   <label class="sys-switch">
-    <input type="checkbox" class="sys-switch-input" :checked="value === 'true'" :disabled="disabled"
+    <input type="checkbox" class="sys-switch-input" :checked="isChecked()" :disabled="disabled"
       @change="handleChange" />
     <span class="sys-switch-track"><span class="sys-switch-thumb" /></span>
     <span v-if="label" class="sys-switch-label">{{ label }}</span>

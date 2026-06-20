@@ -96,7 +96,7 @@ _DASHBOARD_XML = """\
         <vbox gap="0.75rem">
           <sys-input label="名称" placeholder="输入条目名称..." bind:value="username" />
           <hbox gap="0.5rem">
-            <sys-button variant="filled" icon="add" on-click="api: addItem | notify: '添加成功', 'success'">
+            <sys-button variant="filled" icon="add" on-click="api: addItem | notify: '添加成功', 'success'",disabled="{!username.trim()}">
               添加
             </sys-button>
             <sys-button variant="text" on-click="set: username=''">
