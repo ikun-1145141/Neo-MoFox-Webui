@@ -1,5 +1,14 @@
+<script lang="ts">
+/**
+ * 模块级变量：跨 AppShell 实例持久化侧边栏滚动位置。
+ * 由于每个页面视图都独立包含 AppShell，路由切换时实例会销毁重建，
+ * 使用模块级变量可保证滚动位置不丢失。
+ */
+let savedRailNavScrollTop = 0
+</script>
+
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { logout } from '../../api/modules/auth'
 import { restartBot, shutdownBot } from '../../api/modules/system'
@@ -9,6 +18,28 @@ import { useToastStore } from '../../utils/toast'
 import { useI18n } from '../../utils/i18n'
 
 const showSystemMenu = ref(false)
+
+const railNavRef = ref<HTMLElement | null>(null)
+
+function onRailNavScroll() {
+  if (railNavRef.value) {
+    savedRailNavScrollTop = railNavRef.value.scrollTop
+  }
+}
+
+onMounted(() => {
+  nextTick(() => {
+    if (railNavRef.value && savedRailNavScrollTop > 0) {
+      railNavRef.value.scrollTop = savedRailNavScrollTop
+    }
+  })
+})
+
+onBeforeUnmount(() => {
+  if (railNavRef.value) {
+    savedRailNavScrollTop = railNavRef.value.scrollTop
+  }
+})
 
 const props = defineProps<{
   noPadding?: boolean
@@ -183,7 +214,7 @@ async function handleSystemAction(action: 'restart' | 'shutdown' | 'logout') {
       </div>
 
       <!-- 导航项区域 -->
-      <nav class="rail-nav">
+      <nav class="rail-nav" ref="railNavRef" @scroll="onRailNavScroll">
         <router-link
           v-for="item in navItems"
           :key="item.name"

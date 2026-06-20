@@ -1,4 +1,4 @@
-<script setup lang="ts">
+  <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
 import ToastManager from './components/common/ToastManager.vue'
 import DialogManager from './components/common/DialogManager.vue'
