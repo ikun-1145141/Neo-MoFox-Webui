@@ -447,6 +447,10 @@ function getFieldComponent(inputType: string, fieldType?: string) {
 <style scoped>
 .form-editor {
   padding: 16px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .empty-state {
@@ -454,7 +458,7 @@ function getFieldComponent(inputType: string, fieldType?: string) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100%;
+  flex: 1;
   color: var(--md-sys-color-on-surface-variant);
   gap: 12px;
 }
@@ -463,6 +467,8 @@ function getFieldComponent(inputType: string, fieldType?: string) {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  flex: 1;
+  min-height: 0;
 }
 
 /* 折叠面板样式 */
