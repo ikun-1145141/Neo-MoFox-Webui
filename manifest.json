@@ -1,0 +1,100 @@
+{
+    "name": "neo-mofox-webui",
+    "version": "1.0.11",
+    "display_name": "Neo-MoFox WebUI",
+    "summary": "现代化、类型安全的 Neo-MoFox 机器人 Web 管理界面。",
+    "description": "Neo-MoFox WebUI 后端插件，提供前端静态资源托管、设置管理、插件配置、LLM 指标、请求检查器等 Web 管理接口。",
+    "author": "MoFox Team",
+    "license": "AGPL-3.0",
+    "homepage": "https://github.com/ikun-1145141/Neo-MoFox-Webui/",
+    "repository_url": "https://github.com/ikun-1145141/Neo-MoFox-Webui/",
+    "github_owner": "ikun-1145141",
+    "github_repo": "Neo-MoFox-Webui",
+    "categories": [
+        "information"
+    ],
+    "tags": [
+        "webui",
+        "dashboard",
+        "admin",
+        "settings",
+        "monitoring"
+    ],
+    "maintainers": [
+        "MoFox Team"
+    ],
+    "dependencies": {
+        "plugins": [],
+        "components": []
+    },
+    "include": [
+        {
+            "component_type": "router",
+            "component_name": "auth",
+            "dependencies": []
+        },
+        {
+            "component_type": "router",
+            "component_name": "webui",
+            "dependencies": []
+        },
+        {
+            "component_type": "router",
+            "component_name": "llm-metrics",
+            "dependencies": []
+        },
+        {
+            "component_type": "event_handler",
+            "component_name": "webui_startup_panel",
+            "dependencies": []
+        },
+        {
+            "component_type": "router",
+            "component_name": "request-inspector",
+            "dependencies": []
+        },
+        {
+            "component_type": "router",
+            "component_name": "log",
+            "dependencies": []
+        },
+        {
+            "component_type": "router",
+            "component_name": "chat",
+            "dependencies": []
+        },
+        {
+            "component_type": "event_handler",
+            "component_name": "log_broadcast",
+            "dependencies": []
+        },
+        {
+            "component_type": "event_handler",
+            "component_name": "webui_chat_broadcast",
+            "dependencies": []
+        },
+        {
+            "component_type": "service",
+            "component_name": "plugin_ui",
+            "dependencies": []
+        },
+        {
+            "component_type": "router",
+            "component_name": "plugin-ui",
+            "dependencies": []
+        },
+        {
+            "component_type": "router",
+            "component_name": "plugin-ui-asset",
+            "dependencies": []
+        }
+    ],
+    "entry_point": "plugin.py",
+    "min_core_version": "1.0.0",
+    "python_dependencies": [
+        "lxml",
+        "pydantic",
+        "python-multipart"
+    ],
+    "dependencies_required": true
+}
