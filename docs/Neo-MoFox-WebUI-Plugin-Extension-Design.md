@@ -1366,3 +1366,44 @@ async def update_page(self):
 **设计文档版本历史**：
 - v2.0.0 (2026-05-04): 重新设计为动态注册机制，增强表单校验和 POST 支持
 - v1.0.0 (2026-05-03): 初始设计（已废弃）
+
+---
+
+## 附录：与当前项目 (Neo-MoFox-Webui) 的关联分析
+
+> 分析日期：2026-06-21
+
+### 当前实现状态
+
+本设计文档描述的系统 **尚未实现**。当前项目代码中不存在以下内容：
+
+- WebUI Service / `register_ui_page()` 方法
+- `/api/ui/discovery` 聚合端点
+- `/api/ui/schema/{plugin}/{page_id}` 端点
+- XML Schema 解析器 / XSD 校验器
+- 16 个预设 Vue 组件（UIContainer、UIInputField 等）
+- `SchemaRenderer.vue` 渲染引擎
+- `dataStore` 数据绑定系统
+- 前端动态路由注册 (`router.addRoute`)
+
+### 现有可复用基础
+
+| 现有模块 | 位置 | 可复用场景 |
+|----------|------|-----------|
+| 插件管理系统 | `Plugin/managers/plugin_manager.py` | Phase 1 注册 API 可参考其架构 |
+| 配置管理系统 | `Plugin/managers/config/` + `frontend/src/components/config/` | FormEditor.vue 的 Schema 驱动渲染可参考 |
+| 统一 API 响应 | `Plugin/utils/response.py` (BaseResponse) | 新 API 端点复用 |
+| 前端路由系统 | `frontend/src/router/index.ts` | 动态路由注册的入口 |
+| SPA 静态托管 | `Plugin/components/router/frontend_router.py` | 前端资源分发 |
+| 认证系统 | `VerifiedDep` | 新 API 端点复用 |
+| 插件详情页 | `frontend/src/views/PluginDetailView.vue` | 可作为插件页面容器 |
+
+### Phase → 项目文件映射
+
+| Phase | 任务 | 对应项目位置 |
+|-------|------|-------------|
+| Phase 1 | WebUI Service 实现 | `Plugin/managers/` 新建 `webui_service_manager.py`<br>`Plugin/components/router/` 新建 `ui_router.py` |
+| Phase 2 | XML 解析与 XSD 校验 | `Plugin/utils/` 新建 `xml_schema_validator.py` |
+| Phase 3 | 前端渲染器 + 15 个组件 | `frontend/src/components/ui-schema/` 新建组件目录 |
+| Phase 4 | 表单校验与 API 执行器 | `frontend/src/utils/` 新建表单校验和 API 执行逻辑 |
+| Phase 5 | 示例插件 + 文档 | `docs/` 补充开发指南

@@ -20,6 +20,8 @@ from .components.router.system_router import SystemRouter
 from .components.router.plugin_router import PluginRouter
 from .components.router.frontend_router import FrontendRouter
 from .components.router.log_router import LogRouter
+from .components.router.ui_router import UiRouter
+from .components.service import WebuiUiService
 from .components.router.config import (
     MainConfigRouter,
     BotConfigRouter,
@@ -67,6 +69,8 @@ class WebuiPlugin(BasePlugin):
             PluginRouter,
             FrontendRouter,
             LogRouter,
+            UiRouter,
+            WebuiUiService,
             WebuiStartupPanelHandler,
             LogBroadcastHandler,
             ChatBroadcastHandler,

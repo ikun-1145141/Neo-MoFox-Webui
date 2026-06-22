@@ -1,0 +1,26 @@
+{
+    "name": "ui_demo_plugin",
+    "version": "1.0.0",
+    "display_name": "WebUI 扩展示例",
+    "summary": "演示如何通过 WebUI 的 webui_ui Service 动态注册 XML 前端页面。",
+    "description": "Neo-MoFox WebUI 插件前端扩展系统的最小可运行示例：注册一个留言板页面，包含表单校验、POST 提交与数据表格自动加载，对应设计文档 Phase 5。",
+    "author": "MoFox Team",
+    "license": "AGPL-3.0",
+    "dependencies": {
+        "plugins": [
+            "neo-mofox-webui"
+        ],
+        "components": []
+    },
+    "include": [
+        {
+            "component_type": "router",
+            "component_name": "ui-demo",
+            "dependencies": []
+        }
+    ],
+    "entry_point": "plugin.py",
+    "min_core_version": "1.0.0",
+    "python_dependencies": [],
+    "dependencies_required": true
+}
