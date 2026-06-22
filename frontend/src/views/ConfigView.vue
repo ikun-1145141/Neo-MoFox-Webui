@@ -54,7 +54,7 @@
           :title="botConfig?.config_name"
           :config-path="botConfig?.config_path"
           :config-type="'bot'"
-          :schema="botConfig?.schema"
+          :schema="botConfig?.sections"
           :model-value="botConfig?.data"
           @save="handleSave('bot', $event)"
         />
@@ -64,7 +64,7 @@
           v-else-if="activeTab === 'model' && modelConfig"
           :title="modelConfig?.config_name"
           :config-path="modelConfig?.config_path"
-          :schema="modelConfig?.schema"
+          :schema="modelConfig?.sections"
           :model-value="modelConfig?.data"
           @save="handleSave('model', $event)"
         />

@@ -9,12 +9,12 @@ import asyncio
 import json
 from typing import TYPE_CHECKING, Any
 
-from fastapi import HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from src.core.components.base.router import BaseRouter
 from src.app.plugin_system.api.log_api import get_logger
-from src.core.utils.security import VerifiedDep, get_api_key
+from src.core.utils.security import VerifiedDep, verify_websocket_token
 
 from ...managers.log_manager import get_log_manager
 from ...utils.response import BaseResponse
@@ -147,15 +147,7 @@ class LogRouter(BaseRouter):
             - {"type": "ping"} : 心跳
             - {"type": "set_level_filter", "levels": ["INFO", "ERROR"]} : 设置级别过滤
             """
-            token = websocket.query_params.get("token")
-            if token is None:
-                await websocket.close(code=1008, reason="缺少认证令牌")
-                return
-
-            try:
-                await get_api_key(token)
-            except HTTPException as exc:
-                await websocket.close(code=1008, reason=str(exc.detail))
+            if not await verify_websocket_token(websocket):
                 return
 
             await websocket.accept()

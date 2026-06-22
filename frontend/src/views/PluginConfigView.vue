@@ -89,7 +89,7 @@
           :config-path="currentPluginConfig.config_path"
           :config-type="'plugin'"
           :plugin-name="selectedPlugin.plugin_name"
-          :schema="currentPluginConfig.schema"
+          :schema="currentPluginConfig.sections"
           :model-value="currentPluginConfig.data"
           @save="handleSave"
         />
@@ -376,6 +376,7 @@ onMounted(() => {
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -416,6 +417,10 @@ onMounted(() => {
   gap: 16px;
   padding: 40px;
   color: var(--md-sys-color-on-surface-variant);
+}
+
+.editor-empty {
+  background: color-mix(in srgb, var(--md-sys-color-surface) 75%, transparent);
 }
 
 .editor-empty p,

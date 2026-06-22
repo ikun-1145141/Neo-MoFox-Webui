@@ -88,7 +88,12 @@
                     <label :for="`${section.name}-${itemIndex}-${field.key}`" class="field-label">
                       <span class="field-title-zh">{{ getFieldTitle(field) }}</span>
                       <span class="field-name-en">{{ field.key }}</span>
-                      <div v-if="getFieldDescriptionText(field)" class="field-tooltip">
+                      <div
+                        v-if="getFieldDescriptionText(field)"
+                        class="field-tooltip"
+                        :class="{ 'tooltip-below': belowTooltips.has(`${section.name}-${itemIndex}-${field.key}`) }"
+                        @mouseenter="checkTooltipPosition($event)"
+                      >
                         <Icon icon="material-symbols:help-outline-rounded" :size="16" class="help-icon" />
                         <div class="tooltip-popup">{{ getFieldDescriptionText(field) }}</div>
                       </div>
@@ -127,7 +132,12 @@
                   <label :for="`${section.name}-${field.key}`" class="field-label">
                     <span class="field-title-zh">{{ getFieldTitle(field) }}</span>
                     <span class="field-name-en">{{ field.key }}</span>
-                    <div v-if="getFieldDescriptionText(field)" class="field-tooltip">
+                    <div
+                      v-if="getFieldDescriptionText(field)"
+                      class="field-tooltip"
+                      :class="{ 'tooltip-below': belowTooltips.has(`${section.name}-${field.key}`) }"
+                      @mouseenter="checkTooltipPosition($event)"
+                    >
                       <Icon icon="material-symbols:help-outline-rounded" :size="16" class="help-icon" />
                       <div class="tooltip-popup">{{ getFieldDescriptionText(field) }}</div>
                     </div>
@@ -188,7 +198,54 @@ const emit = defineEmits<{
 // 展开状态（默认全部展开）
 const expandedSections = ref<Set<number>>(new Set())
 
+// 追踪需要下方显示的 tooltip（左侧空间不足时）
+const belowTooltips = ref<Set<string>>(new Set())
+
 type SelectOption = string | number | { label: string; value: string | number }
+
+/**
+ * 检测 tooltip 是否需要切换到下方显示。
+ * 当 tooltip 元素左侧空间不足以容纳弹出内容时，标记为下方显示。
+ */
+function checkTooltipPosition(event: MouseEvent) {
+  const el = event.currentTarget as HTMLElement
+  const popup = el.querySelector('.tooltip-popup') as HTMLElement | null
+  if (!el || !popup) return
+
+  // 临时让 popup 可见但不影响布局，以获取其真实宽度
+  popup.style.visibility = 'hidden'
+  popup.style.position = 'fixed'
+  popup.style.left = '-9999px'
+  popup.style.top = '-9999px'
+  popup.style.opacity = '1'
+  popup.style.display = 'block'
+
+  const popupWidth = popup.offsetWidth
+  const elRect = el.getBoundingClientRect()
+
+  // 恢复原始样式
+  popup.style.visibility = ''
+  popup.style.position = ''
+  popup.style.left = ''
+  popup.style.top = ''
+  popup.style.opacity = ''
+  popup.style.display = ''
+
+  // 判断左侧空间是否足够（popup 宽度 + 间距）
+  const leftSpace = elRect.left
+  const needBelow = leftSpace < popupWidth + 8
+
+  // 从 DOM 中提取唯一标识 key（使用 label 的 for 属性）
+  const label = el.closest('.field-label')
+  const forAttr = label?.getAttribute('for') || ''
+  if (needBelow) {
+    belowTooltips.value.add(forAttr)
+  } else {
+    belowTooltips.value.delete(forAttr)
+  }
+  // 触发响应式更新
+  belowTooltips.value = new Set(belowTooltips.value)
+}
 
 // 初始化展开第一个节（或单个节时总是展开）
 watch(
@@ -447,6 +504,10 @@ function getFieldComponent(inputType: string, fieldType?: string) {
 <style scoped>
 .form-editor {
   padding: 16px;
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
 }
 
 .empty-state {
@@ -454,7 +515,7 @@ function getFieldComponent(inputType: string, fieldType?: string) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100%;
+  flex: 1;
   color: var(--md-sys-color-on-surface-variant);
   gap: 12px;
 }
@@ -463,6 +524,8 @@ function getFieldComponent(inputType: string, fieldType?: string) {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  flex: 1;
+  min-height: 0;
 }
 
 /* 折叠面板样式 */
@@ -728,9 +791,9 @@ function getFieldComponent(inputType: string, fieldType?: string) {
   visibility: hidden;
   opacity: 0;
   position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%) translateY(-4px);
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
   background: var(--md-sys-color-inverse-surface, #313033);
   color: var(--md-sys-color-inverse-on-surface, #f4eff4);
   padding: 6px 10px;
@@ -751,7 +814,21 @@ function getFieldComponent(inputType: string, fieldType?: string) {
 .field-tooltip:hover .tooltip-popup {
   visibility: visible;
   opacity: 1;
-  transform: translateX(-50%) translateY(-8px);
+  transform: translateY(-50%) translateX(-8px);
+}
+
+/* 左侧空间不足时，tooltip 在下方显示 */
+.field-tooltip.tooltip-below .tooltip-popup {
+  right: auto;
+  left: 0;
+  top: 100%;
+  transform: translateY(4px) translateX(0);
+}
+
+.field-tooltip.tooltip-below:hover .tooltip-popup {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(8px) translateX(0);
 }
 
 /* ===== 移动端适配 ===== */
@@ -773,13 +850,25 @@ function getFieldComponent(inputType: string, fieldType?: string) {
   }
 
   .tooltip-popup {
-    left: auto;
-    right: 0;
-    transform: translateY(-4px);
+    right: 100%;
+    top: 50%;
+    transform: translateY(-50%) translateX(-4px);
   }
 
   .field-tooltip:hover .tooltip-popup {
-    transform: translateY(-8px);
+    transform: translateY(-50%) translateX(-8px);
+  }
+
+  /* 移动端左侧空间通常不足，tooltip-below 样式覆盖 */
+  .field-tooltip.tooltip-below .tooltip-popup {
+    right: auto;
+    left: 0;
+    top: 100%;
+    transform: translateY(4px) translateX(0);
+  }
+
+  .field-tooltip.tooltip-below:hover .tooltip-popup {
+    transform: translateY(8px) translateX(0);
   }
 }
 

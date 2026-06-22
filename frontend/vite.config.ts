@@ -23,6 +23,10 @@ export default defineConfig({
         changeOrigin: true, // 允许跨域
         ws: true, // 转发 WebSocket 日志流
       },
+      '/router': {
+        target: 'http://localhost:8005', // 代理目标地址
+        changeOrigin: true, // 允许跨域
+      },
     },
   },
 })

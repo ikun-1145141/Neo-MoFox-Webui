@@ -223,7 +223,7 @@ class MainConfigManager:
             config_type="mcp",
             config_name="MCP 配置",
             config_path=str(self.mcp_config_path),
-            schema=[],
+            sections=[],
             data=data,
         )
 

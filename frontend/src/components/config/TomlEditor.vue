@@ -11,21 +11,226 @@
 -->
 <template>
   <div class="toml-editor-wrapper">
+    <!-- 自定义搜索栏 -->
+    <div v-if="showSearch" class="search-bar">
+      <div class="search-input-group">
+        <Icon icon="material-symbols:search-rounded" :size="18" class="search-icon" />
+        <input 
+          ref="searchInputRef"
+          v-model="searchQuery" 
+          type="text" 
+          placeholder="搜索..." 
+          @keydown.enter="findNextMatch"
+          @keydown.esc="closeSearch"
+          @input="onSearchInput"
+        />
+        <span v-if="searchQuery" class="search-count">
+          {{ matchCount > 0 ? currentMatchIndex + 1 : 0 }} / {{ matchCount }}
+        </span>
+      </div>
+      <div class="search-actions">
+        <button class="icon-btn" @click="findPrevMatch" title="上一个 (Shift+Enter)" :disabled="matchCount === 0">
+          <Icon icon="material-symbols:keyboard-arrow-up-rounded" :size="20" />
+        </button>
+        <button class="icon-btn" @click="findNextMatch" title="下一个 (Enter)" :disabled="matchCount === 0">
+          <Icon icon="material-symbols:keyboard-arrow-down-rounded" :size="20" />
+        </button>
+        <div class="divider"></div>
+        <button class="icon-btn" @click="closeSearch" title="关闭 (Esc)">
+          <Icon icon="material-symbols:close-rounded" :size="20" />
+        </button>
+      </div>
+    </div>
     <div class="editor-container" ref="editorRef"></div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, shallowRef } from 'vue'
+import { ref, onMounted, onUnmounted, watch, shallowRef, nextTick } from 'vue'
 import { EditorView, basicSetup } from 'codemirror'
-import { Decoration, WidgetType } from '@codemirror/view'
-import { EditorState, Compartment, StateField } from '@codemirror/state'
+import { Decoration, WidgetType, keymap } from '@codemirror/view'
+import { EditorState, Compartment, StateField, StateEffect, Prec } from '@codemirror/state'
 import { StreamLanguage } from '@codemirror/language'
 import { toml } from '@codemirror/legacy-modes/mode/toml'
 import { linter, forEachDiagnostic } from '@codemirror/lint'
 import { syntaxHighlighting, HighlightStyle } from '@codemirror/language'
 import { tags as t } from '@lezer/highlight'
 import { lintTOML } from '@/utils/toml-linter'
+import { SearchQuery } from '@codemirror/search'
+import Icon from '@/components/common/Icon.vue'
+
+// ═══ 自定义搜索状态 ═══
+const showSearch = ref(false)
+const searchQuery = ref('')
+const searchInputRef = ref<HTMLInputElement | null>(null)
+const matchCount = ref(0)
+const currentMatchIndex = ref(0)
+const searchMatches = ref<{from: number, to: number}[]>([])
+
+// 搜索高亮装饰器
+const searchHighlightEffect = StateEffect.define<{from: number, to: number}[]>()
+const searchHighlightField = StateField.define<any>({
+  create() {
+    return Decoration.none
+  },
+  update(decorations, tr) {
+    decorations = decorations.map(tr.changes)
+    for (let e of tr.effects) {
+      if (e.is(searchHighlightEffect)) {
+        const decos = e.value.map(m => Decoration.mark({class: 'cm-searchMatch'}).range(m.from, m.to))
+        return Decoration.set(decos, true)
+      }
+    }
+    return decorations
+  },
+  provide: f => EditorView.decorations.from(f)
+})
+
+// 当前选中搜索结果高亮
+const currentMatchEffect = StateEffect.define<{from: number, to: number} | null>()
+const currentMatchField = StateField.define<any>({
+  create() {
+    return Decoration.none
+  },
+  update(decorations, tr) {
+    decorations = decorations.map(tr.changes)
+    for (let e of tr.effects) {
+      if (e.is(currentMatchEffect)) {
+        if (e.value) {
+          return Decoration.set([Decoration.mark({class: 'cm-searchMatch-selected'}).range(e.value.from, e.value.to)], true)
+        } else {
+          return Decoration.none
+        }
+      }
+    }
+    return decorations
+  },
+  provide: f => EditorView.decorations.from(f)
+})
+
+// 搜索快捷键
+const customSearchKeymap = Prec.highest(keymap.of([
+  {
+    key: 'Mod-f',
+    run: () => {
+      openSearch()
+      return true
+    },
+  },
+  {
+    key: 'F3',
+    run: () => {
+      findNextMatch()
+      return true
+    },
+  },
+  {
+    key: 'Shift-F3',
+    run: () => {
+      findPrevMatch()
+      return true
+    },
+  },
+]))
+
+function openSearch() {
+  showSearch.value = true
+  nextTick(() => {
+    searchInputRef.value?.focus()
+    if (searchQuery.value) {
+      searchInputRef.value?.select()
+      performSearch()
+    }
+  })
+}
+
+function closeSearch() {
+  showSearch.value = false
+  clearSearch()
+  editorView.value?.focus()
+}
+
+function onSearchInput() {
+  performSearch()
+}
+
+function clearSearch() {
+  matchCount.value = 0
+  currentMatchIndex.value = 0
+  searchMatches.value = []
+  if (editorView.value) {
+    editorView.value.dispatch({
+      effects: [
+        searchHighlightEffect.of([]),
+        currentMatchEffect.of(null)
+      ]
+    })
+  }
+}
+
+function performSearch() {
+  if (!editorView.value || !searchQuery.value) {
+    clearSearch()
+    return
+  }
+
+  const state = editorView.value.state
+  const query = new SearchQuery({search: searchQuery.value})
+  const cursor = query.getCursor(state)
+  
+  const matches: {from: number, to: number}[] = []
+  let match = cursor.next()
+  while (!match.done) {
+    matches.push({from: match.value.from, to: match.value.to})
+    match = cursor.next()
+  }
+
+  searchMatches.value = matches
+  matchCount.value = matches.length
+  
+  if (matches.length > 0) {
+    // 尝试保持当前选中的索引，如果超出范围则重置为0
+    if (currentMatchIndex.value >= matches.length) {
+      currentMatchIndex.value = 0
+    }
+    updateSearchHighlight()
+  } else {
+    currentMatchIndex.value = 0
+    editorView.value.dispatch({
+      effects: [
+        searchHighlightEffect.of([]),
+        currentMatchEffect.of(null)
+      ]
+    })
+  }
+}
+
+function updateSearchHighlight() {
+  if (!editorView.value || searchMatches.value.length === 0) return
+
+  const currentMatch = searchMatches.value[currentMatchIndex.value]
+  
+  editorView.value.dispatch({
+    effects: [
+      searchHighlightEffect.of(searchMatches.value),
+      currentMatchEffect.of(currentMatch)
+    ],
+    selection: {anchor: currentMatch.from, head: currentMatch.to},
+    scrollIntoView: true
+  })
+}
+
+function findNextMatch() {
+  if (matchCount.value === 0) return
+  currentMatchIndex.value = (currentMatchIndex.value + 1) % matchCount.value
+  updateSearchHighlight()
+}
+
+function findPrevMatch() {
+  if (matchCount.value === 0) return
+  currentMatchIndex.value = (currentMatchIndex.value - 1 + matchCount.value) % matchCount.value
+  updateSearchHighlight()
+}
 
 // ═══ 行尾诊断信息显示（类似 Error Lens）═══
 /**
@@ -254,11 +459,17 @@ onMounted(() => {
       createSyntaxHighlighting(),
       linter(lintTOML, { delay: 500 }),
       inlineDiagnostics(),
+      searchHighlightField,
+      currentMatchField,
+      customSearchKeymap,
       EditorView.lineWrapping,
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
           const newValue = update.state.doc.toString()
           emit('update:modelValue', newValue)
+          if (showSearch.value) {
+            performSearch()
+          }
         }
       }),
     ],
@@ -331,6 +542,101 @@ watch(
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
+}
+
+.search-bar {
+  position: absolute;
+  top: 8px;
+  right: 24px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  background: var(--md-sys-color-surface-container-high);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 8px;
+  padding: 4px 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  gap: 8px;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from { transform: translateY(-10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.search-input-group {
+  display: flex;
+  align-items: center;
+  background: var(--md-sys-color-surface);
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: 4px;
+  padding: 2px 8px;
+  min-width: 200px;
+}
+
+.search-input-group:focus-within {
+  border-color: var(--md-sys-color-primary);
+}
+
+.search-icon {
+  color: var(--md-sys-color-on-surface-variant);
+  margin-right: 4px;
+}
+
+.search-input-group input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--md-sys-color-on-surface);
+  font-size: 13px;
+  outline: none;
+  width: 100px;
+}
+
+.search-count {
+  font-size: 12px;
+  color: var(--md-sys-color-on-surface-variant);
+  margin-left: 8px;
+  white-space: nowrap;
+}
+
+.search-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: var(--md-sys-color-surface-variant);
+  color: var(--md-sys-color-on-surface);
+}
+
+.icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.divider {
+  width: 1px;
+  height: 16px;
+  background: var(--md-sys-color-outline-variant);
+  margin: 0 4px;
 }
 
 .editor-container {
@@ -359,6 +665,15 @@ watch(
   padding: 0 16px;
 }
 
+/* 搜索高亮样式 */
+.editor-container :deep(.cm-searchMatch) {
+  background-color: rgba(255, 213, 0, 0.4);
+}
+
+.editor-container :deep(.cm-searchMatch-selected) {
+  background-color: rgba(255, 140, 0, 0.6);
+}
+
 /* Lint 错误样式 */
 .editor-container :deep(.cm-lintRange-error) {
   background: none;
@@ -376,6 +691,8 @@ watch(
   color: var(--md-sys-color-on-surface);
   border-radius: 8px;
   padding: 8px 12px;
+  z-index: 1000;
+  position: fixed;
 }
 
 .editor-container :deep(.cm-diagnostic-error) {

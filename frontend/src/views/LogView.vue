@@ -29,7 +29,9 @@ const wsStatus = ref<WsStatus>('disconnected')
 const autoScroll = ref(true)
 const atBottom = ref(true)
 const searchText = ref('')
-const selectedLevel = ref('ALL')
+const selectedLevels = ref<string[]>([])
+const levelDropdownOpen = ref(false)
+const levelDropdownRef = ref<HTMLElement | null>(null)
 const logContainerRef = ref<HTMLElement | null>(null)
 const lastRealtimeAt = ref<string>('')
 const maxLogEntries = 2000
@@ -38,6 +40,7 @@ const logFiles = ref<LogFileInfo[]>([])
 const selectedFile = ref<string>('')
 const fileSearchText = ref('')
 const historySearchText = ref('')
+const isMobileFileMenuOpen = ref(false)
 const historyLines = ref<string[]>([])
 const historyEntries = ref<StructuredLogLine[]>([])
 const historyLoading = ref(false)
@@ -59,9 +62,9 @@ const LOG_LEVELS = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] as const
 
 const filteredLogs = computed(() => {
   const keyword = searchText.value.trim().toLowerCase()
-  const levelFilter = selectedLevel.value
+  const levelFilter = selectedLevels.value
   return realtimeLogs.value.filter((entry) => {
-    if (levelFilter !== 'ALL' && entry.level.toUpperCase() !== levelFilter) {
+    if (levelFilter.length > 0 && !levelFilter.includes(entry.level.toUpperCase())) {
       return false
     }
 
@@ -147,7 +150,7 @@ function historyEntryStyle(entry: StructuredLogLine): Record<string, string> {
 }
 
 function historyFilterLevels(): string[] {
-  return selectedLevel.value === 'ALL' ? [] : [selectedLevel.value]
+  return selectedLevels.value.length > 0 ? [...selectedLevels.value] : []
 }
 
 function connectWs(): void {
@@ -302,15 +305,34 @@ function appendRealtimeLog(value: unknown): void {
 
 function sendLevelFilter(): void {
   if (ws && ws.readyState === WebSocket.OPEN) {
-    const levels = selectedLevel.value === 'ALL' ? null : [selectedLevel.value]
+    const levels = selectedLevels.value.length > 0 ? [...selectedLevels.value] : null
     ws.send(JSON.stringify({ type: 'set_level_filter', levels }))
   }
 }
 
-function updateLevelFilter(event: Event): void {
-  const target = event.target as HTMLSelectElement
-  selectedLevel.value = target.value
+function toggleLevel(level: string): void {
+  const idx = selectedLevels.value.indexOf(level)
+  if (idx === -1) {
+    selectedLevels.value = [...selectedLevels.value, level]
+  } else {
+    selectedLevels.value = selectedLevels.value.filter((l) => l !== level)
+  }
   sendLevelFilter()
+}
+
+function clearLevelFilter(): void {
+  selectedLevels.value = []
+  sendLevelFilter()
+}
+
+function toggleLevelDropdown(): void {
+  levelDropdownOpen.value = !levelDropdownOpen.value
+}
+
+function closeLevelDropdown(event: MouseEvent): void {
+  if (levelDropdownRef.value && !levelDropdownRef.value.contains(event.target as Node)) {
+    levelDropdownOpen.value = false
+  }
 }
 
 function clearLogs(): void {
@@ -463,6 +485,7 @@ function extractHistoryMeta(data: LogContentResponse): HistoryMeta {
 
 function selectLogFile(filename: string): void {
   selectedFile.value = filename
+  isMobileFileMenuOpen.value = false
   historyLines.value = []
   historyEntries.value = []
   historyMeta.value = null
@@ -534,10 +557,12 @@ watch(activeTab, (tab) => {
 
 onMounted(() => {
   connectWs()
+  document.addEventListener('click', closeLevelDropdown)
 })
 
 onUnmounted(() => {
   disconnectWs()
+  document.removeEventListener('click', closeLevelDropdown)
 })
 </script>
 
@@ -563,16 +588,82 @@ onUnmounted(() => {
               <input v-model="searchText" :placeholder="t('log.realtime.searchPlaceholder')" />
             </label>
 
-            <label class="level-select-field">
-              <span>{{ t('log.realtime.levelLabel') }}</span>
-              <select :value="selectedLevel" @change="updateLevelFilter">
-                <option value="ALL">{{ t('log.realtime.allLevels') }}</option>
-                <option v-for="level in LOG_LEVELS" :key="level" :value="level">
-                  {{ level }} · {{ logStats[level] || 0 }}
-                </option>
-              </select>
-              <Icon icon="material-symbols:keyboard-arrow-down-rounded" width="20" height="20" />
-            </label>
+            <div class="level-multiselect" ref="levelDropdownRef">
+              <button
+                type="button"
+                class="level-multiselect-trigger"
+                :class="{ open: levelDropdownOpen, active: selectedLevels.length > 0 }"
+                :aria-expanded="levelDropdownOpen"
+                @click.stop="toggleLevelDropdown"
+              >
+                <span class="level-multiselect-label">{{ t('log.realtime.levelLabel') }}</span>
+                <span class="level-multiselect-value">
+                  <template v-if="selectedLevels.length === 0">{{ t('log.realtime.allLevels') }}</template>
+                  <template v-else>{{ t('log.realtime.selectedCount', { count: String(selectedLevels.length) }) }}</template>
+                </span>
+                <Icon
+                  icon="material-symbols:keyboard-arrow-down-rounded"
+                  width="20"
+                  height="20"
+                  class="level-multiselect-chevron"
+                  :class="{ open: levelDropdownOpen }"
+                />
+              </button>
+
+              <transition name="level-dropdown">
+                <div v-if="levelDropdownOpen" class="level-multiselect-panel" role="listbox" aria-multiselectable="true">
+                  <button
+                    type="button"
+                    class="level-multiselect-option"
+                    :class="{ checked: selectedLevels.length === 0 }"
+                    role="option"
+                    :aria-selected="selectedLevels.length === 0"
+                    @click="clearLevelFilter"
+                  >
+                    <span class="level-multiselect-check">
+                      <Icon
+                        v-if="selectedLevels.length === 0"
+                        icon="material-symbols:check-rounded"
+                        width="16"
+                        height="16"
+                      />
+                    </span>
+                    <span class="level-multiselect-option-text">{{ t('log.realtime.allLevels') }}</span>
+                    <span class="level-multiselect-count">{{ realtimeLogs.length }}</span>
+                  </button>
+
+                  <button
+                    v-for="level in LOG_LEVELS"
+                    :key="level"
+                    type="button"
+                    class="level-multiselect-option"
+                    :class="{ checked: selectedLevels.includes(level) }"
+                    role="option"
+                    :aria-selected="selectedLevels.includes(level)"
+                    :style="{ '--option-level-color': levelColor(level) }"
+                    @click="toggleLevel(level)"
+                  >
+                    <span class="level-multiselect-check">
+                      <Icon
+                        v-if="selectedLevels.includes(level)"
+                        icon="material-symbols:check-rounded"
+                        width="16"
+                        height="16"
+                      />
+                    </span>
+                    <span class="level-multiselect-option-text">{{ level }}</span>
+                    <span class="level-multiselect-count">{{ logStats[level] || 0 }}</span>
+                  </button>
+
+                  <div v-if="selectedLevels.length > 0" class="level-multiselect-footer">
+                    <button type="button" class="level-multiselect-clear" @click="clearLevelFilter">
+                      <Icon icon="material-symbols:filter-alt-off-outline-rounded" width="16" height="16" />
+                      {{ t('log.realtime.clearFilter') }}
+                    </button>
+                  </div>
+                </div>
+              </transition>
+            </div>
 
             <div class="toolbar-right">
               <div class="inline-status-group">
@@ -645,6 +736,54 @@ onUnmounted(() => {
       </div>
 
       <div v-else class="history-section">
+        <header class="history-mobile-top-bar">
+          <div class="history-mobile-title">
+            <button class="history-file-title-btn" type="button" @click="isMobileFileMenuOpen = !isMobileFileMenuOpen">
+              <h3>{{ selectedFile || t('log.history.filesTitle') }}</h3>
+              <Icon icon="material-symbols:expand-more-rounded" width="20" height="20" class="history-file-chevron" :class="{ open: isMobileFileMenuOpen }" />
+            </button>
+            <p>{{ historyProgressText }}</p>
+          </div>
+          <button class="icon-button" @click="loadLogFiles" :title="t('log.history.refreshTitle')">
+            <Icon icon="material-symbols:refresh-rounded" width="18" height="18" />
+          </button>
+        </header>
+
+        <button v-if="isMobileFileMenuOpen" class="history-mobile-menu-backdrop" type="button" aria-label="Close history file list" @click="isMobileFileMenuOpen = false"></button>
+        <aside class="history-mobile-file-menu" :class="{ open: isMobileFileMenuOpen }" aria-label="history log files">
+          <div class="panel-header">
+            <div>
+              <span class="panel-kicker">{{ t('log.history.archives') }}</span>
+              <h3>{{ t('log.history.filesTitle') }}</h3>
+            </div>
+          </div>
+          <label class="history-search-field file-search-field">
+            <Icon icon="material-symbols:search-rounded" width="18" height="18" />
+            <input v-model="fileSearchText" :placeholder="t('log.history.fileSearchPlaceholder')" />
+          </label>
+          <div v-if="filteredLogFiles.length === 0" class="empty-state small">
+            <p>{{ logFiles.length === 0 ? t('log.history.emptyFiles') : t('log.history.noMatchedFiles') }}</p>
+          </div>
+          <div v-else class="file-list">
+            <button
+              v-for="file in filteredLogFiles"
+              :key="file.filename"
+              class="file-item"
+              :class="{ active: selectedFile === file.filename }"
+              @click="selectLogFile(file.filename)"
+            >
+              <div class="file-item-main">
+                <Icon icon="material-symbols:description-outline-rounded" width="18" height="18" />
+                <span class="file-name" :title="file.filename">{{ file.filename }}</span>
+              </div>
+              <div class="file-item-meta">
+                <span>{{ formatFileSize(file.size) }}</span>
+                <span>{{ formatTimestamp(file.modified_time) }}</span>
+              </div>
+            </button>
+          </div>
+        </aside>
+
         <div class="history-layout">
           <aside class="file-list-panel">
             <div class="panel-header">
@@ -673,7 +812,7 @@ onUnmounted(() => {
               >
                 <div class="file-item-main">
                   <Icon icon="material-symbols:description-outline-rounded" width="18" height="18" />
-                  <span class="file-name">{{ file.filename }}</span>
+                  <span class="file-name" :title="file.filename">{{ file.filename }}</span>
                 </div>
                 <div class="file-item-meta">
                   <span>{{ formatFileSize(file.size) }}</span>
@@ -691,9 +830,9 @@ onUnmounted(() => {
             </div>
             <template v-else>
               <div class="content-header">
-                <div>
+                <div class="content-title-block">
                   <span class="panel-kicker">{{ t('log.history.viewer') }}</span>
-                  <h3>{{ selectedFile }}</h3>
+                  <h3 :title="selectedFile">{{ selectedFile }}</h3>
                 </div>
                 <span class="content-meta">{{ historyProgressText }}</span>
               </div>
@@ -778,11 +917,6 @@ p {
 button,
 input {
   font: inherit;
-}
-
-select:focus-visible {
-  outline: 2px solid var(--md-sys-color-primary);
-  outline-offset: 2px;
 }
 
 button:focus-visible,
@@ -951,21 +1085,45 @@ input:focus-visible {
   backdrop-filter: blur(6px);
 }
 
-.level-select-field {
+.level-multiselect {
   position: relative;
   display: flex;
   align-items: center;
-  gap: .55rem;
   min-height: 42px;
+}
+
+.level-multiselect-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  min-height: 42px;
+  width: 100%;
   padding: .35rem .72rem;
   border: 1px solid var(--soft-border);
   border-radius: 14px;
   color: var(--md-sys-color-on-surface-variant);
   background: var(--glass-surface);
   backdrop-filter: blur(6px);
+  cursor: pointer;
+  transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
 }
 
-.level-select-field span {
+.level-multiselect-trigger:hover {
+  border-color: color-mix(in srgb, var(--md-sys-color-primary) 38%, var(--soft-border));
+  background: color-mix(in srgb, var(--md-sys-color-primary) 6%, var(--glass-surface));
+}
+
+.level-multiselect-trigger.open {
+  border-color: var(--md-sys-color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--md-sys-color-primary) 16%, transparent);
+}
+
+.level-multiselect-trigger.active {
+  border-color: color-mix(in srgb, var(--md-sys-color-primary) 48%, var(--soft-border));
+  background: color-mix(in srgb, var(--md-sys-color-primary-container) 42%, transparent);
+}
+
+.level-multiselect-label {
   flex: 0 0 auto;
   color: var(--md-sys-color-primary);
   font-size: .72rem;
@@ -974,22 +1132,141 @@ input:focus-visible {
   text-transform: uppercase;
 }
 
-.level-select-field select {
-  flex: 1;
+.level-multiselect-value {
+  flex: 1 1 auto;
   min-width: 0;
-  border: 0;
-  outline: 0;
-  appearance: none;
+  overflow: hidden;
   color: var(--md-sys-color-on-surface);
-  background: transparent;
   font-size: .9rem;
   font-weight: 800;
-  cursor: pointer;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.level-select-field .icon {
+.level-multiselect-chevron {
   flex: 0 0 auto;
-  pointer-events: none;
+  color: var(--md-sys-color-on-surface-variant);
+  transition: transform .18s ease;
+}
+
+.level-multiselect-chevron.open {
+  transform: rotate(180deg);
+}
+
+.level-multiselect-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 220px;
+  padding: .42rem;
+  border: 1px solid var(--soft-border);
+  border-radius: 16px;
+  background: var(--md-sys-color-surface-container-lowest);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .12), 0 4px 12px rgba(0, 0, 0, .06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.level-multiselect-option {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  width: 100%;
+  padding: .5rem .58rem;
+  border: 0;
+  border-radius: 10px;
+  color: var(--md-sys-color-on-surface);
+  background: transparent;
+  font-size: .86rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: background .14s ease, color .14s ease;
+}
+
+.level-multiselect-option:hover {
+  background: color-mix(in srgb, var(--md-sys-color-primary) 10%, transparent);
+}
+
+.level-multiselect-option.checked {
+  color: var(--md-sys-color-on-surface);
+  background: color-mix(in srgb, var(--md-sys-color-primary) 14%, transparent);
+}
+
+.level-multiselect-check {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--md-sys-color-primary);
+}
+
+.level-multiselect-option-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.level-multiselect-option:not(:first-child) .level-multiselect-option-text {
+  color: var(--option-level-color, var(--md-sys-color-on-surface));
+  font-weight: 900;
+}
+
+.level-multiselect-count {
+  flex: 0 0 auto;
+  padding: .04rem .42rem;
+  border-radius: 999px;
+  color: var(--md-sys-color-on-surface-variant);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high) 72%, transparent);
+  font-size: .72rem;
+  font-weight: 800;
+}
+
+.level-multiselect-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: .32rem .2rem .12rem;
+  margin-top: .2rem;
+  border-top: 1px solid var(--soft-border);
+}
+
+.level-multiselect-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  padding: .32rem .58rem;
+  border: 0;
+  border-radius: 999px;
+  color: var(--md-sys-color-primary);
+  background: color-mix(in srgb, var(--md-sys-color-primary) 10%, transparent);
+  font-size: .76rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background .14s ease;
+}
+
+.level-multiselect-clear:hover {
+  background: color-mix(in srgb, var(--md-sys-color-primary) 18%, transparent);
+}
+
+.level-dropdown-enter-active,
+.level-dropdown-leave-active {
+  transition: opacity .16s ease, transform .16s ease;
+}
+
+.level-dropdown-enter-from,
+.level-dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(-6px) scale(.98);
 }
 
 .search-field input {
@@ -1225,6 +1502,12 @@ input:focus-visible {
   font-size: .86rem;
 }
 
+.history-mobile-top-bar,
+.history-mobile-menu-backdrop,
+.history-mobile-file-menu {
+  display: none;
+}
+
 .history-layout {
   display: grid;
   grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
@@ -1247,10 +1530,17 @@ input:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  min-width: 0;
 }
 
 .panel-header {
   margin-bottom: .85rem;
+}
+
+.content-title-block {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .panel-header h3,
@@ -1259,6 +1549,14 @@ input:focus-visible {
   font-size: 1.08rem;
   font-weight: 900;
   letter-spacing: -.02em;
+}
+
+.content-header h3 {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .file-list {
@@ -1293,15 +1591,24 @@ input:focus-visible {
 }
 
 .file-item-main {
+  width: 100%;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: .5rem;
 }
 
+.file-item-main .iconify {
+  flex: 0 0 auto;
+}
+
 .file-name {
+  min-width: 0;
+  overflow: hidden;
   font-size: .86rem;
   font-weight: 800;
-  word-break: break-all;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .file-item-meta {
@@ -1485,22 +1792,114 @@ input:focus-visible {
 }
 
 @media (max-width: 1100px) {
+  .history-mobile-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--soft-border);
+    background: color-mix(in srgb, var(--md-sys-color-surface) 75%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    flex-shrink: 0;
+    z-index: 10;
+  }
+
+  .history-mobile-title {
+    min-width: 0;
+  }
+
+  .history-file-title-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    max-width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--md-sys-color-on-surface);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+  }
+
+  .history-file-title-btn h3 {
+    overflow: hidden;
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 900;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .history-file-chevron {
+    color: var(--md-sys-color-on-surface-variant);
+    transition: transform .18s ease;
+    flex: 0 0 auto;
+  }
+
+  .history-file-chevron.open {
+    transform: rotate(180deg);
+  }
+
+  .history-mobile-title p {
+    overflow: hidden;
+    margin: 0;
+    color: var(--md-sys-color-on-surface-variant);
+    font-size: .76rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .history-mobile-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    display: block;
+    border: 0;
+    background: rgba(0, 0, 0, .32);
+    animation: fade-in .15s ease;
+  }
+
+  .history-mobile-file-menu {
+    position: fixed;
+    top: 4.5rem;
+    left: .75rem;
+    right: .75rem;
+    z-index: 80;
+    display: block;
+    max-height: min(76vh, 620px);
+    overflow: auto;
+    padding: 1rem;
+    border: 1px solid var(--soft-border);
+    border-radius: 20px;
+    background: var(--md-sys-color-surface);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, .12), 0 2px 8px rgba(0, 0, 0, .08);
+    transform: translateY(-12px) scale(.98);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform .18s ease, opacity .18s ease;
+  }
+
+  .history-mobile-file-menu.open {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+    pointer-events: auto;
+  }
+
   .history-layout {
     display: flex;
-    flex-direction: column-reverse;
-    overflow: visible;
+    overflow: hidden;
   }
 
   .file-list-panel {
-    border-right: 0;
-    border-top: 1px solid var(--soft-border);
-    max-height: 42dvh;
-    flex-shrink: 0;
+    display: none;
   }
 
   .content-panel {
-    flex: 1 0 auto;
-    min-height: 60dvh;
+    flex: 1 1 0;
+    min-height: 0;
     max-height: none;
   }
 }
@@ -1512,21 +1911,27 @@ input:focus-visible {
   }
 
   .search-field,
-  .level-select-field {
+  .level-multiselect {
     min-height: 38px;
+  }
+
+  .search-field {
     padding-inline: .58rem;
     border-radius: 12px;
   }
 
-  .level-select-field {
+  .level-multiselect-trigger {
+    min-height: 38px;
+    padding-inline: .58rem;
+    border-radius: 12px;
     gap: .38rem;
   }
 
-  .level-select-field span {
+  .level-multiselect-label {
     font-size: .66rem;
   }
 
-  .level-select-field select,
+  .level-multiselect-value,
   .search-field input {
     font-size: .82rem;
   }
@@ -1588,7 +1993,7 @@ input:focus-visible {
   }
 
   .search-field,
-  .level-select-field {
+  .level-multiselect {
     width: auto;
     min-height: 38px;
   }
@@ -1801,6 +2206,11 @@ input:focus-visible {
     width: 34px;
     height: 34px;
   }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 </style>
 

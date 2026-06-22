@@ -32,6 +32,7 @@ const searchText = ref('')
 const selectedRole = ref('all')
 const viewMode = ref<'rendered' | 'raw'>('rendered')
 const lastUpdatedAt = ref('')
+const isRequestListOpen = ref(false)
 
 let pollTimer: number | null = null
 
@@ -109,6 +110,7 @@ async function selectRequest(requestId: number): Promise<void> {
   selectedRole.value = 'all'
   try {
     selectedRequest.value = await getInspectorRequest(requestId)
+    isRequestListOpen.value = false
   } finally {
     isDetailLoading.value = false
   }
@@ -154,52 +156,105 @@ function formatTime(timestamp: number): string {
 </script>
 
 <template>
-  <AppShell>
+  <AppShell no-padding>
     <section class="inspector-page">
-      <header class="hero-card">
-        <div class="hero-copy">
-          <span class="eyebrow">{{ t('requestInspector.hero.eyebrow') }}</span>
-          <h1>{{ t('requestInspector.hero.title') }}</h1>
-          <p>{{ t('requestInspector.hero.desc') }}</p>
-        </div>
-        <div class="hero-actions">
-          <button class="danger-button" :disabled="requests.length === 0" @click="clearRequests">
-            <Icon icon="material-symbols:delete-outline-rounded" width="18" height="18" />
-            {{ t('requestInspector.actions.clear') }}
+      <header class="inspector-top-bar">
+        <div class="top-bar-left">
+          <button class="request-title-button" type="button" @click="isRequestListOpen = !isRequestListOpen">
+            <h2>{{ selectedRequest ? `#${selectedRequest.id} ${selectedRequest.model}` : t('requestInspector.list.title') }}</h2>
+            <Icon icon="material-symbols:expand-more-rounded" width="20" height="20" class="request-title-chevron" :class="{ open: isRequestListOpen }" />
           </button>
+          <p>{{ selectedRequest ? `${selectedRequest.api_name} · ${selectedRequest.api_provider}` : t('requestInspector.list.count', { filtered: String(filteredRequests.length), total: String(requests.length) }) }}</p>
+        </div>
+        <div class="top-bar-status">
+          <span>{{ t('requestInspector.stats.lastUpdated') }} {{ lastUpdatedAt || '—' }}</span>
+          <strong>{{ totalCaptured }}</strong>
         </div>
       </header>
 
-      <div class="stat-grid">
-        <article class="stat-card">
-          <span>{{ t('requestInspector.stats.capturedRequests') }}</span>
-          <strong>{{ totalCaptured }}</strong>
-          <small>{{ t('requestInspector.stats.lastUpdated') }} {{ lastUpdatedAt || '—' }}</small>
-        </article>
-        <article class="stat-card">
-          <span>{{ t('requestInspector.stats.totalMessages') }}</span>
-          <strong>{{ totalMessages }}</strong>
-          <small>{{ t('requestInspector.stats.memorySnapshot') }}</small>
-        </article>
-        <article class="stat-card">
-          <span>{{ t('requestInspector.stats.toolDeclarations') }}</span>
-          <strong>{{ totalTools }}</strong>
-          <small>{{ t('requestInspector.stats.summaryAccumulated') }}</small>
-        </article>
-        <article class="stat-card">
-          <span>{{ t('requestInspector.stats.statsRequests') }}</span>
-          <strong>{{ formatMetric(statsSummary.total_requests) }}</strong>
-          <small>{{ t('requestInspector.stats.fromCollector') }}</small>
-        </article>
-      </div>
+      <button v-if="isRequestListOpen" class="mobile-menu-backdrop" type="button" aria-label="Close request list" @click="isRequestListOpen = false"></button>
+      <aside class="mobile-request-menu" :class="{ open: isRequestListOpen }" aria-label="request list">
+          <div class="panel-toolbar">
+            <div class="request-list-heading">
+              <div class="request-list-title-row">
+                <div>
+                  <span class="request-list-eyebrow">{{ t('requestInspector.list.eyebrow') }}</span>
+                  <h2>{{ t('requestInspector.list.title') }}</h2>
+                </div>
+                <button class="mobile-close-button" type="button" aria-label="Close request list" @click="isRequestListOpen = false">
+                  <Icon icon="material-symbols:close-rounded" width="20" height="20" />
+                </button>
+              </div>
+              <p>{{ t('requestInspector.list.count', { filtered: String(filteredRequests.length), total: String(requests.length) }) }}</p>
+            </div>
+            <div class="inspector-status-card">
+              <div class="status-row">
+                <span>{{ t('requestInspector.stats.lastUpdated') }}</span>
+                <strong>{{ lastUpdatedAt || '—' }}</strong>
+              </div>
+              <div class="status-metrics">
+                <span>{{ t('requestInspector.stats.capturedRequests') }} <strong>{{ totalCaptured }}</strong></span>
+                <span>{{ t('requestInspector.stats.totalMessages') }} <strong>{{ totalMessages }}</strong></span>
+                <span>{{ t('requestInspector.stats.toolDeclarations') }} <strong>{{ totalTools }}</strong></span>
+                <span>{{ t('requestInspector.stats.statsRequests') }} <strong>{{ formatMetric(statsSummary.total_requests) }}</strong></span>
+              </div>
+              <button class="danger-button" :disabled="requests.length === 0" @click="clearRequests">
+                <Icon icon="material-symbols:delete-outline-rounded" width="18" height="18" />
+                {{ t('requestInspector.actions.clear') }}
+              </button>
+            </div>
+          </div>
+
+          <div v-if="!selectedRequest" class="mobile-select-hint">
+            <Icon icon="material-symbols:touch-app-outline-rounded" width="22" height="22" />
+            <span>{{ t('requestInspector.list.mobileHint') }}</span>
+          </div>
+
+          <input v-model="searchText" class="search-input" :placeholder="t('requestInspector.list.searchPlaceholder')" />
+
+          <div v-if="isLoading" class="empty-state">{{ t('requestInspector.list.loading') }}</div>
+          <div v-else-if="filteredRequests.length === 0" class="empty-state">{{ t('requestInspector.list.empty') }}</div>
+          <div v-else class="request-list">
+            <button v-for="item in filteredRequests" :key="item.id" class="request-item"
+              :class="{ active: selectedRequest?.id === item.id }" @click="selectRequest(item.id)">
+              <span class="request-item-top">
+                <strong>#{{ item.id }} {{ item.model }}</strong>
+                <em>{{ item.ts_str }}</em>
+              </span>
+              <span class="request-item-name">{{ item.request_name || item.api_name }}</span>
+              <span class="request-item-meta">{{ item.api_provider }} · {{ t('requestInspector.list.messages', { count: String(item.msg_count) }) }} · {{
+                t('requestInspector.list.tools', { count: String(item.tool_count) }) }}</span>
+            </button>
+          </div>
+      </aside>
 
       <div class="workspace-card">
         <aside class="request-list-panel">
           <div class="panel-toolbar">
             <div class="request-list-heading">
-              <span class="request-list-eyebrow">{{ t('requestInspector.list.eyebrow') }}</span>
-              <h2>{{ t('requestInspector.list.title') }}</h2>
+              <div class="request-list-title-row">
+                <div>
+                  <span class="request-list-eyebrow">{{ t('requestInspector.list.eyebrow') }}</span>
+                  <h2>{{ t('requestInspector.list.title') }}</h2>
+                </div>
+              </div>
               <p>{{ t('requestInspector.list.count', { filtered: String(filteredRequests.length), total: String(requests.length) }) }}</p>
+            </div>
+            <div class="inspector-status-card">
+              <div class="status-row">
+                <span>{{ t('requestInspector.stats.lastUpdated') }}</span>
+                <strong>{{ lastUpdatedAt || '—' }}</strong>
+              </div>
+              <div class="status-metrics">
+                <span>{{ t('requestInspector.stats.capturedRequests') }} <strong>{{ totalCaptured }}</strong></span>
+                <span>{{ t('requestInspector.stats.totalMessages') }} <strong>{{ totalMessages }}</strong></span>
+                <span>{{ t('requestInspector.stats.toolDeclarations') }} <strong>{{ totalTools }}</strong></span>
+                <span>{{ t('requestInspector.stats.statsRequests') }} <strong>{{ formatMetric(statsSummary.total_requests) }}</strong></span>
+              </div>
+              <button class="danger-button" :disabled="requests.length === 0" @click="clearRequests">
+                <Icon icon="material-symbols:delete-outline-rounded" width="18" height="18" />
+                {{ t('requestInspector.actions.clear') }}
+              </button>
             </div>
           </div>
 
@@ -329,28 +384,21 @@ function formatTime(timestamp: number): string {
 
 <style scoped>
 .inspector-page {
+  height: calc(100dvh - var(--app-top-bar-height, 64px) - var(--app-bottom-nav-height, 0px));
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  background: transparent;
 }
 
-.hero-card,
 .workspace-card,
-.stat-card,
 .section-card {
   border: 1px solid var(--md-sys-color-outline-variant);
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-low) 78%, transparent);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 75%, transparent);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-  backdrop-filter: blur(18px) saturate(1.08);
-  -webkit-backdrop-filter: blur(18px) saturate(1.08);
-}
-
-.hero-card {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1.5rem;
-  border-radius: 28px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .eyebrow {
@@ -361,35 +409,17 @@ function formatTime(timestamp: number): string {
   text-transform: uppercase;
 }
 
-h1,
 h2,
 h3,
 p {
   margin: 0;
 }
 
-h1 {
-  margin-top: .35rem;
-  color: var(--md-sys-color-on-surface);
-  font-size: clamp(1.8rem, 4vw, 3rem);
-  letter-spacing: -.04em;
-}
-
-.hero-copy p,
 .detail-header p,
-.panel-toolbar p,
-.stat-card small {
+.panel-toolbar p {
   color: var(--md-sys-color-on-surface-variant);
 }
 
-.hero-actions {
-  display: flex;
-  align-items: flex-start;
-  gap: .75rem;
-  flex-wrap: wrap;
-}
-
-.tonal-button,
 .danger-button,
 .segmented button {
   display: inline-flex;
@@ -402,11 +432,6 @@ h1 {
   cursor: pointer;
 }
 
-.tonal-button {
-  color: var(--md-sys-color-on-primary-container);
-  background: var(--md-sys-color-primary-container);
-}
-
 .danger-button {
   color: var(--md-sys-color-on-error-container);
   background: var(--md-sys-color-error-container);
@@ -415,30 +440,6 @@ h1 {
 button:disabled {
   cursor: not-allowed;
   opacity: .55;
-}
-
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1rem;
-}
-
-.stat-card {
-  padding: 1rem;
-  border-radius: 22px;
-  display: flex;
-  flex-direction: column;
-  gap: .3rem;
-}
-
-.stat-card span {
-  color: var(--md-sys-color-on-surface-variant);
-  font-weight: 600;
-}
-
-.stat-card strong {
-  font-size: 1.7rem;
-  color: var(--md-sys-color-on-surface);
 }
 
 .mobile-select-hint {
@@ -455,11 +456,94 @@ button:disabled {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary) 18%, transparent);
 }
 
+.inspector-top-bar {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 75%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.top-bar-left {
+  min-width: 0;
+}
+
+.request-title-button {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--md-sys-color-on-surface);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.request-title-button h2 {
+  overflow: hidden;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.request-title-chevron {
+  color: var(--md-sys-color-on-surface-variant);
+  transition: transform .18s ease;
+  flex: 0 0 auto;
+}
+
+.request-title-chevron.open {
+  transform: rotate(180deg);
+}
+
+.top-bar-left p,
+.top-bar-status span {
+  overflow: hidden;
+  margin: 0;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: .76rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.top-bar-status {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  flex: 0 0 auto;
+}
+
+.top-bar-status strong {
+  min-width: 1.75rem;
+  padding: .22rem .5rem;
+  border-radius: 999px;
+  color: var(--md-sys-color-on-primary-container);
+  background: var(--md-sys-color-primary-container);
+  text-align: center;
+}
+
+.mobile-menu-backdrop,
+.mobile-request-menu {
+  display: none;
+}
+
 .workspace-card {
   display: grid;
   grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
-  min-height: 68vh;
-  border-radius: 28px;
+  flex: 1;
+  min-height: 0;
+  border-radius: 0;
   overflow: hidden;
 }
 
@@ -467,7 +551,13 @@ button:disabled {
   border-right: 1px solid var(--md-sys-color-outline-variant);
   padding: 1rem;
   overflow: auto;
-  max-height: calc(100vh - 220px);
+  min-height: 0;
+}
+
+.mobile-list-button,
+.mobile-close-button,
+.mobile-drawer-scrim {
+  display: none;
 }
 
 .panel-toolbar {
@@ -482,6 +572,58 @@ button:disabled {
   flex-direction: column;
   gap: .18rem;
   padding: .2rem 0 .35rem;
+}
+
+.request-list-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.inspector-status-card {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  padding: .85rem;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--md-sys-color-surface) 72%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.status-row,
+.status-metrics {
+  display: flex;
+  gap: .5rem;
+}
+
+.status-row {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.status-row span,
+.status-metrics span {
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: .78rem;
+  font-weight: 600;
+}
+
+.status-row strong,
+.status-metrics strong {
+  color: var(--md-sys-color-on-surface);
+}
+
+.status-metrics {
+  flex-wrap: wrap;
+}
+
+.status-metrics span {
+  padding: .35rem .55rem;
+  border-radius: 999px;
+  background: var(--md-sys-color-surface-container-high);
 }
 
 .request-list-eyebrow {
@@ -536,10 +678,11 @@ button:disabled {
 }
 
 .detail-panel {
+  flex: 1;
   min-width: 0;
   padding: 1.25rem;
   overflow: auto;
-  max-height: calc(100vh - 220px);
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -779,10 +922,59 @@ pre {
   min-height: 520px;
 }
 
-@media (max-width: 1100px) {
-  .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .workspace-card { display: flex; flex-direction: column-reverse; }
-  .request-list-panel { border-right: 0; border-top: 1px solid var(--md-sys-color-outline-variant); max-height: 360px; }
+@media (max-width: 899px) {
+  .inspector-top-bar {
+    display: flex;
+  }
+
+  .workspace-card {
+    display: flex;
+  }
+
+  .request-list-panel {
+    display: none;
+  }
+
+  .mobile-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    display: block;
+    border: 0;
+    background: rgba(0, 0, 0, .32);
+    animation: fade-in .15s ease;
+  }
+
+  .mobile-request-menu {
+    position: fixed;
+    top: 4.5rem;
+    left: .75rem;
+    right: .75rem;
+    z-index: 80;
+    display: block;
+    max-height: min(76vh, 620px);
+    overflow: auto;
+    padding: 1rem;
+    border: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: 20px;
+    background: var(--md-sys-color-surface);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, .12), 0 2px 8px rgba(0, 0, 0, .08);
+    transform: translateY(-12px) scale(.98);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform .18s ease, opacity .18s ease;
+  }
+
+  .mobile-request-menu.open {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .mobile-close-button {
+    display: none;
+  }
+
   .detail-panel { max-height: none; }
   .desktop-text { display: none; }
   .mobile-text { display: inline; }
@@ -791,7 +983,6 @@ pre {
 
 @media (max-width: 720px) {
 
-  .hero-card,
   .detail-header,
   .tool-title,
   .message-toolbar {
@@ -799,38 +990,13 @@ pre {
     align-items: stretch;
   }
 
-  .stat-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: .65rem;
-  }
-
-  .stat-card {
-    padding: .72rem;
-    border-radius: 16px;
-    gap: .18rem;
-  }
-
-  .stat-card span,
-  .stat-card small {
-    font-size: .72rem;
-  }
-
-  .stat-card strong {
-    font-size: 1.18rem;
-  }
-
-  .workspace-card,
-  .hero-card {
-    border-radius: 20px;
+  .workspace-card {
+    border-radius: 0;
   }
 
   .detail-panel,
   .request-list-panel {
     padding: .85rem;
-  }
-
-  .request-list-panel {
-    max-height: 48vh;
   }
 
   .request-list-heading h2 {
@@ -851,17 +1017,9 @@ pre {
   }
 }
 
-@media (max-width: 380px) {
-  .stat-grid {
-    gap: .5rem;
-  }
-
-  .stat-card {
-    padding: .62rem;
-  }
-
-  .stat-card strong {
-    font-size: 1.05rem;
-  }
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 </style>
+

@@ -1014,7 +1014,7 @@ function formatTime(timestamp: number): string {
 }
 
 /* ====== 响应式：移动端 ====== */
-@media (max-width: 760px) {
+@media (max-width: 899px) {
   .workspace {
     grid-template-columns: 1fr;
   }

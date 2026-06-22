@@ -82,7 +82,7 @@ export interface EnhancedConfigResponse {
   config_type: 'bot' | 'model' | 'plugin' | 'mcp'
   config_name: string
   config_path: string
-  schema: SectionSchema[]
+  sections: SectionSchema[]
   data: Record<string, unknown>
   plugin_name?: string
 }

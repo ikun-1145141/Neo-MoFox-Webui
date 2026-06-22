@@ -364,6 +364,9 @@ const localData = ref<Record<string, any>>({
 // 代码内容
 const codeContent = ref('')
 
+// 原始代码内容（用于代码模式检测变更）
+const originalCodeContent = ref('')
+
 // 原始数据
 const originalData = ref<Record<string, any>>({})
 
@@ -384,17 +387,11 @@ const testResults = ref<{
 
 // 是否有变更
 const hasChanges = computed(() => {
-  const currentJson = JSON.stringify(localData.value)
-  const originalJson = JSON.stringify(originalData.value)
-  const changed = currentJson !== originalJson
-  console.log('[ModelConfigEditor] hasChanges 检测:', {
-    changed,
-    currentDataKeys: Object.keys(localData.value),
-    originalDataKeys: Object.keys(originalData.value),
-    currentProvidersCount: localData.value.api_providers?.length,
-    originalProvidersCount: originalData.value.api_providers?.length,
-  })
-  return changed
+  if (isCodeMode.value) {
+    return codeContent.value !== originalCodeContent.value
+  }
+
+  return JSON.stringify(localData.value) !== JSON.stringify(originalData.value)
 })
 
 // 提供商名称列表
@@ -429,6 +426,7 @@ onMounted(async () => {
   try {
     const rawToml = await getRawConfig('model')
     codeContent.value = rawToml
+    originalCodeContent.value = rawToml
     console.log('[ModelConfigEditor] 原始 TOML 加载成功，长度:', rawToml.length)
   } catch (error: any) {
     console.error('[ModelConfigEditor] 加载原始 TOML 失败:', error)
@@ -483,6 +481,7 @@ async function toggleEditMode() {
       // 从后端重新加载原始 TOML
       const rawToml = await getRawConfig('model')
       codeContent.value = rawToml
+      originalCodeContent.value = rawToml
       errorMessage.value = ''
       isCodeMode.value = true
     } catch (error: any) {
@@ -538,6 +537,9 @@ async function handleSave() {
     // 只发出 save 事件，不发出 update:modelValue
     // 父组件保存成功后会更新 props.modelValue，触发 watch，更新 originalData
     emit('save', dataToSave)
+    if (isCodeMode.value) {
+      originalCodeContent.value = codeContent.value
+    }
     
     console.log('[ModelConfigEditor] save 事件已发出')
   } catch (error: any) {

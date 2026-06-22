@@ -99,6 +99,12 @@ const router = createRouter({
       ],
     },
     {
+      path: '/plugin-ui',
+      name: 'plugin-ui',
+      component: () => import('../views/PluginUIView.vue'),
+      meta: { requiresAuth: true, title: '插件中心', icon: 'material-symbols:dashboard-customize-outline-rounded', nav: true, navOrder: 43, navKey: 'app.nav.pluginCenter' },
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: '/',
     },

@@ -1,5 +1,15 @@
+<script lang="ts">
+/**
+ * 模块级变量：跨 AppShell 实例持久化导航栏滚动位置。
+ * 由于每个页面视图都独立包含 AppShell，路由切换时实例会销毁重建，
+ * 使用模块级变量可保证滚动位置不丢失。
+ */
+let savedRailNavScrollTop = 0
+let savedBottomNavScrollLeft = 0
+</script>
+
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { logout } from '../../api/modules/auth'
 import { restartBot, shutdownBot } from '../../api/modules/system'
@@ -9,6 +19,41 @@ import { useToastStore } from '../../utils/toast'
 import { useI18n } from '../../utils/i18n'
 
 const showSystemMenu = ref(false)
+
+const railNavRef = ref<HTMLElement | null>(null)
+const bottomNavScrollRef = ref<HTMLElement | null>(null)
+
+function onRailNavScroll() {
+  if (railNavRef.value) {
+    savedRailNavScrollTop = railNavRef.value.scrollTop
+  }
+}
+
+function onBottomNavScroll() {
+  if (bottomNavScrollRef.value) {
+    savedBottomNavScrollLeft = bottomNavScrollRef.value.scrollLeft
+  }
+}
+
+onMounted(() => {
+  nextTick(() => {
+    if (railNavRef.value && savedRailNavScrollTop > 0) {
+      railNavRef.value.scrollTop = savedRailNavScrollTop
+    }
+    if (bottomNavScrollRef.value && savedBottomNavScrollLeft > 0) {
+      bottomNavScrollRef.value.scrollLeft = savedBottomNavScrollLeft
+    }
+  })
+})
+
+onBeforeUnmount(() => {
+  if (railNavRef.value) {
+    savedRailNavScrollTop = railNavRef.value.scrollTop
+  }
+  if (bottomNavScrollRef.value) {
+    savedBottomNavScrollLeft = bottomNavScrollRef.value.scrollLeft
+  }
+})
 
 const props = defineProps<{
   noPadding?: boolean
@@ -189,7 +234,7 @@ async function handleSystemAction(action: 'restart' | 'shutdown' | 'logout') {
       </div>
 
       <!-- 导航项区域 -->
-      <nav class="rail-nav">
+      <nav class="rail-nav" ref="railNavRef" @scroll="onRailNavScroll">
         <router-link
           v-for="item in navItems"
           :key="item.name"
@@ -268,7 +313,7 @@ async function handleSystemAction(action: 'restart' | 'shutdown' | 'logout') {
     </main>
 
     <!-- M3 Bottom Navigation Bar (移动端底部导航栏) -->
-    <nav class="bottom-nav" :aria-label="t('app.aria.openMenu')">
+    <nav class="bottom-nav" :aria-label="t('app.aria.openMenu')" ref="bottomNavScrollRef" @scroll="onBottomNavScroll">
       <div class="bottom-nav-scroll">
         <router-link
           v-for="item in navItems"

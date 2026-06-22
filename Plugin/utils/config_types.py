@@ -117,8 +117,8 @@ class SectionSchema(BaseModel):
 class EnhancedConfigResponse(BaseModel):
     """增强配置响应。
 
-    包含配置的当前值（data）和渲染编辑器所需的 Schema（schema）。
-    前端根据 schema 渲染表单，根据 data 填充初始值，
+    包含配置的当前值（data）和渲染编辑器所需的 Schema（sections）。
+    前端根据 sections 渲染表单，根据 data 填充初始值，
     编辑完成后将修改后的 data 通过写入接口回写。
 
     Attributes:
@@ -126,7 +126,7 @@ class EnhancedConfigResponse(BaseModel):
         config_name: 配置名称（用于显示，如 "机器人配置"、"模型配置"）
         config_path: 配置文件路径（相对路径，如 "config/core.toml"）
         plugin_name: 插件名（仅 plugin 类型时有值）
-        schema: 有序的配置节列表（含 Schema）
+        sections: 有序的配置节列表（含 Schema）
         data: 当前配置值（与 TOML 文件内容一致的字典）
     """
 
@@ -134,7 +134,7 @@ class EnhancedConfigResponse(BaseModel):
     config_name: str = Field(..., description="配置名称")
     config_path: str = Field(..., description="配置文件路径")
     plugin_name: str | None = Field(default=None, description="插件名")
-    schema: list[SectionSchema] = Field(default_factory=list, description="配置节列表")
+    sections: list[SectionSchema] = Field(default_factory=list, description="配置节列表")
     data: dict[str, Any] = Field(default_factory=dict, description="配置数据")
 
 

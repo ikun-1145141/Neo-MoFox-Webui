@@ -1,0 +1,22 @@
+{
+  "name": "demo_ui_plugin",
+  "version": "1.0.0",
+  "description": "XML 前端 UI 演示插件，展示各组件用法和 API 交互",
+  "author": "MoFox Team",
+  "dependencies": {
+    "plugins": ["neo-mofox-webui"],
+    "components": ["neo-mofox-webui:service:plugin_ui"]
+  },
+  "include": [
+    {
+      "component_type": "router",
+      "component_name": "demo_ui_router",
+      "dependencies": [],
+      "enabled": true
+    }
+  ],
+  "entry_point": "plugin.py",
+  "min_core_version": "1.0.0",
+  "python_dependencies": [],
+  "dependencies_required": true
+}
