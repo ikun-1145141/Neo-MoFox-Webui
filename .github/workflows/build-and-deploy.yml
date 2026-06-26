@@ -35,7 +35,7 @@ jobs:
             exit 0
           fi
 
-          if git log --since="24 hours ago" --pretty=format:'%H' -- frontend Plugin .github/workflows/build-and-deploy.yml | grep -q .; then
+          if git log --since="24 hours ago" --invert-grep --author="github-actions\[bot\]" --pretty=format:'%H' -- frontend Plugin .github/workflows/build-and-deploy.yml | grep -q .; then
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
             echo "Recent changes found, build will continue."
           else
@@ -156,7 +156,7 @@ jobs:
             echo ""
             echo "## 最近 24 小时内的提交"
             echo ""
-            git log --since="${SINCE_TIME}" --pretty=format:'- %h %s（%an）' || true
+            git log --since="${SINCE_TIME}" --invert-grep --author="github-actions\[bot\]" --pretty=format:'- %h %s（%an）' || true
           } > "${NOTES_FILE}"
 
           if ! grep -q '^- ' "${NOTES_FILE}"; then
