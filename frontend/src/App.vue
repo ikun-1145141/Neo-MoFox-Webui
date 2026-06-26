@@ -74,6 +74,7 @@ async function syncWallpaperStatus(forceImageUpdate = false) {
 function handleWallpaperUpdated(e: Event) {
   if (e instanceof CustomEvent && e.detail) {
     if (e.detail.has_wallpaper !== undefined) hasWallpaper.value = e.detail.has_wallpaper
+    if (e.detail.wallpaper_type !== undefined) wallpaperType.value = e.detail.wallpaper_type
     if (e.detail.wallpaper_blur !== undefined) wallpaperBlur.value = e.detail.wallpaper_blur
     if (e.detail.wallpaper_opacity !== undefined) wallpaperOpacity.value = e.detail.wallpaper_opacity
     if (e.detail.force) wallpaperVersion.value = Date.now()
@@ -148,7 +149,8 @@ html, body {
 
 html {
   overflow: hidden;
-  background: transparent;
+  /* 无壁纸时使用 MD3 surface 色作为背景，避免透出浏览器默认白底 */
+  background: var(--md-sys-color-surface, #fef7ff);
   color: var(--md-sys-color-on-surface, #1b1b1f);
 }
 

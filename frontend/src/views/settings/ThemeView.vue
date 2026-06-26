@@ -262,7 +262,14 @@ async function handleWallpaperFileChange(event: Event) {
     settings.value.theme.wallpaper_blur = status.wallpaper_blur
     settings.value.theme.wallpaper_opacity = status.wallpaper_opacity
     wallpaperVersion.value = Date.now()
-    emitWallpaperUpdated()
+    // 传递完整状态并强制刷新背景图，确保 App.vue 壁纸层立即渲染新图
+    emitWallpaperUpdated({
+      has_wallpaper: status.has_wallpaper,
+      wallpaper_type: status.wallpaper_type,
+      wallpaper_blur: status.wallpaper_blur,
+      wallpaper_opacity: status.wallpaper_opacity,
+      force: true,
+    })
     
     // 自动应用第一个取色
     if (colors.length > 0) {
@@ -286,8 +293,14 @@ async function handleDeleteWallpaper() {
   try {
     await deleteWallpaper()
     settings.value.theme.has_wallpaper = false
+    wallpaperType.value = 'none'
     wallpaperVersion.value = Date.now()
-    emitWallpaperUpdated()
+    // 传递完整状态，确保 App.vue 壁纸层立即隐藏
+    emitWallpaperUpdated({
+      has_wallpaper: false,
+      wallpaper_type: 'none',
+      force: true,
+    })
     
     // 清除壁纸取色
     wallpaperColors.value = []

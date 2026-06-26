@@ -112,7 +112,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from '@/utils/i18n'
-import { useToastStore } from '@/utils/toast'
 import AppShell from '@/components/common/AppShell.vue'
 import Icon from '@/components/common/Icon.vue'
 import MdSelect from '@/components/common/MdSelect.vue'
@@ -126,7 +125,6 @@ import type { PluginConfigEntry, EnhancedConfigResponse } from '@/api/types/conf
 
 const route = useRoute()
 const { t } = useI18n()
-const toast = useToastStore()
 
 // 插件列表
 const plugins = ref<PluginConfigEntry[]>([])
@@ -229,9 +227,9 @@ async function handleSave(data: Record<string, any>) {
     )
 
     currentPluginConfig.value = response
-    toast.show(t('pluginConfig.saveSuccess'), 'success')
   } catch (error: any) {
-    toast.show(t('pluginConfig.saveFailed', { error: error.message }), 'error')
+    // 错误提示由 api/base.ts 响应拦截器统一处理，避免重复弹窗
+    console.error('保存插件配置失败:', error)
   }
 }
 
