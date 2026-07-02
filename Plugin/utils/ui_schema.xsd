@@ -1,0 +1,534 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Neo-MoFox WebUI 插件前端扩展 XML Schema (XSD)。
+
+  对应设计文档 8.1「XML 注入防护 - Schema 强校验」。
+  采用 targetNamespace="https://mofox.studio/ui-schema/v1"，
+  所有 <ui-page> 文档必须声明该默认命名空间 xmlns。
+
+  - elementFormDefault="qualified"：元素需属于目标命名空间（带 xmlns 即可，无需前缀）。
+  - 属性默认 unqualified：属性名为裸名（如 id="..."），与现有页面写法一致。
+  - 未声明的元素 / 属性默认被拒绝（XSD 默认行为），因此 <script>、onclick 等天然被挡。
+  - <template> 子树含 Vue 模板语法，用 <xs:any processContents="skip"/> 放行，不参与校验。
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns="https://mofox.studio/ui-schema/v1"
+           targetNamespace="https://mofox.studio/ui-schema/v1"
+           elementFormDefault="qualified"
+           attributeFormDefault="unqualified">
+
+  <!-- ============================================================ -->
+  <!-- 根元素 ui-page                                              -->
+  <!-- ============================================================ -->
+  <xs:element name="ui-page">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="metadata"/>
+        <xs:element ref="layout" minOccurs="0"/>
+      </xs:sequence>
+      <xs:attribute name="schema-version" type="xs:string" use="required"/>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ============================================================ -->
+  <!-- 元数据 metadata                                             -->
+  <!-- ============================================================ -->
+  <xs:element name="metadata">
+    <xs:complexType>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element ref="title"/>
+        <xs:element ref="description"/>
+        <xs:element ref="icon"/>
+        <xs:element ref="api-base"/>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="title" type="xs:string"/>
+  <xs:element name="description" type="xs:string"/>
+  <xs:element name="icon" type="xs:string"/>
+  <xs:element name="api-base" type="xs:string"/>
+
+  <!-- ============================================================ -->
+  <!-- layout - 顶层布局容器                                       -->
+  <!-- ============================================================ -->
+  <xs:element name="layout">
+    <xs:complexType mixed="true">
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:group ref="componentGroup"/>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ============================================================ -->
+  <!-- componentGroup - 公共组件组（容器内允许的所有子元素）         -->
+  <!-- ============================================================ -->
+  <xs:group name="componentGroup">
+    <xs:choice>
+      <xs:element ref="container"/>
+      <xs:element ref="input-field"/>
+      <xs:element ref="textarea"/>
+      <xs:element ref="select"/>
+      <xs:element ref="switch"/>
+      <xs:element ref="slider"/>
+      <xs:element ref="date-picker"/>
+      <xs:element ref="button"/>
+      <xs:element ref="dialog"/>
+      <xs:element ref="data-table"/>
+      <xs:element ref="card"/>
+      <xs:element ref="tag"/>
+      <xs:element ref="tabs"/>
+      <xs:element ref="line-chart"/>
+      <xs:element ref="bar-chart"/>
+      <xs:element ref="pie-chart"/>
+      <xs:element ref="text"/>
+      <xs:element ref="divider"/>
+      <xs:element ref="spacer"/>
+      <xs:element ref="badge"/>
+      <xs:element ref="avatar"/>
+      <xs:element ref="list"/>
+      <xs:element ref="alert"/>
+      <xs:element ref="empty"/>
+      <xs:element ref="chip"/>
+      <xs:element ref="radio-group"/>
+      <xs:element ref="checkbox"/>
+      <xs:element ref="json-editor"/>
+      <xs:element ref="code-editor"/>
+      <xs:element ref="rating"/>
+    </xs:choice>
+  </xs:group>
+
+  <!-- ============================================================ -->
+  <!-- 容器类元素 - 支持嵌套子组件                                  -->
+  <!-- ============================================================ -->
+  <xs:element name="container">
+    <xs:complexType mixed="true">
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:group ref="componentGroup"/>
+      </xs:choice>
+      <xs:attribute name="layout" type="xs:string"/>
+      <xs:attribute name="spacing" type="xs:string"/>
+      <xs:attribute name="padding" type="xs:string"/>
+      <xs:attribute name="align" type="xs:string"/>
+      <xs:attribute name="justify" type="xs:string"/>
+      <xs:attribute name="columns" type="xs:string"/>
+      <xs:attribute name="row-gap" type="xs:string"/>
+      <xs:attribute name="col-gap" type="xs:string"/>
+      <xs:attribute name="gap" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="card">
+    <xs:complexType mixed="true">
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:group ref="componentGroup"/>
+      </xs:choice>
+      <xs:attribute name="title" type="xs:string"/>
+      <xs:attribute name="elevation" type="xs:string"/>
+      <xs:attribute name="style" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="dialog">
+    <xs:complexType mixed="true">
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:group ref="componentGroup"/>
+      </xs:choice>
+      <xs:attribute name="id" type="xs:string"/>
+      <xs:attribute name="title" type="xs:string"/>
+      <xs:attribute name="width" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="list">
+    <xs:complexType mixed="true">
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element ref="list-item"/>
+      </xs:choice>
+      <xs:attribute name="id" type="xs:string"/>
+      <xs:attribute name="data-bind" type="xs:string"/>
+      <xs:attribute name="api-endpoint" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="list-item">
+    <xs:complexType mixed="true"/>
+  </xs:element>
+
+  <xs:element name="tabs">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="tab" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attribute name="id" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="tab">
+    <xs:complexType mixed="true">
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:group ref="componentGroup"/>
+      </xs:choice>
+      <xs:attribute name="title" type="xs:string"/>
+      <xs:attribute name="name" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="radio-group">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="radio" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attribute name="id" type="xs:string"/>
+      <xs:attribute name="label" type="xs:string"/>
+      <xs:attribute name="required" type="xs:string"/>
+      <xs:attribute name="data-bind" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="radio">
+    <xs:complexType>
+      <xs:attribute name="value" type="xs:string"/>
+      <xs:attribute name="label" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ============================================================ -->
+  <!-- 表单控件 - 支持属性 + 可选文本内容                            -->
+  <!-- ============================================================ -->
+  <xs:element name="input-field">
+    <xs:complexType>
+      <xs:simpleContent>
+        <xs:extension base="xs:string">
+          <xs:attribute name="id" type="xs:string"/>
+          <xs:attribute name="label" type="xs:string"/>
+          <xs:attribute name="type" type="xs:string"/>
+          <xs:attribute name="placeholder" type="xs:string"/>
+          <xs:attribute name="required" type="xs:string"/>
+          <xs:attribute name="disabled" type="xs:string"/>
+          <xs:attribute name="min-length" type="xs:string"/>
+          <xs:attribute name="max-length" type="xs:string"/>
+          <xs:attribute name="min" type="xs:string"/>
+          <xs:attribute name="max" type="xs:string"/>
+          <xs:attribute name="pattern" type="xs:string"/>
+          <xs:attribute name="error-message" type="xs:string"/>
+          <xs:attribute name="data-bind" type="xs:string"/>
+          <xs:attribute name="default" type="xs:string"/>
+        </xs:extension>
+      </xs:simpleContent>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="textarea">
+    <xs:complexType>
+      <xs:simpleContent>
+        <xs:extension base="xs:string">
+          <xs:attribute name="id" type="xs:string"/>
+          <xs:attribute name="label" type="xs:string"/>
+          <xs:attribute name="placeholder" type="xs:string"/>
+          <xs:attribute name="required" type="xs:string"/>
+          <xs:attribute name="disabled" type="xs:string"/>
+          <xs:attribute name="rows" type="xs:string"/>
+          <xs:attribute name="min-length" type="xs:string"/>
+          <xs:attribute name="max-length" type="xs:string"/>
+          <xs:attribute name="error-message" type="xs:string"/>
+          <xs:attribute name="data-bind" type="xs:string"/>
+          <xs:attribute name="default" type="xs:string"/>
+        </xs:extension>
+      </xs:simpleContent>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="select">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="option" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attribute name="id" type="xs:string"/>
+      <xs:attribute name="label" type="xs:string"/>
+      <xs:attribute name="required" type="xs:string"/>
+      <xs:attribute name="disabled" type="xs:string"/>
+      <xs:attribute name="data-bind" type="xs:string"/>
+      <xs:attribute name="default" type="xs:string"/>
+      <xs:attribute name="options-from-api" type="xs:string"/>
+      <xs:attribute name="api-endpoint" type="xs:string"/>
+      <xs:attribute name="option-label-key" type="xs:string"/>
+      <xs:attribute name="option-value-key" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="option">
+    <xs:complexType>
+      <xs:simpleContent>
+        <xs:extension base="xs:string">
+          <xs:attribute name="value" type="xs:string"/>
+        </xs:extension>
+      </xs:simpleContent>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="switch">
+    <xs:complexType>
+      <xs:attribute name="id" type="xs:string"/>
+      <xs:attribute name="label" type="xs:string"/>
+      <xs:attribute name="disabled" type="xs:string"/>
+      <xs:attribute name="data-bind" type="xs:string"/>
+      <xs:attribute name="default" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="slider">
+    <xs:complexType>
+      <xs:attribute name="id" type="xs:string"/>
+      <xs:attribute name="label" type="xs:string"/>
+      <xs:attribute name="min" type="xs:string"/>
+      <xs:attribute name="max" type="xs:string"/>
+      <xs:attribute name="step" type="xs:string"/>
+      <xs:attribute name="required" type="xs:string"/>
+      <xs:attribute name="disabled" type="xs:string"/>
+      <xs:attribute name="data-bind" type="xs:string"/>
+      <xs:attribute name="default" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="date-picker">
+    <xs:complexType>
+      <xs:attribute name="id" type="xs:string"/>
+      <xs:attribute name="label" type="xs:string"/>
+      <xs:attribute name="format" type="xs:string"/>
+      <xs:attribute name="required" type="xs:string"/>
+      <xs:attribute name="disabled" type="xs:string"/>
+      <xs:attribute name="min-date" type="xs:string"/>
+      <xs:attribute name="max-date" type="xs:string"/>
+      <xs:attribute name="data-bind" type="xs:string"/>
+      <xs:attribute name="default" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="checkbox">
+    <xs:complexType>
+      <xs:attribute name="id" type="xs:string"/>
+      <xs:attribute name="label" type="xs:string"/>
+      <xs:attribute name="data-bind" type="xs:string"/>
+      <xs:attribute name="default" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="json-editor">
+    <xs:complexType>
+      <xs:attribute name="id" type="xs:string"/>
+      <xs:attribute name="label" type="xs:string"/>
+      <xs:attribute name="data-bind" type="xs:string"/>
+      <xs:attribute name="height" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="code-editor">
+    <xs:complexType>
+      <xs:attribute name="id" type="xs:string"/>
+      <xs:attribute name="label" type="xs:string"/>
+      <xs:attribute name="data-bind" type="xs:string"/>
+      <xs:attribute name="language" type="xs:string"/>
+      <xs:attribute name="height" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="rating">
+    <xs:complexType>
+      <xs:attribute name="id" type="xs:string"/>
+      <xs:attribute name="label" type="xs:string"/>
+      <xs:attribute name="max" type="xs:string"/>
+      <xs:attribute name="data-bind" type="xs:string"/>
+      <xs:attribute name="default" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ============================================================ -->
+  <!-- 按钮与交互组件                                               -->
+  <!-- ============================================================ -->
+  <xs:element name="button">
+    <xs:complexType>
+      <xs:simpleContent>
+        <xs:extension base="xs:string">
+          <xs:attribute name="type" type="xs:string"/>
+          <xs:attribute name="size" type="xs:string"/>
+          <xs:attribute name="color" type="xs:string"/>
+          <xs:attribute name="action" type="xs:string"/>
+          <xs:attribute name="api-endpoint" type="xs:string"/>
+          <xs:attribute name="api-method" type="xs:string"/>
+          <xs:attribute name="api-data-from" type="xs:string"/>
+          <xs:attribute name="confirm-message" type="xs:string"/>
+          <xs:attribute name="on-success" type="xs:string"/>
+          <xs:attribute name="on-error" type="xs:string"/>
+          <xs:attribute name="disabled" type="xs:string"/>
+        </xs:extension>
+      </xs:simpleContent>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ============================================================ -->
+  <!-- 数据表格                                                     -->
+  <!-- ============================================================ -->
+  <xs:element name="data-table">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="column" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attribute name="id" type="xs:string"/>
+      <xs:attribute name="api-endpoint" type="xs:string"/>
+      <xs:attribute name="api-method" type="xs:string"/>
+      <xs:attribute name="data-bind" type="xs:string"/>
+      <xs:attribute name="pagination" type="xs:string"/>
+      <xs:attribute name="page-size" type="xs:string"/>
+      <xs:attribute name="auto-refresh" type="xs:string"/>
+      <xs:attribute name="selectable" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="column">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="template" minOccurs="0" maxOccurs="1"/>
+      </xs:sequence>
+      <xs:attribute name="key" type="xs:string"/>
+      <xs:attribute name="label" type="xs:string"/>
+      <xs:attribute name="width" type="xs:string"/>
+      <xs:attribute name="sortable" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- template 子树：含 Vue 模板语法（:color, {{ row.x }} 等），不校验内部内容 -->
+  <xs:element name="template">
+    <xs:complexType mixed="true">
+      <xs:sequence>
+        <xs:any processContents="skip" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ============================================================ -->
+  <!-- 图表组件                                                     -->
+  <!-- ============================================================ -->
+  <xs:element name="line-chart">
+    <xs:complexType>
+      <xs:attribute name="id" type="xs:string"/>
+      <xs:attribute name="title" type="xs:string"/>
+      <xs:attribute name="api-endpoint" type="xs:string"/>
+      <xs:attribute name="api-method" type="xs:string"/>
+      <xs:attribute name="data-bind" type="xs:string"/>
+      <xs:attribute name="x-key" type="xs:string"/>
+      <xs:attribute name="y-key" type="xs:string"/>
+      <xs:attribute name="height" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="bar-chart">
+    <xs:complexType>
+      <xs:attribute name="id" type="xs:string"/>
+      <xs:attribute name="title" type="xs:string"/>
+      <xs:attribute name="api-endpoint" type="xs:string"/>
+      <xs:attribute name="api-method" type="xs:string"/>
+      <xs:attribute name="data-bind" type="xs:string"/>
+      <xs:attribute name="x-key" type="xs:string"/>
+      <xs:attribute name="y-key" type="xs:string"/>
+      <xs:attribute name="height" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="pie-chart">
+    <xs:complexType>
+      <xs:attribute name="id" type="xs:string"/>
+      <xs:attribute name="title" type="xs:string"/>
+      <xs:attribute name="api-endpoint" type="xs:string"/>
+      <xs:attribute name="api-method" type="xs:string"/>
+      <xs:attribute name="data-bind" type="xs:string"/>
+      <xs:attribute name="name-key" type="xs:string"/>
+      <xs:attribute name="value-key" type="xs:string"/>
+      <xs:attribute name="height" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ============================================================ -->
+  <!-- 装饰与辅助元素                                               -->
+  <!-- ============================================================ -->
+  <xs:element name="text">
+    <xs:complexType>
+      <xs:simpleContent>
+        <xs:extension base="xs:string">
+          <xs:attribute name="style" type="xs:string"/>
+        </xs:extension>
+      </xs:simpleContent>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="tag">
+    <xs:complexType>
+      <xs:simpleContent>
+        <xs:extension base="xs:string">
+          <xs:attribute name="color" type="xs:string"/>
+          <xs:attribute name="style" type="xs:string"/>
+        </xs:extension>
+      </xs:simpleContent>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="divider">
+    <xs:complexType/>
+  </xs:element>
+
+  <xs:element name="spacer">
+    <xs:complexType>
+      <xs:attribute name="size" type="xs:string"/>
+      <xs:attribute name="height" type="xs:string"/>
+      <xs:attribute name="width" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="badge">
+    <xs:complexType>
+      <xs:simpleContent>
+        <xs:extension base="xs:string">
+          <xs:attribute name="color" type="xs:string"/>
+          <xs:attribute name="value" type="xs:string"/>
+          <xs:attribute name="style" type="xs:string"/>
+        </xs:extension>
+      </xs:simpleContent>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="avatar">
+    <xs:complexType>
+      <xs:attribute name="src" type="xs:string"/>
+      <xs:attribute name="size" type="xs:string"/>
+      <xs:attribute name="style" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="alert">
+    <xs:complexType>
+      <xs:attribute name="type" type="xs:string"/>
+      <xs:attribute name="title" type="xs:string"/>
+      <xs:attribute name="message" type="xs:string"/>
+      <xs:attribute name="style" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="empty">
+    <xs:complexType>
+      <xs:attribute name="message" type="xs:string"/>
+      <xs:attribute name="icon" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="chip">
+    <xs:complexType>
+      <xs:simpleContent>
+        <xs:extension base="xs:string">
+          <xs:attribute name="color" type="xs:string"/>
+          <xs:attribute name="label" type="xs:string"/>
+          <xs:attribute name="style" type="xs:string"/>
+        </xs:extension>
+      </xs:simpleContent>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

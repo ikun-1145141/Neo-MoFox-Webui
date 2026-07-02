@@ -13,25 +13,25 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: () => import('../views/HomeView.vue'),
-      meta: { requiresAuth: true, title: '主页', icon: 'material-symbols:home-outline-rounded' },
+      meta: { requiresAuth: true, title: '主页', icon: 'material-symbols:home-outline-rounded', nav: true, navOrder: 10, navKey: 'app.nav.home' },
     },
     {
       path: '/config',
       name: 'config',
       component: () => import('../views/ConfigView.vue'),
-      meta: { requiresAuth: true, title: '配置管理', icon: 'material-symbols:settings-outline-rounded' },
+      meta: { requiresAuth: true, title: '配置管理', icon: 'material-symbols:tune-rounded', nav: true, navOrder: 20, navKey: 'app.nav.config' },
     },
     {
       path: '/config/plugins',
       name: 'config-plugins',
       component: () => import('../views/PluginConfigView.vue'),
-      meta: { requiresAuth: true, title: '插件配置', icon: 'material-symbols:extension-outline-rounded' },
+      meta: { requiresAuth: true, title: '插件配置', icon: 'material-symbols:settings-outline-rounded', nav: true, navOrder: 50, navKey: 'app.nav.config-plugins' },
     },
     {
       path: '/plugins',
       name: 'plugins',
       component: () => import('../views/PluginsView.vue'),
-      meta: { requiresAuth: true, title: '插件管理', icon: 'material-symbols:extension-outline-rounded' },
+      meta: { requiresAuth: true, title: '插件管理', icon: 'material-symbols:extension-outline-rounded', nav: true, navOrder: 40, navKey: 'app.nav.plugins' },
     },
     {
       path: '/plugins/:name',
@@ -40,33 +40,39 @@ const router = createRouter({
       meta: { requiresAuth: true, title: '插件详情', icon: 'material-symbols:extension-outline-rounded' },
     },
     {
+      path: '/plugin-pages',
+      name: 'plugin-pages',
+      component: () => import('../views/PluginPagesView.vue'),
+      meta: { requiresAuth: true, title: '插件页面', icon: 'material-symbols:web-rounded', nav: true, navOrder: 45, navKey: 'app.nav.pluginPages' },
+    },
+    {
       path: '/chat',
       name: 'chat',
       component: () => import('../views/ChatView.vue'),
-      meta: { requiresAuth: true, title: '聊天监视', icon: 'material-symbols:chat-outline-rounded' },
+      meta: { requiresAuth: true, title: '聊天监视', icon: 'material-symbols:chat-outline-rounded', nav: true, navOrder: 30, navKey: 'app.nav.chat' },
     },
     {
       path: '/llm-metrics',
       name: 'llm-metrics',
       component: () => import('../views/llm-metrics/LLMMetricsView.vue'),
-      meta: { requiresAuth: true, title: 'LLM 统计', icon: 'material-symbols:bar-chart-rounded' },
+      meta: { requiresAuth: true, title: 'LLM 统计', icon: 'material-symbols:bar-chart-rounded', nav: true, navOrder: 60, navKey: 'app.nav.llmMetrics' },
     },
     {
       path: '/request-inspector',
       name: 'request-inspector',
       component: () => import('../views/RequestInspectorView.vue'),
-      meta: { requiresAuth: true, title: '请求体检视器', icon: 'material-symbols:plagiarism-outline-rounded' },
+      meta: { requiresAuth: true, title: '请求体检视器', icon: 'material-symbols:plagiarism-outline-rounded', nav: true, navOrder: 70, navKey: 'app.nav.requestInspector' },
     },
     {
       path: '/logs',
       name: 'logs',
       component: () => import('../views/LogView.vue'),
-      meta: { requiresAuth: true, title: '日志查看', icon: 'material-symbols:terminal-rounded' },
+      meta: { requiresAuth: true, title: '日志查看', icon: 'material-symbols:terminal-rounded', nav: true, navOrder: 80, navKey: 'app.nav.log' },
     },
     {
       path: '/settings',
       component: () => import('../views/SettingsView.vue'),
-      meta: { requiresAuth: true, title: '设置', icon: 'material-symbols:settings-outline-rounded' },
+      meta: { requiresAuth: true, title: '设置', icon: 'material-symbols:setting-outline-rounded', nav: true, navOrder: 90, navKey: 'app.nav.settings', navName: 'settings-theme' },
       children: [
         {
           path: '',
@@ -96,7 +102,7 @@ const router = createRouter({
       path: '/plugin-ui',
       name: 'plugin-ui',
       component: () => import('../views/PluginUIView.vue'),
-      meta: { requiresAuth: true, title: '插件中心', icon: 'material-symbols:dashboard-customize-outline-rounded' },
+      meta: { requiresAuth: true, title: '插件中心', icon: 'material-symbols:dashboard-customize-outline-rounded', nav: true, navOrder: 43, navKey: 'app.nav.pluginCenter' },
     },
     {
       path: '/:pathMatch(.*)*',
