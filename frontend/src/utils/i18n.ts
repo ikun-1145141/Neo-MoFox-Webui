@@ -350,7 +350,7 @@ const messages = {
           reloading: '重载中...',
           load: '加载',
           loading: '加载中...',
-          unload: '卸载',
+          unload: '卸载并删除',
           unloading: '卸载中...',
         },
         stats: {
@@ -376,9 +376,9 @@ const messages = {
           loadTitle: '确认加载插件',
           loadMessage: '是否加载插件 "{name}"？',
           loadConfirm: '加载',
-          unloadTitle: '确认卸载插件',
-          unloadMessage: '是否卸载插件 "{name}"？这将停止该插件的所有组件。',
-          unloadConfirm: '卸载',
+          unloadTitle: '确认卸载并删除插件',
+          unloadMessage: '确定要卸载插件 "{name}" 吗？\n\n⚠️ 警告：此操作将停止该插件的所有组件，并永久删除插件的全部文件，且不可恢复。请谨慎操作。',
+          unloadConfirm: '卸载并删除',
           cancel: '取消',
         },
         toast: {
@@ -387,7 +387,7 @@ const messages = {
           reloadFailed: '插件重载失败: {error}',
           loadSuccess: '插件 "{name}" 加载成功',
           loadFailed: '插件加载失败: {error}',
-          unloadSuccess: '插件 "{name}" 卸载成功',
+          unloadSuccess: '插件 "{name}" 卸载成功，文件已删除',
           unloadFailed: '插件卸载失败: {error}',
         },
         componentTypes: {
@@ -1234,7 +1234,7 @@ const messages = {
           reloading: 'Reloading...',
           load: 'Load',
           loading: 'Loading...',
-          unload: 'Unload',
+          unload: 'Unload and Delete',
           unloading: 'Unloading...',
         },
         stats: {
@@ -1260,9 +1260,9 @@ const messages = {
           loadTitle: 'Confirm Load Plugin',
           loadMessage: 'Load plugin "{name}"?',
           loadConfirm: 'Load',
-          unloadTitle: 'Confirm Unload Plugin',
-          unloadMessage: 'Unload plugin "{name}"? This will stop all components of the plugin.',
-          unloadConfirm: 'Unload',
+          unloadTitle: 'Confirm Unload and Delete Plugin',
+          unloadMessage: 'Are you sure you want to unload plugin "{name}"?\n\n⚠️ Warning: This will stop all components of the plugin and permanently delete all plugin files. This action cannot be undone. Proceed with caution.',
+          unloadConfirm: 'Unload and Delete',
           cancel: 'Cancel',
         },
         toast: {
@@ -1271,7 +1271,7 @@ const messages = {
           reloadFailed: 'Plugin reload failed: {error}',
           loadSuccess: 'Plugin "{name}" loaded successfully',
           loadFailed: 'Plugin load failed: {error}',
-          unloadSuccess: 'Plugin "{name}" unloaded successfully',
+          unloadSuccess: 'Plugin "{name}" unloaded successfully, files deleted',
           unloadFailed: 'Plugin unload failed: {error}',
         },
         componentTypes: {

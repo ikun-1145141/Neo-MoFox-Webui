@@ -164,7 +164,15 @@ const handleUnload = async () => {
   try {
     const result = await unloadPlugin(pluginName.value)
     if (result.success) {
-      toastStore.show(tr('plugins.detail.toast.unloadSuccess', { name: pluginName.value }), 'success')
+      // 卸载成功，但可能文件删除失败（此时 error_message 非空）
+      if (result.error_message) {
+        toastStore.show(
+          tr('plugins.detail.toast.unloadSuccess', { name: pluginName.value }) + `（${result.error_message}）`,
+          'info'
+        )
+      } else {
+        toastStore.show(tr('plugins.detail.toast.unloadSuccess', { name: pluginName.value }), 'success')
+      }
       // 卸载成功后返回插件列表页面，避免用户再次点击卸载按钮
       router.push({ name: 'plugins' })
     } else {

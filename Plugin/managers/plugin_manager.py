@@ -6,7 +6,9 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from src.app.plugin_system.api.config_api import get_config  # type: ignore
@@ -448,7 +450,9 @@ class PluginManagementManager:
             )
 
     async def unload_plugin_operation(self, plugin_name: str) -> PluginUnloadResult:
-        """卸载插件。
+        """卸载插件并删除插件文件。
+
+        卸载成功后会直接删除插件的目录文件，此操作不可逆。
 
         Args:
             plugin_name: 插件名称
@@ -465,18 +469,16 @@ class PluginManagementManager:
                 error_message=f"插件 {plugin_name} 未加载",
             )
 
+        # 在卸载前获取插件路径，卸载后可能无法获取
+        plugin_path = get_plugin_path(plugin_name)
+
         try:
             # 执行卸载
             success = await unload_plugin(plugin_name)
             logger.info(str(success))
             unload_time = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
-            if success:
-                logger.info(f"插件 {plugin_name} 卸载成功")
-                return PluginUnloadResult(
-                    success=True, plugin_name=plugin_name, unload_time=unload_time, error_message=None
-                )
-            else:
+            if not success:
                 logger.warning(f"插件 {plugin_name} 卸载失败")
                 return PluginUnloadResult(
                     success=False,
@@ -484,6 +486,30 @@ class PluginManagementManager:
                     unload_time=unload_time,
                     error_message="卸载操作返回失败",
                 )
+
+            logger.info(f"插件 {plugin_name} 卸载成功")
+
+            # 卸载成功后删除插件文件
+            delete_error = self._delete_plugin_files(plugin_name, plugin_path)
+            if delete_error is not None:
+                # 卸载已成功，但文件删除失败，记录警告但不影响卸载结果
+                logger.warning(
+                    f"插件 {plugin_name} 卸载成功，但文件删除失败: {delete_error}"
+                )
+                return PluginUnloadResult(
+                    success=True,
+                    plugin_name=plugin_name,
+                    unload_time=unload_time,
+                    error_message=f"插件已卸载，但文件删除失败: {delete_error}",
+                )
+
+            logger.info(f"插件 {plugin_name} 文件已删除: {plugin_path}")
+            return PluginUnloadResult(
+                success=True,
+                plugin_name=plugin_name,
+                unload_time=unload_time,
+                error_message=None,
+            )
         except Exception as e:
             logger.error(f"插件 {plugin_name} 卸载异常: {e}", exc_info=True)
             return PluginUnloadResult(
@@ -492,6 +518,37 @@ class PluginManagementManager:
                 unload_time=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 error_message=str(e),
             )
+
+    def _delete_plugin_files(self, plugin_name: str, plugin_path: str | None) -> str | None:
+        """删除插件目录文件。
+
+        Args:
+            plugin_name: 插件名称
+            plugin_path: 插件路径（卸载前获取）
+
+        Returns:
+            删除失败时返回错误信息，成功返回 None
+        """
+        if not plugin_path:
+            return f"无法获取插件 {plugin_name} 的路径"
+
+        try:
+            path = Path(plugin_path)
+            if not path.exists():
+                return f"插件路径不存在: {plugin_path}"
+
+            # 安全校验：路径必须是一个目录，且不能是根目录或过于宽泛的路径
+            if not path.is_dir():
+                return f"插件路径不是目录: {plugin_path}"
+
+            # 防止误删根目录或上级目录
+            if path.parent == path or len(path.parts) <= 2:
+                return f"插件路径不安全，拒绝删除: {plugin_path}"
+
+            shutil.rmtree(path)
+            return None
+        except Exception as e:
+            return f"删除插件文件异常: {e}"
 
 
 # 单例实例
