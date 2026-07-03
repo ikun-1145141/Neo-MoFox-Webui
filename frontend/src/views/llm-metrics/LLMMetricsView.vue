@@ -59,8 +59,8 @@ const averageCost = computed(() => {
   return normalizedNumber(windowOverview.value.total_cost) / requestCount
 })
 
-const recentSuccessCount = computed(() => filteredRecentRequests.value.filter((item) => Boolean(item.success)).length)
-const recentFailureCount = computed(() => Math.max(filteredRecentRequests.value.length - recentSuccessCount.value, 0))
+const recentSuccessCount = computed(() => normalizedNumber(windowOverview.value.success_count))
+const recentFailureCount = computed(() => normalizedNumber(windowOverview.value.error_count))
 
 const modelMetricsInWindow = computed<LLMModelMetrics[]>(() => {
   const metrics = new Map<string, LLMModelMetrics>()
