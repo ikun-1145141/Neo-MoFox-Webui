@@ -191,6 +191,13 @@ const displayConfigPath = computed(() => {
   return `${props.configPath.slice(0, 18)}...${props.configPath.slice(-21)}`
 })
 
+// 深拷贝工具：用于独立化 formData 与 originalData，避免嵌套数组/对象
+// 因共享引用导致 hasChanges 判定失效（如 servers.items 数组被双向修改）。
+function deepClone<T>(value: T): T {
+  if (value === null || typeof value !== 'object') return value
+  return JSON.parse(JSON.stringify(value))
+}
+
 // 是否有未保存的更改
 const hasChanges = computed(() => {
   if (editMode.value === 'code') {
@@ -231,11 +238,15 @@ onMounted(async () => {
 })
 
 // 监听 modelValue 变化，更新表单数据
+// 使用深拷贝确保 formData 与 originalData 引用完全独立，
+// 否则嵌套数组（如 servers.items）会共享引用，修改一边另一边也变，
+// hasChanges 永远判为 false。
 watch(
   () => props.modelValue,
   (newValue) => {
-    formData.value = { ...newValue }
-    originalData.value = { ...newValue }
+    const cloned = deepClone(newValue)
+    formData.value = cloned
+    originalData.value = deepClone(newValue)
   },
   { immediate: true, deep: true }
 )
@@ -247,6 +258,9 @@ async function toggleMode() {
     try {
       const parsed = parseToml(codeContent.value)
       formData.value = parsed
+      // 同步变更基准（深拷贝，避免与 formData 共享嵌套引用），
+      // 防止切换模式后 hasChanges 误判为 true
+      originalData.value = deepClone(parsed)
       errorMessage.value = ''
       // 重置到第一个配置节
       activeSectionIndex.value = 0
@@ -310,8 +324,8 @@ async function handleSave() {
     emit('save', dataToSave)
     emit('update:modelValue', dataToSave)
 
-    // 更新原始数据
-    originalData.value = { ...dataToSave }
+    // 更新原始数据（深拷贝，确保与 formData 引用独立）
+    originalData.value = deepClone(dataToSave)
     if (editMode.value === 'code') {
       originalCodeContent.value = codeContent.value
     }

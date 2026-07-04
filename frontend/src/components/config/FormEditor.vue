@@ -247,10 +247,12 @@ function checkTooltipPosition(event: MouseEvent) {
   belowTooltips.value = new Set(belowTooltips.value)
 }
 
-// 初始化展开第一个节（或单个节时总是展开）
+// 初始化展开第一个节（或单个节时总是展开）；同时确保各节数据结构完整。
+// 数据结构初始化集中在此 watch 中完成，避免在渲染期间通过 getter 产生
+// emit 副作用（否则会意外修改父组件 formData，触发保存按钮误亮）。
 watch(
-  () => props.schema,
-  (newSchema) => {
+  [() => props.schema, () => props.modelValue],
+  ([newSchema]) => {
     if (newSchema && newSchema.length > 0) {
       if (newSchema.length === 1) {
         // 单个配置节时，总是展开
@@ -260,8 +262,41 @@ watch(
         expandedSections.value.add(0)
       }
     }
+
+    // 确保各节数据结构存在（list 为数组，object 为普通对象）。
+    // 仅在缺失或类型不匹配时补齐，避免对已有数据产生不必要的更新。
+    if (!newSchema || newSchema.length === 0) return
+
+    const base = props.modelValue && typeof props.modelValue === 'object' ? props.modelValue : {}
+    let working = base
+    let needsUpdate = false
+
+    for (const section of newSchema) {
+      const current = getValueByPath(working, section.name)
+      if (section.is_list) {
+        if (!Array.isArray(current)) {
+          if (!needsUpdate) {
+            working = { ...base }
+            needsUpdate = true
+          }
+          working = setValueByPath(working, section.name, [])
+        }
+      } else {
+        if (!current || typeof current !== 'object' || Array.isArray(current)) {
+          if (!needsUpdate) {
+            working = { ...base }
+            needsUpdate = true
+          }
+          working = setValueByPath(working, section.name, {})
+        }
+      }
+    }
+
+    if (needsUpdate) {
+      emit('update:modelValue', working)
+    }
   },
-  { immediate: true }
+  { immediate: true, deep: true }
 )
 
 // Schema
@@ -312,28 +347,21 @@ function setValueByPath(obj: any, path: string, value: any): any {
   return result
 }
 
-// 获取节数据
+// 获取节数据（纯只读，不产生副作用；缺失时返回空对象占位，
+// 实际的结构初始化由上方的 watch 统一负责）
 function getSectionData(sectionName: string) {
-  let data = getValueByPath(props.modelValue, sectionName)
+  const data = getValueByPath(props.modelValue, sectionName)
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
-    // 初始化节数据
-    const newValue = setValueByPath(props.modelValue, sectionName, {})
-    emit('update:modelValue', newValue)
     return {}
   }
   return data
 }
 
-// 获取列表项
+// 获取列表项（纯只读，不产生副作用；缺失时返回空数组占位，
+// 实际的结构初始化由上方的 watch 统一负责）
 function getListItems(sectionName: string): any[] {
   const items = getValueByPath(props.modelValue, sectionName)
-  if (!Array.isArray(items)) {
-    // 初始化为空数组
-    const newValue = setValueByPath(props.modelValue, sectionName, [])
-    emit('update:modelValue', newValue)
-    return []
-  }
-  return items
+  return Array.isArray(items) ? items : []
 }
 
 // 添加列表项

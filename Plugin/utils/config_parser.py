@@ -110,7 +110,8 @@ class ConfigParser:
                 section_model=section_model,
                 is_list=is_list,
                 parent_name=None,
-                sections=sections
+                sections=sections,
+                field_name=field_name,
             )
 
         return sections
@@ -120,7 +121,8 @@ class ConfigParser:
         section_model: type[SectionBase],
         is_list: bool,
         parent_name: str | None,
-        sections: list[SectionSchema]
+        sections: list[SectionSchema],
+        field_name: str | None = None,
     ) -> None:
         """递归提取 section schema，包括嵌套的 section。
 
@@ -129,9 +131,16 @@ class ConfigParser:
             is_list: 是否为列表类型
             parent_name: 父级 section 名称
             sections: 输出的 sections 列表
+            field_name: 当前 section 对应的字段名，当 section 未通过
+                ``@config_section`` 装饰器注册名称时，用作节名 fallback。
         """
         # 获取节元数据
         section_name = getattr(section_model, "__config_section_name__", "")
+        # 若未通过 @config_section 注册名称，则回退到字段名，保证 schema
+        # name 与实际数据路径一致（例如 servers.items 而非 servers.）
+        if not section_name and field_name:
+            section_name = field_name
+
         if parent_name:
             full_section_name = f"{parent_name}.{section_name}"
         else:
@@ -178,7 +187,8 @@ class ConfigParser:
                 section_model=nested_model,
                 is_list=nested_is_list,
                 parent_name=full_section_name,
-                sections=sections
+                sections=sections,
+                field_name=nested_field_name,
             )
 
     @staticmethod
