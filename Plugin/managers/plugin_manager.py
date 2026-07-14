@@ -28,6 +28,7 @@ from src.app.plugin_system.api.adapter_api import is_adapter_active  # type: ign
 from src.app.plugin_system.api.router_api import get_mounted_router  # type: ignore
 from src.core.components.registry import get_global_registry  # type: ignore
 from src.core.components.types import ComponentType, parse_signature  # type: ignore
+from src.core.config.core_config import get_core_config  # type: ignore
 
 from ..utils.plugin_types import (
     PluginComponentInfo,
@@ -520,11 +521,15 @@ class PluginManagementManager:
             )
 
     def _delete_plugin_files(self, plugin_name: str, plugin_path: str | None) -> str | None:
-        """删除插件目录文件。
+        """删除插件目录或压缩包文件。
+
+        支持插件目录与插件压缩包（.mfp / .zip），二者均可能由相对路径标识。
+        采用白名单校验：插件路径必须严格位于配置的插件根目录之内且为其直接子项，
+        从而拒绝删除插件根目录本身、主程序目录、家目录或任意插件目录外的路径。
 
         Args:
             plugin_name: 插件名称
-            plugin_path: 插件路径（卸载前获取）
+            plugin_path: 插件路径（卸载前获取，可为相对或绝对路径）
 
         Returns:
             删除失败时返回错误信息，成功返回 None
@@ -533,19 +538,30 @@ class PluginManagementManager:
             return f"无法获取插件 {plugin_name} 的路径"
 
         try:
-            path = Path(plugin_path)
+            # 解析为绝对路径，使后续白名单校验对相对路径同样生效。
+            path = Path(plugin_path).resolve()
             if not path.exists():
                 return f"插件路径不存在: {plugin_path}"
 
-            # 安全校验：路径必须是一个目录，且不能是根目录或过于宽泛的路径
-            if not path.is_dir():
-                return f"插件路径不是目录: {plugin_path}"
+            # 白名单校验：插件根目录取自核心配置（默认 "plugins"），同样解析为绝对路径。
+            plugins_root = Path(get_core_config().bot.plugins_dir).resolve()
 
-            # 防止误删根目录或上级目录
-            if path.parent == path or len(path.parts) <= 2:
-                return f"插件路径不安全，拒绝删除: {plugin_path}"
+            # 拒绝删除插件根目录本身（防止清空整个插件目录）。
+            if path == plugins_root:
+                return f"插件路径指向插件根目录，拒绝删除: {plugin_path}"
 
-            shutil.rmtree(path)
+            # 插件路径必须是插件根目录的直接子项（如 plugins/xxx 或 plugins/xxx.mfp），
+            # 任何跳出插件目录的路径（主程序目录、家目录、/ 等）一律拒绝。
+            if path.parent != plugins_root:
+                return f"插件路径不在插件目录内，拒绝删除: {plugin_path}"
+
+            if path.is_dir():
+                shutil.rmtree(path)
+            elif path.is_file():
+                path.unlink()
+            else:
+                return f"插件路径既不是目录也不是文件: {plugin_path}"
+
             return None
         except Exception as e:
             return f"删除插件文件异常: {e}"
