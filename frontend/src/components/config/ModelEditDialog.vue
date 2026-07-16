@@ -227,6 +227,44 @@
               </button>
             </div>
 
+            <!-- HTTP 层特殊键：headers / query / body -->
+            <p class="field-description section-divider">
+              {{ t('modelEditDialog.model.httpSpecialKeysDesc') }}
+            </p>
+
+            <div class="form-field">
+              <label for="model-extra-headers">{{ t('modelEditDialog.model.headersLabel') }}</label>
+              <p class="field-description">{{ t('modelEditDialog.model.headersDesc') }}</p>
+              <textarea
+                id="model-extra-headers"
+                v-model="headersText"
+                :placeholder="t('modelEditDialog.model.headersPlaceholder')"
+                rows="3"
+              />
+            </div>
+
+            <div class="form-field">
+              <label for="model-extra-query">{{ t('modelEditDialog.model.queryLabel') }}</label>
+              <p class="field-description">{{ t('modelEditDialog.model.queryDesc') }}</p>
+              <textarea
+                id="model-extra-query"
+                v-model="queryText"
+                :placeholder="t('modelEditDialog.model.queryPlaceholder')"
+                rows="3"
+              />
+            </div>
+
+            <div class="form-field">
+              <label for="model-extra-body">{{ t('modelEditDialog.model.bodyLabel') }}</label>
+              <p class="field-description">{{ t('modelEditDialog.model.bodyDesc') }}</p>
+              <textarea
+                id="model-extra-body"
+                v-model="bodyText"
+                :placeholder="t('modelEditDialog.model.bodyPlaceholder')"
+                rows="3"
+              />
+            </div>
+
             <div class="form-field checkbox-field">
               <label class="custom-checkbox">
                 <input
@@ -367,6 +405,10 @@ const emit = defineEmits<{
 // 表单数据
 const formData = ref<Record<string, any>>({})
 const extraParamsText = ref('{}')
+// HTTP 层特殊键：headers/query/body，从 extra_params 中拆出独立编辑
+const headersText = ref('{}')
+const queryText = ref('{}')
+const bodyText = ref('{}')
 
 // 标题
 const title = ref('')
@@ -442,7 +484,25 @@ function initForm() {
 }
 
 function syncExtraParamsText() {
-  extraParamsText.value = formatExtraParams(formData.value.extra_params)
+  const source = formData.value.extra_params
+  if (!source || typeof source !== 'object') {
+    extraParamsText.value = '{}'
+    headersText.value = '{}'
+    queryText.value = '{}'
+    bodyText.value = '{}'
+    return
+  }
+
+  // 拆分：headers/query/body 三个特殊键独立编辑，其余留在 extraParamsText
+  const rest: Record<string, any> = {}
+  for (const [k, v] of Object.entries(source)) {
+    if (k === 'headers' || k === 'query' || k === 'body') continue
+    rest[k] = v
+  }
+  extraParamsText.value = formatExtraParams(rest)
+  headersText.value = formatExtraParams(source.headers)
+  queryText.value = formatExtraParams(source.query)
+  bodyText.value = formatExtraParams(source.body)
 }
 
 function formatExtraParams(value: Record<string, any> | undefined) {
@@ -461,6 +521,18 @@ function parseExtraParamsText() {
 
   try {
     return parseToml(`extra_params = ${text}`).extra_params || {}
+  } catch {
+    return JSON.parse(text)
+  }
+}
+
+function parseSpecialField(textRef: { value: string }): Record<string, any> {
+  const text = textRef.value.trim()
+  if (!text || text === '{}') {
+    return {}
+  }
+  try {
+    return parseToml(`_v = ${text}`)._v || {}
   } catch {
     return JSON.parse(text)
   }
@@ -513,7 +585,22 @@ async function handleSubmit() {
     }
 
     try {
-      formData.value.extra_params = parseExtraParamsText()
+      const baseParams = parseExtraParamsText()
+      const headers = parseSpecialField(headersText)
+      const query = parseSpecialField(queryText)
+      const body = parseSpecialField(bodyText)
+
+      // 把三个特殊键合并回 extra_params；非空才写入，避免无意义空字典
+      formData.value.extra_params = { ...baseParams }
+      if (Object.keys(headers).length > 0) {
+        formData.value.extra_params.headers = headers
+      }
+      if (Object.keys(query).length > 0) {
+        formData.value.extra_params.query = query
+      }
+      if (Object.keys(body).length > 0) {
+        formData.value.extra_params.body = body
+      }
     } catch {
       await dialogStore.alert(t('modelEditDialog.errors.invalidExtraParams'))
       return
@@ -705,6 +792,13 @@ async function handleSubmit() {
   color: var(--md-sys-color-on-surface-variant);
   margin: -4px 0 4px 0;
   line-height: 1.4;
+}
+
+.section-divider {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--md-sys-color-outline-variant);
+  font-style: italic;
 }
 
 .form-row {
