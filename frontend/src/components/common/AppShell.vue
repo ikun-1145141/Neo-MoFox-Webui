@@ -65,18 +65,24 @@ const dialogStore = useDialogStore()
 const toastStore = useToastStore()
 const { t } = useI18n()
 
-const navItems = [
-  { labelKey: 'app.nav.home', icon: 'material-symbols:home-outline-rounded', name: 'home', path: '/' },
-  { labelKey: 'app.nav.config', icon: 'material-symbols:tune-rounded', name: 'config', path: '/config' },
-  { labelKey: 'app.nav.chat', icon: 'material-symbols:chat-outline-rounded', name: 'chat', path: '/chat' },
-  { labelKey: 'app.nav.plugins', icon: 'material-symbols:extension-outline-rounded', name: 'plugins', path: '/plugins' },
-  { labelKey: 'app.nav.config-plugins', icon: 'material-symbols:settings-outline-rounded', name: 'config-plugins', path: '/config/plugins' },
-  { labelKey: 'app.nav.pluginCenter', icon: 'material-symbols:dashboard-customize-outline-rounded', name: 'plugin-ui', path: '/plugin-ui' },
-  { labelKey: 'app.nav.llmMetrics', icon: 'material-symbols:bar-chart-rounded', name: 'llm-metrics', path: '/llm-metrics' },
-  { labelKey: 'app.nav.requestInspector', icon: 'material-symbols:plagiarism-outline-rounded', name: 'request-inspector', path: '/request-inspector' },
-  { labelKey: 'app.nav.log', icon: 'material-symbols:terminal-rounded', name: 'logs', path: '/logs' },
-  { labelKey: 'app.nav.settings', icon: 'material-symbols:setting-outline-rounded', name: 'settings-theme', path: '/settings' },
-]
+// 导航项由路由表自动生成：过滤 meta.nav 标记的路由，按 meta.navOrder 升序排序。
+// 新增页面只需在 router/index.ts 的 meta 中声明 nav/navOrder/navKey 即可出现在导航栏。
+const navItems = computed(() =>
+  router
+    .getRoutes()
+    .filter((r) => r.meta?.nav)
+    .sort(
+      (a, b) =>
+        ((a.meta.navOrder as number | undefined) ?? 0) -
+        ((b.meta.navOrder as number | undefined) ?? 0),
+    )
+    .map((r) => ({
+      labelKey: r.meta.navKey as string,
+      icon: r.meta.icon as string,
+      name: (r.meta.navName as string | undefined) || (r.name as string) || r.path,
+      path: r.path,
+    })),
+)
 
 const pageTitle = computed(() => {
   const routeName = typeof route.name === 'string' ? route.name : ''
@@ -91,7 +97,7 @@ const isActive = (path: string) => {
   if (!route.path.startsWith(path + '/')) return false
   
   // 如果是子路径，检查是否有其他更具体的导航项匹配当前路由
-  const hasMoreSpecificMatch = navItems.some(item => 
+  const hasMoreSpecificMatch = navItems.value.some(item =>
     item.path !== path && 
     item.path.startsWith(path) && 
     (route.path === item.path || route.path.startsWith(item.path + '/'))
