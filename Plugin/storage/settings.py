@@ -53,6 +53,19 @@ class SystemSettings(BaseModel):
     check_update_on_startup: bool = Field(default=True, description="启动时检查更新")
 
 
+class ConfigSettings(BaseModel):
+    """配置编辑器设置。
+
+    Attributes:
+        auto_reload_after_save: 在 WebUI 保存配置后是否自动触发运行时热重载
+    """
+
+    auto_reload_after_save: bool = Field(
+        default=True,
+        description="保存配置后自动热重载到运行时",
+    )
+
+
 class WebuiSettings(BaseModel):
     """WebUI 全局设置模型。
 
@@ -60,11 +73,13 @@ class WebuiSettings(BaseModel):
         theme: 主题设置
         ui: 界面设置
         system: 系统设置
+        config: 配置编辑器设置
     """
 
     theme: ThemeSettings = Field(default_factory=ThemeSettings, description="主题设置")
     ui: UISettings = Field(default_factory=UISettings, description="界面设置")
     system: SystemSettings = Field(default_factory=SystemSettings, description="系统设置")
+    config: ConfigSettings = Field(default_factory=ConfigSettings, description="配置编辑器设置")
 
 
 class SettingsStorage(BaseStorage):

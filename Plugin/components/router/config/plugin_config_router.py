@@ -29,6 +29,7 @@ class PluginConfigRouter(BaseRouter):
     提供插件配置专属操作：
     - GET /api/config-plugin/list - 获取可配置插件列表
     - GET /api/config-plugin/{plugin_name}/schema - 获取插件配置 Schema
+    - POST /api/config-plugin/{plugin_name}/reload - 热重载指定插件的配置
     """
 
     router_name: str = "config-plugin"
@@ -68,6 +69,34 @@ class PluginConfigRouter(BaseRouter):
                 logger.error(f"获取插件配置列表失败: {e}")
                 raise HTTPException(
                     status_code=500, detail=f"获取插件配置列表失败: {str(e)}"
+                )
+
+        @self.app.post(
+            "/{plugin_name}/reload",
+            response_model=BaseResponse[None],
+            dependencies=[VerifiedDep],
+            summary="热重载插件配置",
+            description="从磁盘重新加载指定插件的配置到运行时",
+        )
+        async def reload_plugin_config(plugin_name: str) -> BaseResponse[None]:
+            """热重载指定插件的配置。
+
+            Args:
+                plugin_name: 插件名称
+
+            Returns:
+                成功响应
+            """
+            try:
+                await self.manager.reload_plugin_config(plugin_name)
+                return BaseResponse.ok(message=f"插件 '{plugin_name}' 配置已热重载")
+            except ValueError as e:
+                logger.warning(f"热重载插件配置参数错误: {e}")
+                raise HTTPException(status_code=400, detail=str(e))
+            except Exception as e:
+                logger.error(f"热重载插件配置失败: {e}")
+                raise HTTPException(
+                    status_code=500, detail=f"热重载插件配置失败: {str(e)}"
                 )
 
         @self.app.get(

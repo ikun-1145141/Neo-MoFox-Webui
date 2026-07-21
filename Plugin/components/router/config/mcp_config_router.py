@@ -38,6 +38,29 @@ class McpConfigRouter(BaseRouter):
         """注册 API 端点。"""
 
         @self.app.post(
+            "/reload",
+            response_model=BaseResponse[None],
+            dependencies=[VerifiedDep],
+        )
+        async def reload_config() -> BaseResponse[None]:
+            """热重载 MCP 配置。
+
+            触发 MCPConfig 重新从文件加载，无需重启进程。
+
+            Returns:
+                成功响应
+            """
+            try:
+                await self.manager.reload_config()
+                return BaseResponse.ok(message="MCP 配置已热重载")
+            except Exception as e:
+                logger.error(f"热重载 MCP 配置失败: {e}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"热重载 MCP 配置失败: {str(e)}",
+                )
+
+        @self.app.post(
             "/test",
             response_model=BaseResponse[McpTestResult],
             dependencies=[VerifiedDep],

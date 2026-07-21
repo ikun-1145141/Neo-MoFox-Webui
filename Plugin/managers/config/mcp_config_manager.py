@@ -5,11 +5,13 @@ from __future__ import annotations
 import asyncio
 import shutil
 import time
+from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from src.app.plugin_system.api.log_api import get_logger
+from src.core.config.mcp_config import init_mcp_config
 
 from ...utils.config_types import McpTestRequest, McpTestResult
 
@@ -18,6 +20,25 @@ logger = get_logger("mcp_config_manager")
 
 class McpConfigManager:
     """MCP 配置管理器。"""
+
+    def __init__(self) -> None:
+        """初始化管理器。"""
+        self.mcp_config_path = Path("config/mcp.toml")
+
+    async def reload_config(self) -> None:
+        """热重载 MCP 配置。
+
+        通过重新调用 ``init_mcp_config`` 触发 MCPConfig 重新从文件加载，
+        同时更新全局单例。
+        """
+        try:
+            # init_mcp_config 会覆盖 _global_mcp_config 单例
+            # 放到线程中执行避免阻塞事件循环（其内部为同步文件 I/O）
+            await asyncio.to_thread(init_mcp_config, str(self.mcp_config_path))
+            logger.info("MCP 配置已热重载")
+        except Exception as e:
+            logger.error(f"热重载 MCP 配置失败: {e}")
+            raise ValueError(f"热重载 MCP 配置失败: {e}")
 
     async def test_server(self, request: McpTestRequest) -> McpTestResult:
         """测试 MCP 服务连通性。"""

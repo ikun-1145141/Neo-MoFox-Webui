@@ -17,6 +17,15 @@ import type {
 
 const BASE = `${API_WEBUI_PREFIX}/config`
 
+// ===== core配置路由 =====
+
+/**
+ * 热重载机器人配置（从磁盘重新加载到运行时）
+ */
+export function reloadBotConfig(): Promise<void> {
+  return http.post(`${BASE}-bot/reload`)
+}
+
 // ===== 主配置路由 =====
 
 /**
@@ -78,6 +87,13 @@ export function patchWriteConfig(
 // ===== 模型配置路由 =====
 
 /**
+ * 热重载模型配置（从磁盘重新加载到运行时）
+ */
+export function reloadModelConfig(): Promise<void> {
+  return http.post(`${BASE}-model/reload`)
+}
+
+/**
  * 测试模型连通性
  * @param request 测试请求
  */
@@ -101,6 +117,15 @@ export function listModels(provider?: string): Promise<string[]> {
   return http.get(`${BASE}-model/models${params}`)
 }
 
+// ===== MCP 配置路由 =====
+
+/**
+ * 热重载 MCP 配置（从磁盘重新加载到运行时）
+ */
+export function reloadMcpConfig(): Promise<void> {
+  return http.post(`${BASE}-mcp/reload`)
+}
+
 export function testMcpServer(request: McpTestRequest): Promise<McpTestResult> {
   return http.post(`${BASE}-mcp/test`, request)
 }
@@ -112,6 +137,14 @@ export function testMcpServer(request: McpTestRequest): Promise<McpTestResult> {
  */
 export function listPluginConfigs(): Promise<PluginConfigEntry[]> {
   return http.get(`${BASE}-plugin/list`)
+}
+
+/**
+ * 热重载指定插件的配置（从磁盘重新加载到运行时）
+ * @param pluginName 插件名
+ */
+export function reloadPluginConfig(pluginName: string): Promise<void> {
+  return http.post(`${BASE}-plugin/${encodeURIComponent(pluginName)}/reload`)
 }
 
 /**

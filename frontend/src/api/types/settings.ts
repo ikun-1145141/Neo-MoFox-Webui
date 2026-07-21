@@ -16,10 +16,15 @@ export interface SystemSettings {
   check_update_on_startup: boolean
 }
 
+export interface ConfigSettings {
+  auto_reload_after_save: boolean
+}
+
 export interface WebuiSettings {
   theme: ThemeSettings
   ui: UISettings
   system: SystemSettings
+  config: ConfigSettings
 }
 
 export interface UpdateSettingsRequest {
@@ -27,6 +32,7 @@ export interface UpdateSettingsRequest {
     theme: Partial<ThemeSettings>
     ui: Partial<UISettings>
     system: Partial<SystemSettings>
+    config: Partial<ConfigSettings>
   }>
 }
 

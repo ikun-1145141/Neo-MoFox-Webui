@@ -27,6 +27,7 @@ class ModelConfigRouter(BaseRouter):
     """模型配置路由。
 
     提供模型配置专属操作：
+    - POST /api/config-model/reload - 热重载模型配置
     - POST /api/config-model/test - 测试模型连通性
     - GET /api/config-model/providers - 获取提供商列表
     - GET /api/config-model/models - 获取模型列表
@@ -50,6 +51,29 @@ class ModelConfigRouter(BaseRouter):
 
     def register_endpoints(self) -> None:
         """注册 API 端点。"""
+
+        @self.app.post(
+            "/reload",
+            response_model=BaseResponse[None],
+            dependencies=[VerifiedDep],
+        )
+        async def reload_config() -> BaseResponse[None]:
+            """热重载模型配置。
+
+            触发 ModelConfig 重新从文件加载，无需重启进程。
+
+            Returns:
+                成功响应
+            """
+            try:
+                await self.manager.reload_config()
+                return BaseResponse.ok(message="模型配置已热重载")
+            except Exception as e:
+                logger.error(f"热重载模型配置失败: {e}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"热重载模型配置失败: {str(e)}",
+                )
 
         @self.app.post(
             "/test",

@@ -32,6 +32,7 @@ const DEFAULT_SETTINGS: WebuiSettings = {
   },
   ui: { language: 'zh-CN', font_size: 'medium' },
   system: { auto_update: false, check_update_on_startup: true },
+  config: { auto_reload_after_save: true },
 }
 
 const settings = ref<WebuiSettings>(structuredClone(DEFAULT_SETTINGS))
@@ -40,6 +41,7 @@ function getCurrentSnapshot(): string {
   return JSON.stringify({
     ui: settings.value.ui,
     system: settings.value.system,
+    config: settings.value.config,
   })
 }
 
@@ -58,11 +60,20 @@ async function persistChanges() {
 
   saving.value = true
   try {
-    const updated = await updateSettings({ ui: settings.value.ui, system: settings.value.system })
+    const updated = await updateSettings({
+      ui: settings.value.ui,
+      system: settings.value.system,
+      config: settings.value.config,
+    })
     settings.value.ui = updated.ui
     settings.value.system = updated.system
+    settings.value.config = updated.config
     setLocale(updated.ui.language)
-    lastSavedSnapshot.value = JSON.stringify({ ui: updated.ui, system: updated.system })
+    lastSavedSnapshot.value = JSON.stringify({
+      ui: updated.ui,
+      system: updated.system,
+      config: updated.config,
+    })
   } catch {
     if (IS_DEV) toast.show(t('settings.general.devBackendOfflineUnsaved'), 'info')
   } finally {
@@ -84,6 +95,10 @@ async function fetchSettings() {
   clearAutoSaveTimer()
   try {
     settings.value = await getSettings()
+    // 兜底：旧版后端响应可能没有 config 字段
+    if (!settings.value.config) {
+      settings.value.config = { auto_reload_after_save: true }
+    }
     setLocale(settings.value.ui.language)
   } catch {
     if (IS_DEV) toast.show(t('settings.general.devBackendOfflineDefaults'), 'info')
@@ -101,6 +116,10 @@ async function handleReset() {
   try {
     const data = await resetSettings()
     settings.value = data
+    // 兜底：重置后端可能未返回 config 字段
+    if (!settings.value.config) {
+      settings.value.config = { auto_reload_after_save: true }
+    }
     setLocale(data.ui.language)
     toast.show(t('settings.general.resetDone'), 'success')
   } catch {
@@ -118,6 +137,7 @@ watch(
     settings.value.ui.font_size,
     settings.value.system.auto_update,
     settings.value.system.check_update_on_startup,
+    settings.value.config.auto_reload_after_save,
   ],
   () => {
     setLocale(settings.value.ui.language)
@@ -237,6 +257,31 @@ onMounted(fetchSettings)
               @click="settings.system.check_update_on_startup = !settings.system.check_update_on_startup"
               role="switch"
               :aria-checked="settings.system.check_update_on_startup"
+            >
+              <div class="toggle-thumb" />
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="setting-section">
+        <div class="section-text">
+          <h3 class="section-heading">{{ t('settings.general.configTitle') }}</h3>
+          <p class="section-desc">{{ t('settings.general.configDesc') }}</p>
+        </div>
+
+        <div class="toggle-list">
+          <div class="toggle-row">
+            <div class="toggle-label-wrap">
+              <span class="toggle-label">{{ t('settings.general.autoReloadAfterSave') }}</span>
+              <span class="toggle-hint">{{ t('settings.general.autoReloadAfterSaveHint') }}</span>
+            </div>
+            <button
+              class="toggle-btn"
+              :class="{ on: settings.config.auto_reload_after_save }"
+              @click="settings.config.auto_reload_after_save = !settings.config.auto_reload_after_save"
+              role="switch"
+              :aria-checked="settings.config.auto_reload_after_save"
             >
               <div class="toggle-thumb" />
             </button>

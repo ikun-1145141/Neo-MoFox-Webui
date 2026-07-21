@@ -5,13 +5,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from pathlib import Path
 
 import openai
 
 from src.app.plugin_system.api.log_api import get_logger
-from src.core.config.model_config import ModelConfig
+from src.core.config.model_config import ModelConfig, init_model_config
 
 from ...utils.config_types import ModelTestRequest, ModelTestResult
 
@@ -28,6 +29,21 @@ class ModelConfigManager:
     def __init__(self) -> None:
         """初始化管理器。"""
         self.model_config_path = Path("config/model.toml")
+
+    async def reload_config(self) -> None:
+        """热重载模型配置。
+
+        通过重新调用 ``init_model_config`` 触发 ModelConfig 重新从文件加载，
+        同时更新全局单例。``ModelConfig.model_post_init`` 会自动重建内部缓存。
+        """
+        try:
+            # init_model_config 会覆盖 _global_model_config 单例
+            # 放到线程中执行避免阻塞事件循环（其内部为同步文件 I/O）
+            await asyncio.to_thread(init_model_config, str(self.model_config_path))
+            logger.info("模型配置已热重载")
+        except Exception as e:
+            logger.error(f"热重载模型配置失败: {e}")
+            raise ValueError(f"热重载模型配置失败: {e}")
 
     async def test_model(self, request: ModelTestRequest) -> ModelTestResult:
         """测试模型连通性。

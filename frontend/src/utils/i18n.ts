@@ -100,6 +100,10 @@ const messages = {
         autoUpdateHint: '发现新版本后自动下载并安装',
         checkUpdateOnStartup: '启动时检查更新',
         checkUpdateOnStartupHint: '每次启动时自动检测是否有新版本',
+        configTitle: '配置编辑器',
+        configDesc: '保存配置时的行为选项',
+        autoReloadAfterSave: '保存后自动热重载',
+        autoReloadAfterSaveHint: '在 WebUI 保存配置后自动应用到运行时，无需重启',
         refetch: '重新获取',
         reset: '恢复默认',
         resetDone: '已重置为默认设置',
@@ -214,6 +218,10 @@ const messages = {
       },
       loading: '加载配置中...',
       retry: '重试',
+    },
+    configView: {
+      saveSuccess: '配置已保存',
+      saveFailed: '保存失败：{error}',
     },
     login: {
       title: 'Neo-MoFox',
@@ -994,6 +1002,10 @@ const messages = {
         autoUpdateHint: 'Automatically download and install new versions when available',
         checkUpdateOnStartup: 'Check Updates on Startup',
         checkUpdateOnStartupHint: 'Automatically check for new versions on each startup',
+        configTitle: 'Configuration Editor',
+        configDesc: 'Behavior options when saving configuration',
+        autoReloadAfterSave: 'Auto Reload After Save',
+        autoReloadAfterSaveHint: 'Apply saved configuration to runtime automatically, no restart needed',
         refetch: 'Reload',
         reset: 'Restore Defaults',
         resetDone: 'Restored default settings',
@@ -1108,6 +1120,10 @@ const messages = {
       },
       loading: 'Loading configuration...',
       retry: 'Retry',
+    },
+    configView: {
+      saveSuccess: 'Configuration saved',
+      saveFailed: 'Save failed: {error}',
     },
     login: {
       title: 'Neo-MoFox',

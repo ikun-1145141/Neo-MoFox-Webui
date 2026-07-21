@@ -1,13 +1,18 @@
 """插件配置管理器。
 
-提供插件配置专属操作（如枚举可配置插件、获取 Schema）。
+提供插件配置专属操作（如枚举可配置插件、获取 Schema、热重载）。
 """
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
-from src.app.plugin_system.api.config_api import get_loaded_plugins, get_config
+from src.app.plugin_system.api.config_api import (
+    get_loaded_plugins,
+    get_config,
+    reload_config,
+)
 from src.app.plugin_system.api.log_api import get_logger
 
 from ...utils.config_parser import ConfigParser
@@ -19,9 +24,41 @@ logger = get_logger("plugin_config_manager")
 class PluginConfigManager:
     """插件配置管理器。
 
-    提供插件配置的专属操作，如列表枚举和 Schema 查询。
+    提供插件配置的专属操作，如列表枚举、Schema 查询和热重载。
     读写操作委托给 MainConfigManager。
     """
+
+    async def reload_plugin_config(self, plugin_name: str) -> None:
+        """热重载指定插件的配置。
+
+        通过 ``config_api.reload_config`` 重新从磁盘读取该插件的配置文件，
+        并替换 ConfigManager 中的缓存实例。``BaseConfig.reload`` 会使用插件
+        注册时注入的 ``_plugin_`` 类属性定位默认配置文件路径。
+
+        Args:
+            plugin_name: 插件名称
+
+        Raises:
+            ValueError: 插件未加载或配置未找到
+        """
+        try:
+            # 获取当前已加载的配置实例，从中拿到配置类
+            config_instance = get_config(plugin_name)
+            if config_instance is None:
+                raise ValueError(f"插件配置未找到: {plugin_name}")
+
+            config_class = type(config_instance)
+
+            # reload_config 内部为同步 I/O，放到线程中执行避免阻塞事件循环
+            await asyncio.to_thread(
+                reload_config, plugin_name, config_class
+            )
+            logger.info(f"插件 '{plugin_name}' 配置已热重载")
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"热重载插件配置失败: {e}")
+            raise ValueError(f"热重载插件配置失败: {e}")
 
     async def list_plugin_configs(self) -> list[PluginConfigEntry]:
         """获取可配置插件列表。

@@ -90,11 +90,20 @@ import Icon from '@/components/common/Icon.vue'
 import ConfigEditor from '@/components/config/ConfigEditor.vue'
 import ModelConfigEditor from '@/components/config/ModelConfigEditor.vue'
 import McpConfigEditor from '@/components/config/McpConfigEditor.vue'
-import { getConfig, fullWriteConfig } from '@/api/modules/config'
+import {
+  getConfig,
+  fullWriteConfig,
+  reloadBotConfig,
+  reloadModelConfig,
+  reloadMcpConfig,
+} from '@/api/modules/config'
+import { getSettings } from '@/api/modules/settings'
 import type { EnhancedConfigResponse } from '@/api/types/config'
 import { useI18n } from '@/utils/i18n'
+import { useToastStore } from '@/utils/toast'
 
 const { t } = useI18n()
+const toast = useToastStore()
 
 // 路由
 const router = useRouter()
@@ -119,6 +128,9 @@ const mcpConfig = ref<EnhancedConfigResponse | null>(null)
 // 加载状态
 const isLoading = ref(false)
 const errorMessage = ref('')
+
+// 是否在保存后自动热重载运行时配置（从 WebUI 设置读取）
+const autoReloadAfterSave = ref(true)
 
 // 切换 Tab
 function switchTab(tab: ConfigTab) {
@@ -177,10 +189,41 @@ async function handleSave(configType: ConfigTab, data: Record<string, any>) {
       console.log('[ConfigView] MCP 配置保存成功，已更新 mcpConfig')
     }
 
-    // 显示成功提示（可以集成 Toast 组件）
+
+    // 根据设置决定是否自动热重载运行时配置
+    if (autoReloadAfterSave.value) {
+      await autoReloadRuntime(configType)
+    }
   } catch (error: any) {
     console.error(`[ConfigView] 保存 ${configType} 配置失败:`, error)
-    // 显示错误提示（可以集成 Toast 组件）
+    toast.show(t('configView.saveFailed', { error: error.message ?? '' }), 'error')
+  }
+}
+
+// 自动热重载对应类型的运行时配置（仅控制台日志，不弹 Toast）
+async function autoReloadRuntime(configType: ConfigTab) {
+  try {
+    if (configType === 'bot') {
+      await reloadBotConfig()
+    } else if (configType === 'model') {
+      await reloadModelConfig()
+    } else if (configType === 'mcp') {
+      await reloadMcpConfig()
+    }
+    console.log(`[ConfigView] ${configType} 配置已热重载`)
+  } catch (error: any) {
+    console.error(`[ConfigView] 热重载 ${configType} 配置失败:`, error)
+  }
+}
+
+// 加载 WebUI 设置中的"保存后自动重载"开关
+async function loadAutoReloadSetting() {
+  try {
+    const settings = await getSettings()
+    autoReloadAfterSave.value = settings.config?.auto_reload_after_save ?? true
+  } catch (error) {
+    console.warn('[ConfigView] 加载自动重载设置失败，使用默认值 true:', error)
+    autoReloadAfterSave.value = true
   }
 }
 
@@ -193,6 +236,7 @@ onMounted(() => {
   }
 
   loadConfig()
+  loadAutoReloadSetting()
 })
 </script>
 

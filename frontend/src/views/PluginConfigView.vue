@@ -120,7 +120,9 @@ import {
   listPluginConfigs,
   getConfig,
   fullWriteConfig,
+  reloadPluginConfig,
 } from '@/api/modules/config'
+import { getSettings } from '@/api/modules/settings'
 import type { PluginConfigEntry, EnhancedConfigResponse } from '@/api/types/config'
 
 const route = useRoute()
@@ -138,6 +140,9 @@ const selectedPlugin = ref<PluginConfigEntry | null>(null)
 const currentPluginConfig = ref<EnhancedConfigResponse | null>(null)
 const isLoadingConfig = ref(false)
 const configErrorMessage = ref('')
+
+// 是否在保存后自动热重载运行时配置（从 WebUI 设置读取）
+const autoReloadAfterSave = ref(true)
 
 // 过滤后的插件列表
 const filteredPlugins = computed(() => {
@@ -227,15 +232,42 @@ async function handleSave(data: Record<string, any>) {
     )
 
     currentPluginConfig.value = response
+
+    // 根据设置决定是否自动热重载运行时配置
+    if (autoReloadAfterSave.value) {
+      await autoReloadPluginRuntime(selectedPlugin.value.plugin_name)
+    }
   } catch (error: any) {
     // 错误提示由 api/base.ts 响应拦截器统一处理，避免重复弹窗
     console.error('保存插件配置失败:', error)
   }
 }
 
+// 自动热重载指定插件的运行时配置（仅控制台日志，不弹 Toast）
+async function autoReloadPluginRuntime(pluginName: string) {
+  try {
+    await reloadPluginConfig(pluginName)
+    console.log(`[PluginConfigView] 插件 '${pluginName}' 配置已热重载`)
+  } catch (error: any) {
+    console.error(`[PluginConfigView] 热重载插件 '${pluginName}' 配置失败:`, error)
+  }
+}
+
+// 加载 WebUI 设置中的"保存后自动重载"开关
+async function loadAutoReloadSetting() {
+  try {
+    const settings = await getSettings()
+    autoReloadAfterSave.value = settings.config?.auto_reload_after_save ?? true
+  } catch (error) {
+    console.warn('[PluginConfigView] 加载自动重载设置失败，使用默认值 true:', error)
+    autoReloadAfterSave.value = true
+  }
+}
+
 // 组件挂载时加载插件列表
 onMounted(() => {
   loadPluginList()
+  loadAutoReloadSetting()
 })
 </script>
 
