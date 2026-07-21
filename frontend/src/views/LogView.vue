@@ -36,6 +36,13 @@ const logContainerRef = ref<HTMLElement | null>(null)
 const lastRealtimeAt = ref<string>('')
 const maxLogEntries = 2000
 
+const selectedLogKeys = ref<Set<string>>(new Set())
+const anchorIndex = ref<number | null>(null)
+const swipeState = ref<{ startX: number; startY: number; key: string; idx: number } | null>(null)
+const swipeOffset = ref(0)
+const swipeKey = ref<string | null>(null)
+let suppressClickUntil = 0
+
 const logFiles = ref<LogFileInfo[]>([])
 const selectedFile = ref<string>('')
 const fileSearchText = ref('')
@@ -76,6 +83,36 @@ const filteredLogs = computed(() => {
     return true
   })
 })
+
+const hasLogSelection = computed(() => selectedLogKeys.value.size > 0)
+
+const allSelected = computed(() => {
+  if (filteredLogs.value.length === 0) return false
+  return filteredLogs.value.every((entry) => selectedLogKeys.value.has(logEntryKey(entry)))
+})
+
+function logEntryKey(entry: RealtimeLogEntry): string {
+  return `${entry.timestamp}|${entry.logger_name}|${entry.display}|${entry.message}`
+}
+
+function isLogSelected(entry: RealtimeLogEntry): boolean {
+  return selectedLogKeys.value.has(logEntryKey(entry))
+}
+
+function toggleSelectAll(): void {
+  if (allSelected.value) {
+    clearLogSelection()
+    return
+  }
+  const next = new Set(selectedLogKeys.value)
+  for (const entry of filteredLogs.value) {
+    next.add(logEntryKey(entry))
+  }
+  selectedLogKeys.value = next
+  if (anchorIndex.value === null && filteredLogs.value.length > 0) {
+    anchorIndex.value = 0
+  }
+}
 
 const logStats = computed(() => {
   const stats: Record<string, number> = {}
@@ -338,6 +375,156 @@ function closeLevelDropdown(event: MouseEvent): void {
 function clearLogs(): void {
   realtimeLogs.value = []
   lastRealtimeAt.value = ''
+  clearLogSelection()
+}
+
+function clearLogSelection(): void {
+  if (selectedLogKeys.value.size === 0 && anchorIndex.value === null) return
+  selectedLogKeys.value = new Set()
+  anchorIndex.value = null
+}
+
+function handleLogClick(event: MouseEvent, entry: RealtimeLogEntry, idx: number): void {
+  if (Date.now() < suppressClickUntil) return
+  if (event.button !== 0) return
+  event.preventDefault()
+  event.stopPropagation()
+
+  const key = logEntryKey(entry)
+  const next = new Set(selectedLogKeys.value)
+
+  if (event.shiftKey && anchorIndex.value !== null && anchorIndex.value !== idx) {
+    const start = Math.min(anchorIndex.value, idx)
+    const end = Math.max(anchorIndex.value, idx)
+    for (let i = start; i <= end; i++) {
+      const target = filteredLogs.value[i]
+      if (target) next.add(logEntryKey(target))
+    }
+  } else {
+    if (next.has(key)) next.delete(key)
+    else next.add(key)
+    anchorIndex.value = idx
+  }
+
+  selectedLogKeys.value = next
+}
+
+function handleLogContextMenu(event: MouseEvent, entry: RealtimeLogEntry): void {
+  event.preventDefault()
+  if (Date.now() < suppressClickUntil) return
+  const key = logEntryKey(entry)
+  if (!selectedLogKeys.value.has(key)) return
+  const next = new Set(selectedLogKeys.value)
+  next.delete(key)
+  selectedLogKeys.value = next
+}
+
+function handleRealtimeKeyDown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape') return
+  if (activeTab.value !== 'realtime') return
+  if (selectedLogKeys.value.size === 0) return
+  const target = event.target as HTMLElement | null
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+    return
+  }
+  clearLogSelection()
+}
+
+function handleLogTouchStart(event: TouchEvent, entry: RealtimeLogEntry, idx: number): void {
+  if (event.touches.length !== 1) return
+  const touch = event.touches[0]
+  swipeState.value = {
+    startX: touch.clientX,
+    startY: touch.clientY,
+    key: logEntryKey(entry),
+    idx,
+  }
+  swipeKey.value = logEntryKey(entry)
+  swipeOffset.value = 0
+}
+
+function handleLogTouchMove(event: TouchEvent): void {
+  if (!swipeState.value || event.touches.length !== 1) return
+  const touch = event.touches[0]
+  const deltaX = touch.clientX - swipeState.value.startX
+  const deltaY = touch.clientY - swipeState.value.startY
+
+  if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 4) {
+    swipeOffset.value = Math.min(0, deltaX)
+  } else {
+    swipeOffset.value = 0
+  }
+}
+
+function handleLogTouchEnd(event: TouchEvent, entry: RealtimeLogEntry, idx: number): void {
+  const state = swipeState.value
+  swipeKey.value = null
+  swipeOffset.value = 0
+  swipeState.value = null
+  if (!state || event.changedTouches.length === 0) return
+
+  const touch = event.changedTouches[0]
+  const deltaX = touch.clientX - state.startX
+  const deltaY = touch.clientY - state.startY
+
+  if (deltaX < -28 && Math.abs(deltaX) > Math.abs(deltaY)) {
+    const key = logEntryKey(entry)
+    const next = new Set(selectedLogKeys.value)
+    if (next.has(key)) next.delete(key)
+    else next.add(key)
+    selectedLogKeys.value = next
+    anchorIndex.value = idx
+    suppressClickUntil = Date.now() + 600
+  } else if (Math.abs(deltaX) < 6 && Math.abs(deltaY) < 6) {
+    suppressClickUntil = Date.now() + 600
+  }
+}
+
+function swipeStyle(key: string): Record<string, string> {
+  if (swipeKey.value !== key) return {}
+  if (swipeOffset.value === 0) return {}
+  return { transform: `translateX(${swipeOffset.value * 0.5}px)` }
+}
+
+async function copySelectedLogs(): Promise<void> {
+  if (selectedLogKeys.value.size === 0) return
+
+  const keys = selectedLogKeys.value
+  const selected = realtimeLogs.value.filter((entry) => keys.has(logEntryKey(entry)))
+  if (selected.length === 0) {
+    toastStore.show(t('log.realtime.copyFailed'), 'error')
+    return
+  }
+
+  const text = selected
+    .map((entry) => {
+      const time = formatTimestamp(entry.timestamp)
+      const source = entry.display || entry.logger_name || 'core'
+      return `[${time}] ${entry.level.padEnd(8)} ${source}: ${entry.message}`
+    })
+    .join('\n')
+
+  try {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.setAttribute('readonly', '')
+      textarea.style.position = 'fixed'
+      textarea.style.top = '0'
+      textarea.style.left = '0'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(textarea)
+      if (!ok) throw new Error('execCommand failed')
+    }
+    toastStore.show(t('log.realtime.copySuccess', { count: String(selected.length) }), 'success')
+  } catch {
+    toastStore.show(t('log.realtime.copyFailed'), 'error')
+  }
 }
 
 function scrollToBottom(): void {
@@ -558,11 +745,13 @@ watch(activeTab, (tab) => {
 onMounted(() => {
   connectWs()
   document.addEventListener('click', closeLevelDropdown)
+  window.addEventListener('keydown', handleRealtimeKeyDown)
 })
 
 onUnmounted(() => {
   disconnectWs()
   document.removeEventListener('click', closeLevelDropdown)
+  window.removeEventListener('keydown', handleRealtimeKeyDown)
 })
 </script>
 
@@ -707,25 +896,67 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <div class="log-container" ref="logContainerRef" @scroll="handleRealtimeScroll">
-            <div v-if="filteredLogs.length === 0" class="empty-state">
-              <Icon icon="material-symbols:terminal-rounded" width="48" height="48" />
-              <p>{{ wsStatus === 'connected' ? t('log.realtime.waitingLogs') : t('log.realtime.serviceDisconnected') }}</p>
-            </div>
-            <div v-else class="log-entries">
-              <div
-                v-for="(entry, idx) in filteredLogs"
-                :key="`${entry.timestamp}-${idx}`"
-                class="log-entry"
-                :style="{ '--entry-level-color': levelColor(entry.level), '--entry-level-bg': levelBg(entry.level) }"
-              >
-                <span class="shell-prompt">❯</span>
-                <span class="log-time">{{ formatTimestamp(entry.timestamp) }}</span>
-                <span class="log-level-badge">{{ entry.level }}</span>
-                <span class="log-logger">{{ entry.display || entry.logger_name || 'core' }}</span>
-                <span class="log-message">{{ entry.message }}</span>
+          <div class="log-area">
+            <div class="log-container" ref="logContainerRef" @scroll="handleRealtimeScroll" @touchmove.passive="handleLogTouchMove">
+              <div v-if="filteredLogs.length === 0" class="empty-state">
+                <Icon icon="material-symbols:terminal-rounded" width="48" height="48" />
+                <p>{{ wsStatus === 'connected' ? t('log.realtime.waitingLogs') : t('log.realtime.serviceDisconnected') }}</p>
+              </div>
+              <div v-else class="log-entries">
+                <div
+                  v-for="(entry, idx) in filteredLogs"
+                  :key="`${entry.timestamp}-${idx}`"
+                  class="log-entry log-entry-selectable"
+                  :class="{ selected: isLogSelected(entry) }"
+                  :style="{
+                    '--entry-level-color': levelColor(entry.level),
+                    '--entry-level-bg': levelBg(entry.level),
+                    ...swipeStyle(logEntryKey(entry)),
+                  }"
+                  @click="handleLogClick($event, entry, idx)"
+                  @contextmenu.prevent="handleLogContextMenu($event, entry)"
+                  @touchstart.passive="handleLogTouchStart($event, entry, idx)"
+                  @touchend.passive="handleLogTouchEnd($event, entry, idx)"
+                >
+                  <span class="shell-prompt">❯</span>
+                  <span class="log-time">{{ formatTimestamp(entry.timestamp) }}</span>
+                  <span class="log-level-badge">{{ entry.level }}</span>
+                  <span class="log-logger">{{ entry.display || entry.logger_name || 'core' }}</span>
+                  <span class="log-message">{{ entry.message }}</span>
+                </div>
               </div>
             </div>
+
+            <transition name="selection-bar">
+              <div v-if="hasLogSelection" class="selection-bar" role="toolbar" :aria-label="t('log.realtime.selectHint')">
+                <span class="selection-count">{{ t('log.realtime.selectionCount', { count: String(selectedLogKeys.size) }) }}</span>
+                <div class="selection-actions">
+                  <button
+                    type="button"
+                    class="pill-action select-all-btn"
+                    :class="{ active: allSelected }"
+                    @click="toggleSelectAll"
+                    :title="t('log.realtime.selectAllTitle')"
+                  >
+                    <Icon icon="material-symbols:checklist-rounded" width="16" height="16" />
+                    {{ allSelected ? t('log.realtime.deselectAll') : t('log.realtime.selectAll') }}
+                  </button>
+                  <button type="button" class="pill-action primary" @click="copySelectedLogs" :title="t('log.realtime.copyTitle')">
+                    <Icon icon="material-symbols:content-copy-outline-rounded" width="18" height="18" />
+                    {{ t('log.realtime.copy') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="icon-button"
+                    @click="clearLogSelection"
+                    :title="t('log.realtime.clearSelectionTitle')"
+                    :aria-label="t('log.realtime.clearSelection')"
+                  >
+                    <Icon icon="material-symbols:close-rounded" width="20" height="20" />
+                  </button>
+                </div>
+              </div>
+            </transition>
           </div>
 
           <div class="status-bar">
@@ -1362,6 +1593,14 @@ input:focus-visible {
   white-space: nowrap;
 }
 
+.log-area {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .log-container {
   flex: 1 1 0;
   min-height: 0;
@@ -1405,12 +1644,29 @@ input:focus-visible {
   padding: .22rem .42rem;
   border-radius: 12px;
   background: var(--entry-level-bg);
-  transition: background .12s ease, transform .12s ease;
+  transition: background .12s ease, transform .12s ease, box-shadow .12s ease;
 }
 
 .log-entry:hover {
   transform: translateX(2px);
   background: color-mix(in srgb, var(--entry-level-color) 13%, transparent);
+}
+
+.log-entry-selectable {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: pan-y;
+}
+
+.log-entry.selected {
+  background: color-mix(in srgb, var(--entry-level-color) 26%, transparent);
+  box-shadow: inset 0 0 0 2px var(--entry-level-color);
+}
+
+.log-entry.selected:hover {
+  transform: translateX(2px);
+  background: color-mix(in srgb, var(--entry-level-color) 32%, transparent);
 }
 
 .shell-prompt {
@@ -1464,6 +1720,106 @@ input:focus-visible {
   color: var(--md-sys-color-on-surface-variant);
   font-size: .76rem;
   flex-shrink: 0;
+}
+
+.selection-bar {
+  position: absolute;
+  left: .55rem;
+  right: .55rem;
+  bottom: .55rem;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .55rem;
+  padding: .4rem .58rem;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-primary) 32%, var(--soft-border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--md-sys-color-primary-container) 78%, transparent);
+  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .14), 0 2px 6px rgba(0, 0, 0, .06);
+  pointer-events: auto;
+}
+
+.selection-count {
+  color: var(--md-sys-color-on-primary-container);
+  font-size: .8rem;
+  font-weight: 800;
+  letter-spacing: .01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.selection-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  flex-shrink: 0;
+}
+
+.selection-bar .pill-action,
+.selection-bar .icon-button {
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-lowest) 82%, transparent);
+}
+
+.selection-bar .pill-action:hover:not(:disabled),
+.selection-bar .icon-button:hover {
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-lowest) 100%, transparent);
+}
+
+.selection-bar .pill-action.active {
+  color: var(--md-sys-color-on-primary);
+  background: var(--md-sys-color-primary);
+}
+
+.selection-bar .pill-action.active:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--md-sys-color-primary) 88%, #000 12%);
+}
+
+.selection-bar .select-all-btn {
+  color: var(--md-sys-color-on-primary);
+  background: var(--md-sys-color-primary);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--md-sys-color-primary) 28%, transparent);
+}
+
+.selection-bar .select-all-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--md-sys-color-primary) 88%, #000 12%);
+}
+
+.selection-bar .select-all-btn.active {
+  color: var(--md-sys-color-primary);
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--md-sys-color-primary) 55%, transparent);
+}
+
+.selection-bar .select-all-btn.active:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--md-sys-color-primary) 10%, transparent);
+}
+
+.pill-action.primary {
+  color: var(--md-sys-color-on-primary);
+  background: var(--md-sys-color-primary);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--md-sys-color-primary) 28%, transparent);
+}
+
+.pill-action.primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--md-sys-color-primary) 88%, #000 12%);
+}
+
+.selection-bar-enter-active,
+.selection-bar-leave-active {
+  transition: opacity .22s ease, transform .22s ease;
+}
+
+.selection-bar-enter-from,
+.selection-bar-leave-to {
+  opacity: 0;
+  transform: translateY(14px);
 }
 
 .scroll-hint {
@@ -2036,7 +2392,8 @@ input:focus-visible {
   .scroll-action-row .pill-action:hover:not(:disabled),
   .file-item:hover,
   .tab-item:hover,
-  .log-entry:hover {
+  .log-entry:hover,
+  .log-entry.selected:hover {
     transform: none;
   }
 
@@ -2055,6 +2412,11 @@ input:focus-visible {
 
   .realtime-panel {
     min-height: 0;
+  }
+
+  .log-area {
+    min-height: 0;
+    flex: 1;
   }
 
   .log-container {
@@ -2188,10 +2550,39 @@ input:focus-visible {
 }
 
 @media (max-width: 425px) {
-  .log-container {
+  .log-area {
     height: clamp(260px, 46dvh, 340px);
     min-height: 0;
     flex: 0 0 auto;
+  }
+
+  .log-container {
+    height: 100%;
+    min-height: 0;
+    flex: 1 1 0;
+  }
+
+  .selection-bar {
+    left: .4rem;
+    right: .4rem;
+    bottom: .4rem;
+    padding: .32rem .46rem;
+    gap: .4rem;
+  }
+
+  .selection-bar .pill-action {
+    min-height: 34px;
+    padding-inline: .48rem;
+    font-size: .72rem;
+  }
+
+  .selection-bar .icon-button {
+    width: 34px;
+    height: 34px;
+  }
+
+  .selection-count {
+    font-size: .72rem;
   }
 }
 
