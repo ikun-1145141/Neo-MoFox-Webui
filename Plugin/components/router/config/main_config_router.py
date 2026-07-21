@@ -38,8 +38,8 @@ class MainConfigRouter(BaseRouter):
     - PATCH /api/config/patch/{config_type} - 增量写入配置
     """
 
-    router_name: str = "config"
-    router_description: str = "配置管理 API"
+    name: str = "config"
+    description: str = "配置管理 API"
     custom_route_path: str = "/webui/api/config"
     cors_origins: list[str] = ["*"]
 

@@ -41,8 +41,8 @@ class FrontendRouter(BaseRouter):
         挂载UI前端用于测试
     """
 
-    router_name = "Frontend"
-    router_description = "挂载UI前端"
+    name = "Frontend"
+    description = "挂载UI前端"
 
     # 自定义路由路径
     custom_route_path = "/webui/frontend"

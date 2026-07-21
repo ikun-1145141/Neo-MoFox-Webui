@@ -33,8 +33,8 @@ logger = get_logger("plugin_router")
 class PluginRouter(BaseRouter):
     """插件管理路由组件。"""
 
-    router_name: str = "plugin"
-    router_description: str = "插件管理接口"
+    name: str = "plugin"
+    description: str = "插件管理接口"
     custom_route_path: str = "/webui/api/plugin"
     cors_origins: list[str] = ["*"]
 

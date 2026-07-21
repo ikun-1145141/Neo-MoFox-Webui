@@ -25,8 +25,8 @@ logger = get_logger("dashboard_router")
 class DashboardRouter(BaseRouter):
     """Dashboard Router 组件。"""
 
-    router_name: str = "dashboard"
-    router_description: str = "WebUI 仪表盘接口"
+    name: str = "dashboard"
+    description: str = "WebUI 仪表盘接口"
     custom_route_path: str = "/webui/api/dashboard"
     cors_origins: list[str] = ["*"]
 

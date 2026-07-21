@@ -29,8 +29,8 @@ class BotConfigRouter(BaseRouter):
     - POST /api/config-bot/reload - 热重载机器人配置
     """
 
-    router_name: str = "config-bot"
-    router_description: str = "机器人配置 API"
+    name: str = "config-bot"
+    description: str = "机器人配置 API"
     custom_route_path: str = "/webui/api/config-bot"
     cors_origins: list[str] = ["*"]
 

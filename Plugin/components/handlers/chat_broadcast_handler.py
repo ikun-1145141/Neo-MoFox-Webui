@@ -23,8 +23,8 @@ class ChatBroadcastHandler(BaseEventHandler):
     监听核心收到和发送的消息，将可展示消息推送给全局通知和指定流 WebSocket 客户端。
     """
 
-    handler_name: str = "webui_chat_broadcast"
-    handler_description: str = "捕获聊天消息并广播给 WebSocket 客户端"
+    name: str = "webui_chat_broadcast"
+    description: str = "捕获聊天消息并广播给 WebSocket 客户端"
     weight: int = -10
     intercept_message: bool = False
     init_subscribe: list[EventType | str] = [

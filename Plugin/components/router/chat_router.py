@@ -30,8 +30,8 @@ class ChatRouter(BaseRouter):
     提供聊天流 HTTP 列表、全局新消息通知和指定流会话 WebSocket。
     """
 
-    router_name: str = "chat"
-    router_description: str = "聊天消息 API（HTTP 列表 + WebSocket 会话）"
+    name: str = "chat"
+    description: str = "聊天消息 API（HTTP 列表 + WebSocket 会话）"
     custom_route_path: str = "/webui/api/chat"
     cors_origins: list[str] = ["*"]
 

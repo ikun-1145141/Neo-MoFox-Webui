@@ -33,8 +33,8 @@ class ModelConfigRouter(BaseRouter):
     - GET /api/config-model/models - 获取模型列表
     """
 
-    router_name: str = "config-model"
-    router_description: str = "模型配置 API"
+    name: str = "config-model"
+    description: str = "模型配置 API"
     custom_route_path: str = "/webui/api/config-model"
     cors_origins: list[str] = ["*"]
 

@@ -43,8 +43,8 @@ class WallpaperStatus(BaseModel):
 class WallpaperRouter(BaseRouter):
     """壁纸 Router 组件。"""
 
-    router_name: str = "wallpaper"
-    router_description: str = "WebUI 壁纸 API"
+    name: str = "wallpaper"
+    description: str = "WebUI 壁纸 API"
     custom_route_path: str = "/webui/api/wallpaper"
     cors_origins: list[str] = ["*"]
 

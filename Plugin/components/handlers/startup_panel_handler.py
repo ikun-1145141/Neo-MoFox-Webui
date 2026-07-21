@@ -24,8 +24,8 @@ WEBUI_FRONTEND_PATH = "/webui/frontend"
 class WebuiStartupPanelHandler(BaseEventHandler):
     """在全部插件加载完成后打印 WebUI 访问地址面板。"""
 
-    handler_name: str = "webui_startup_panel"
-    handler_description: str = "所有插件启动完毕后打印 WebUI 内外部访问地址"
+    name: str = "webui_startup_panel"
+    description: str = "所有插件启动完毕后打印 WebUI 内外部访问地址"
     weight: int = 0
     intercept_message: bool = False
     init_subscribe: list[EventType | str] = [EventType.ON_START]

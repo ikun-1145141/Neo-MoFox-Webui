@@ -25,8 +25,8 @@ logger = get_logger("request_inspector_router")
 class RequestInspectorRouter(BaseRouter):
     """WebUI LLM 请求体检视器 Router 组件。"""
 
-    router_name: str = "request-inspector"
-    router_description: str = "WebUI LLM 请求体检视器接口"
+    name: str = "request-inspector"
+    description: str = "WebUI LLM 请求体检视器接口"
     custom_route_path: str = "/webui/api/request-inspector"
     cors_origins: list[str] = ["*"]
 

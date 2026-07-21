@@ -24,8 +24,8 @@ class LogBroadcastHandler(BaseEventHandler):
     的缓冲区和所有已连接的 WebSocket 客户端。
     """
 
-    handler_name: str = "webui_log_broadcast"
-    handler_description: str = "捕获实时日志并广播给 WebSocket 客户端"
+    name: str = "webui_log_broadcast"
+    description: str = "捕获实时日志并广播给 WebSocket 客户端"
     weight: int = -10  # 低优先级，不影响其他处理器
     intercept_message: bool = False
     init_subscribe: list[EventType | str] = [LOG_OUTPUT_EVENT]

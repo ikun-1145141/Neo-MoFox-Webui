@@ -37,8 +37,8 @@ class LoginResponse(BaseModel):
 class AuthRouter(BaseRouter):
     """认证 Router 组件。"""
 
-    router_name: str = "auth"
-    router_description: str = "WebUI 认证 API"
+    name: str = "auth"
+    description: str = "WebUI 认证 API"
     custom_route_path: str = "/webui/api/auth"
     cors_origins: list[str] = ["*"]
 

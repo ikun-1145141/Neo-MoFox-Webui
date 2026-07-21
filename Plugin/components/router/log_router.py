@@ -120,8 +120,8 @@ class LogRouter(BaseRouter):
     - GET /content     - 获取日志文件内容（支持偏移量分块）
     """
 
-    router_name: str = "log"
-    router_description: str = "日志查看 API（WebSocket + HTTP）"
+    name: str = "log"
+    description: str = "日志查看 API（WebSocket + HTTP）"
     custom_route_path: str = "/webui/api/log"
     cors_origins: list[str] = ["*"]
 

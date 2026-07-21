@@ -32,8 +32,8 @@ class PluginUIRouter(BaseRouter):
     统一挂载在 /webui/api/plugin-ui 路径下。
     """
 
-    router_name: str = "plugin-ui"
-    router_description: str = "插件 UI 页面发现与 Schema 接口"
+    name: str = "plugin-ui"
+    description: str = "插件 UI 页面发现与 Schema 接口"
     custom_route_path: str = "/webui/api/plugin-ui"
     cors_origins: list[str] = ["*"]
 

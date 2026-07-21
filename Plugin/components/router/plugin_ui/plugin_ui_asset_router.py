@@ -43,8 +43,8 @@ class PluginUIAssetRouter(BaseRouter):
     以索引形式提供 HTML/CSS/JS 和静态资源文件服务。
     """
 
-    router_name: str = "plugin-ui-asset"
-    router_description: str = "插件 UI 静态资源服务"
+    name: str = "plugin-ui-asset"
+    description: str = "插件 UI 静态资源服务"
     custom_route_path: str = "/webui/static/plugin-ui"
     cors_origins: list[str] = ["*"]
 

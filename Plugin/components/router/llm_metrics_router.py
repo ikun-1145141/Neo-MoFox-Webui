@@ -25,8 +25,8 @@ logger = get_logger("llm_metrics_router")
 class LLMMetricsRouter(BaseRouter):
     """WebUI LLM 统计 Router 组件。"""
 
-    router_name: str = "llm-metrics"
-    router_description: str = "WebUI 大模型统计接口"
+    name: str = "llm-metrics"
+    description: str = "WebUI 大模型统计接口"
     custom_route_path: str = "/webui/api/llm-metrics"
     cors_origins: list[str] = ["*"]
 

@@ -32,8 +32,8 @@ class PluginConfigRouter(BaseRouter):
     - POST /api/config-plugin/{plugin_name}/reload - 热重载指定插件的配置
     """
 
-    router_name: str = "config-plugin"
-    router_description: str = "插件配置 API"
+    name: str = "config-plugin"
+    description: str = "插件配置 API"
     custom_route_path: str = "/webui/api/config-plugin"
     cors_origins: list[str] = ["*"]
 

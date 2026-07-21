@@ -23,8 +23,8 @@ logger = get_logger("mcp_config_router")
 class McpConfigRouter(BaseRouter):
     """MCP 配置路由。"""
 
-    router_name: str = "config-mcp"
-    router_description: str = "MCP 配置 API"
+    name: str = "config-mcp"
+    description: str = "MCP 配置 API"
     custom_route_path: str = "/webui/api/config-mcp"
     cors_origins: list[str] = ["*"]
 

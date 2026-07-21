@@ -25,8 +25,8 @@ logger = get_logger("system_router")
 class SystemRouter(BaseRouter):
     """系统控制 Router 组件。"""
 
-    router_name: str = "system"
-    router_description: str = "Bot 系统控制接口"
+    name: str = "system"
+    description: str = "Bot 系统控制接口"
     custom_route_path: str = "/webui/api/system"
     cors_origins: list[str] = ["*"]
 
