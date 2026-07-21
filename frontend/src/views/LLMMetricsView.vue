@@ -1,23 +1,23 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import AppShell from '../../components/common/AppShell.vue'
-import Icon from '../../components/common/Icon.vue'
-import TokenUsageChart from '../../components/llm-metrics/TokenUsageChart.vue'
-import ModelRankingChart from '../../components/llm-metrics/ModelRankingChart.vue'
-import { useI18n } from '../../utils/i18n'
+import AppShell from '../components/common/AppShell.vue'
+import Icon from '../components/common/Icon.vue'
+import TokenUsageChart from '../components/llm-metrics/TokenUsageChart.vue'
+import ModelRankingChart from '../components/llm-metrics/ModelRankingChart.vue'
+import { useI18n } from '../utils/i18n'
 import {
   getLastHoursSummary,
   getOverview,
   getRecentRequestsByTime,
   listStreams,
-} from '../../api/modules/llm-metrics'
+} from '../api/modules/llm-metrics'
 import type {
   LLMMetricsOverview,
   LLMModelMetrics,
   LLMRecentRequest,
   LLMRequestMetrics,
   LLMStreamMetrics,
-} from '../../api/types/llm-metrics'
+} from '../api/types/llm-metrics'
 
 const { t, locale } = useI18n()
 

@@ -48,7 +48,7 @@ const router = createRouter({
     {
       path: '/llm-metrics',
       name: 'llm-metrics',
-      component: () => import('../views/llm-metrics/LLMMetricsView.vue'),
+      component: () => import('../views/LLMMetricsView.vue'),
       meta: { requiresAuth: true, title: 'LLM 统计', icon: 'material-symbols:bar-chart-rounded' },
     },
     {
