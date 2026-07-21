@@ -15,6 +15,16 @@ import { getLogFiles, getLogContent } from '../api/modules/log'
 import { API_BASE_URL } from '../api/config'
 import type { RealtimeLogEntry, LogFileInfo, LogContentResponse, StructuredLogLine } from '../api/types/log'
 
+/** 带预计算字段的实时日志条目，用于虚拟滚动与稳定 key。 */
+interface DisplayLogEntry extends RealtimeLogEntry {
+  /** 全局自增 id，作为 v-for key、行高缓存键、选中集合键。 */
+  __id: number
+  /** 预计算 levelColor 结果，避免每行重渲染时重复调用。 */
+  __color: string
+  /** 预计算 levelBg 结果。 */
+  __bg: string
+}
+
 type WsStatus = 'disconnected' | 'connecting' | 'connected'
 type HistoryLoadMode = 'replace' | 'prepend' | 'append'
 type HistoryMeta = Omit<LogContentResponse, 'content' | 'entries' | 'total_matches' | 'query'>
@@ -24,7 +34,7 @@ const { t, locale } = useI18n()
 
 const activeTab = ref<'realtime' | 'history'>('realtime')
 
-const realtimeLogs = ref<RealtimeLogEntry[]>([])
+const realtimeLogs = ref<DisplayLogEntry[]>([])
 const wsStatus = ref<WsStatus>('disconnected')
 const autoScroll = ref(true)
 const atBottom = ref(true)
@@ -36,11 +46,33 @@ const logContainerRef = ref<HTMLElement | null>(null)
 const lastRealtimeAt = ref<string>('')
 const maxLogEntries = 2000
 
-const selectedLogKeys = ref<Set<string>>(new Set())
+// 虚拟滚动参数
+const ESTIMATED_ROW_HEIGHT = 30
+const VIRTUAL_BUFFER = 6
+const ROW_GAP = 2.4
+const rowHeights = ref<Map<number, number>>(new Map())
+const scrollTop = ref(0)
+const viewportHeight = ref(0)
+let rowResizeObserver: ResizeObserver | null = null
+
+// 触摸能力判定：设备只要有 coarse 输入（手指/触控笔）就启用左滑选中，与视口宽度无关。
+// 桌面端纯鼠标设备 any-pointer: coarse 不匹配，touch 事件也不会触发，不会误启用。
+const isTouchDevice = ref(false)
+let touchMediaQuery: MediaQueryList | null = null
+let touchMediaHandler: ((e: MediaQueryListEvent) => void) | null = null
+let viewportResizeObserver: ResizeObserver | null = null
+
+// WS 消息批处理（RAF 合并）
+let pendingLogs: DisplayLogEntry[] = []
+let flushRafId: number | null = null
+
+let logIdCounter = 0
+
+const selectedLogKeys = ref<Set<number>>(new Set())
 const anchorIndex = ref<number | null>(null)
-const swipeState = ref<{ startX: number; startY: number; key: string; idx: number } | null>(null)
+const swipeState = ref<{ startX: number; startY: number; key: number; idx: number } | null>(null)
 const swipeOffset = ref(0)
-const swipeKey = ref<string | null>(null)
+const swipeKey = ref<number | null>(null)
 let suppressClickUntil = 0
 
 const logFiles = ref<LogFileInfo[]>([])
@@ -84,20 +116,80 @@ const filteredLogs = computed(() => {
   })
 })
 
+// 虚拟滚动：累积高度表，每行高度取实测缓存，未测量则用估算值，行间额外留 ROW_GAP 间隔。
+const offsets = computed(() => {
+  const logs = filteredLogs.value
+  const heights = rowHeights.value
+  const n = logs.length
+  const arr = new Float32Array(n + 1)
+  arr[0] = 0
+  let acc = 0
+  for (let i = 0; i < n; i++) {
+    acc += heights.get(logs[i].__id) ?? ESTIMATED_ROW_HEIGHT
+    if (i < n - 1) acc += ROW_GAP
+    arr[i + 1] = acc
+  }
+  return arr
+})
+
+const totalLogHeight = computed(() => {
+  const arr = offsets.value
+  return arr.length > 0 ? arr[arr.length - 1] : 0
+})
+
+function findStartIndex(top: number): number {
+  const arr = offsets.value
+  const len = arr.length - 1
+  if (len <= 0) return 0
+  let lo = 0, hi = len
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (arr[mid + 1] <= top) lo = mid + 1
+    else hi = mid
+  }
+  return Math.min(lo, Math.max(0, len - 1))
+}
+
+function findEndIndex(bottom: number): number {
+  const arr = offsets.value
+  const len = arr.length - 1
+  if (len <= 0) return 0
+  let lo = 0, hi = len
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (arr[mid] < bottom) lo = mid + 1
+    else hi = mid
+  }
+  return Math.min(lo, len)
+}
+
+const visibleRange = computed(() => {
+  const len = filteredLogs.value.length
+  if (len === 0 || viewportHeight.value === 0) return { start: 0, end: 0 }
+  const startTop = Math.max(0, scrollTop.value - VIRTUAL_BUFFER * ESTIMATED_ROW_HEIGHT)
+  const endBottom = scrollTop.value + viewportHeight.value + VIRTUAL_BUFFER * ESTIMATED_ROW_HEIGHT
+  const start = Math.max(0, findStartIndex(startTop))
+  const end = Math.min(len, findEndIndex(endBottom))
+  return { start, end: Math.max(end, start) }
+})
+
+const visibleLogs = computed(() => {
+  const { start, end } = visibleRange.value
+  const logs = filteredLogs.value
+  const arr = offsets.value
+  const out: Array<{ entry: DisplayLogEntry; idx: number; top: number }> = []
+  for (let i = start; i < end; i++) {
+    out.push({ entry: logs[i], idx: i, top: arr[i] })
+  }
+  return out
+})
+
 const hasLogSelection = computed(() => selectedLogKeys.value.size > 0)
 
 const allSelected = computed(() => {
   if (filteredLogs.value.length === 0) return false
-  return filteredLogs.value.every((entry) => selectedLogKeys.value.has(logEntryKey(entry)))
+  return filteredLogs.value.every((entry) => selectedLogKeys.value.has(entry.__id))
 })
-
-function logEntryKey(entry: RealtimeLogEntry): string {
-  return `${entry.timestamp}|${entry.logger_name}|${entry.display}|${entry.message}`
-}
-
-function isLogSelected(entry: RealtimeLogEntry): boolean {
-  return selectedLogKeys.value.has(logEntryKey(entry))
-}
 
 function toggleSelectAll(): void {
   if (allSelected.value) {
@@ -106,7 +198,7 @@ function toggleSelectAll(): void {
   }
   const next = new Set(selectedLogKeys.value)
   for (const entry of filteredLogs.value) {
-    next.add(logEntryKey(entry))
+    next.add(entry.__id)
   }
   selectedLogKeys.value = next
   if (anchorIndex.value === null && filteredLogs.value.length > 0) {
@@ -279,7 +371,7 @@ function handleWsMessage(rawData: unknown): void {
     if (typedMsg.type === 'pong') return
 
     if (typedMsg.type === 'history_batch' && Array.isArray(typedMsg.data)) {
-      const entries = typedMsg.data.map(normalizeLogEntry).filter(Boolean) as RealtimeLogEntry[]
+      const entries = typedMsg.data.map(normalizeLogEntry).filter(Boolean) as DisplayLogEntry[]
       realtimeLogs.value = mergeRealtimeLogs(entries, realtimeLogs.value)
       if (autoScroll.value) scrollToBottom()
       return
@@ -300,16 +392,17 @@ function handleWsMessage(rawData: unknown): void {
   }
 }
 
-function normalizeLogEntry(value: unknown): RealtimeLogEntry | null {
+function normalizeLogEntry(value: unknown): DisplayLogEntry | null {
   if (!value || typeof value !== 'object') return null
 
   const raw = value as Partial<RealtimeLogEntry> & Record<string, unknown>
   const message = String(raw.message ?? raw.msg ?? raw.text ?? '')
   if (!message) return null
 
+  const level = String(raw.level ?? 'INFO').toUpperCase()
   return {
     timestamp: String(raw.timestamp ?? raw.time ?? new Date().toLocaleTimeString()),
-    level: String(raw.level ?? 'INFO').toUpperCase(),
+    level,
     logger_name: String(raw.logger_name ?? raw.name ?? ''),
     display: String(raw.display ?? raw.logger_name ?? raw.name ?? ''),
     color: String(raw.color ?? ''),
@@ -317,23 +410,42 @@ function normalizeLogEntry(value: unknown): RealtimeLogEntry | null {
     metadata: typeof raw.metadata === 'object' && raw.metadata !== null
       ? raw.metadata as Record<string, unknown>
       : {},
+    __id: ++logIdCounter,
+    __color: levelColor(level),
+    __bg: levelBg(level),
   }
 }
 
-function mergeRealtimeLogs(prefix: RealtimeLogEntry[], current: RealtimeLogEntry[]): RealtimeLogEntry[] {
+function mergeRealtimeLogs(prefix: DisplayLogEntry[], current: DisplayLogEntry[]): DisplayLogEntry[] {
   return [...prefix, ...current].slice(-maxLogEntries)
 }
 
 function appendRealtimeLog(value: unknown): void {
   const entry = normalizeLogEntry(value)
   if (!entry) return
+  pendingLogs.push(entry)
+  scheduleFlush()
+}
 
-  realtimeLogs.value.push(entry)
-  lastRealtimeAt.value = entry.timestamp
+function scheduleFlush(): void {
+  if (flushRafId !== null) return
+  flushRafId = requestAnimationFrame(() => {
+    flushRafId = null
+    flushPendingLogs()
+  })
+}
 
-  if (realtimeLogs.value.length > maxLogEntries) {
-    realtimeLogs.value = realtimeLogs.value.slice(-maxLogEntries)
-  }
+function flushPendingLogs(): void {
+  if (pendingLogs.length === 0) return
+  const batch = pendingLogs
+  pendingLogs = []
+
+  const merged = realtimeLogs.value.concat(batch)
+  const trimmed = merged.length > maxLogEntries ? merged.slice(merged.length - maxLogEntries) : merged
+  realtimeLogs.value = trimmed
+
+  const last = batch[batch.length - 1]
+  if (last) lastRealtimeAt.value = last.timestamp
 
   if (autoScroll.value) {
     scrollToBottom()
@@ -373,7 +485,14 @@ function closeLevelDropdown(event: MouseEvent): void {
 }
 
 function clearLogs(): void {
+  if (flushRafId !== null) {
+    cancelAnimationFrame(flushRafId)
+    flushRafId = null
+  }
+  pendingLogs = []
   realtimeLogs.value = []
+  rowHeights.value = new Map()
+  scrollTop.value = 0
   lastRealtimeAt.value = ''
   clearLogSelection()
 }
@@ -384,13 +503,13 @@ function clearLogSelection(): void {
   anchorIndex.value = null
 }
 
-function handleLogClick(event: MouseEvent, entry: RealtimeLogEntry, idx: number): void {
+function handleLogClick(event: MouseEvent, entry: DisplayLogEntry, idx: number): void {
   if (Date.now() < suppressClickUntil) return
   if (event.button !== 0) return
   event.preventDefault()
   event.stopPropagation()
 
-  const key = logEntryKey(entry)
+  const key = entry.__id
   const next = new Set(selectedLogKeys.value)
 
   if (event.shiftKey && anchorIndex.value !== null && anchorIndex.value !== idx) {
@@ -398,7 +517,7 @@ function handleLogClick(event: MouseEvent, entry: RealtimeLogEntry, idx: number)
     const end = Math.max(anchorIndex.value, idx)
     for (let i = start; i <= end; i++) {
       const target = filteredLogs.value[i]
-      if (target) next.add(logEntryKey(target))
+      if (target) next.add(target.__id)
     }
   } else {
     if (next.has(key)) next.delete(key)
@@ -409,10 +528,10 @@ function handleLogClick(event: MouseEvent, entry: RealtimeLogEntry, idx: number)
   selectedLogKeys.value = next
 }
 
-function handleLogContextMenu(event: MouseEvent, entry: RealtimeLogEntry): void {
+function handleLogContextMenu(event: MouseEvent, entry: DisplayLogEntry): void {
   event.preventDefault()
   if (Date.now() < suppressClickUntil) return
-  const key = logEntryKey(entry)
+  const key = entry.__id
   if (!selectedLogKeys.value.has(key)) return
   const next = new Set(selectedLogKeys.value)
   next.delete(key)
@@ -430,20 +549,22 @@ function handleRealtimeKeyDown(event: KeyboardEvent): void {
   clearLogSelection()
 }
 
-function handleLogTouchStart(event: TouchEvent, entry: RealtimeLogEntry, idx: number): void {
+function handleLogTouchStart(event: TouchEvent, entry: DisplayLogEntry, idx: number): void {
+  if (!isTouchDevice.value) return
   if (event.touches.length !== 1) return
   const touch = event.touches[0]
   swipeState.value = {
     startX: touch.clientX,
     startY: touch.clientY,
-    key: logEntryKey(entry),
+    key: entry.__id,
     idx,
   }
-  swipeKey.value = logEntryKey(entry)
+  swipeKey.value = entry.__id
   swipeOffset.value = 0
 }
 
 function handleLogTouchMove(event: TouchEvent): void {
+  if (!isTouchDevice.value) return
   if (!swipeState.value || event.touches.length !== 1) return
   const touch = event.touches[0]
   const deltaX = touch.clientX - swipeState.value.startX
@@ -456,7 +577,8 @@ function handleLogTouchMove(event: TouchEvent): void {
   }
 }
 
-function handleLogTouchEnd(event: TouchEvent, entry: RealtimeLogEntry, idx: number): void {
+function handleLogTouchEnd(event: TouchEvent, entry: DisplayLogEntry, idx: number): void {
+  if (!isTouchDevice.value) return
   const state = swipeState.value
   swipeKey.value = null
   swipeOffset.value = 0
@@ -468,7 +590,7 @@ function handleLogTouchEnd(event: TouchEvent, entry: RealtimeLogEntry, idx: numb
   const deltaY = touch.clientY - state.startY
 
   if (deltaX < -28 && Math.abs(deltaX) > Math.abs(deltaY)) {
-    const key = logEntryKey(entry)
+    const key = entry.__id
     const next = new Set(selectedLogKeys.value)
     if (next.has(key)) next.delete(key)
     else next.add(key)
@@ -480,7 +602,7 @@ function handleLogTouchEnd(event: TouchEvent, entry: RealtimeLogEntry, idx: numb
   }
 }
 
-function swipeStyle(key: string): Record<string, string> {
+function swipeStyle(key: number): Record<string, string> {
   if (swipeKey.value !== key) return {}
   if (swipeOffset.value === 0) return {}
   return { transform: `translateX(${swipeOffset.value * 0.5}px)` }
@@ -490,7 +612,7 @@ async function copySelectedLogs(): Promise<void> {
   if (selectedLogKeys.value.size === 0) return
 
   const keys = selectedLogKeys.value
-  const selected = realtimeLogs.value.filter((entry) => keys.has(logEntryKey(entry)))
+  const selected = realtimeLogs.value.filter((entry) => keys.has(entry.__id))
   if (selected.length === 0) {
     toastStore.show(t('log.realtime.copyFailed'), 'error')
     return
@@ -539,9 +661,66 @@ function scrollToBottom(): void {
 function handleRealtimeScroll(): void {
   const container = logContainerRef.value
   if (!container) return
+  scrollTop.value = container.scrollTop
+  if (viewportHeight.value === 0) {
+    viewportHeight.value = container.clientHeight
+  }
   const nearBottom = isNearBottom(container)
   atBottom.value = nearBottom
   autoScroll.value = nearBottom
+}
+
+function setupRowResizeObserver(): void {
+  if (rowResizeObserver) return
+  if (typeof ResizeObserver === 'undefined') return
+  rowResizeObserver = new ResizeObserver((entries) => {
+    const current = rowHeights.value
+    let changed = false
+    const next = new Map(current)
+    for (const ent of entries) {
+      const target = ent.target as HTMLElement
+      const id = Number(target.dataset.logId)
+      if (!Number.isFinite(id)) continue
+      // 用 border-box 高度（含 padding），保证行间距内化到 padding 时 offset 计算准确
+      const h = target.getBoundingClientRect().height
+      if (h <= 0) continue
+      const cached = next.get(id)
+      if (cached === undefined || Math.abs(cached - h) > 0.5) {
+        next.set(id, h)
+        changed = true
+      }
+    }
+    if (changed) {
+      rowHeights.value = next
+    }
+  })
+}
+
+function setupViewportResizeObserver(): void {
+  if (viewportResizeObserver) return
+  if (typeof ResizeObserver === 'undefined') return
+  const container = logContainerRef.value
+  if (!container) return
+  viewportResizeObserver = new ResizeObserver((entries) => {
+    for (const ent of entries) {
+      const h = ent.contentRect.height
+      if (h > 0 && h !== viewportHeight.value) {
+        viewportHeight.value = h
+      }
+    }
+  })
+  viewportResizeObserver.observe(container)
+}
+
+function observeRow(el: HTMLElement | null, id: number): void {
+  if (!el || !rowResizeObserver) return
+  el.dataset.logId = String(id)
+  rowResizeObserver.observe(el)
+}
+
+function unobserveRow(el: HTMLElement | null): void {
+  if (!el || !rowResizeObserver) return
+  rowResizeObserver.unobserve(el)
 }
 
 function isNearTop(container: HTMLElement, threshold = 72): boolean {
@@ -742,14 +921,62 @@ watch(activeTab, (tab) => {
   }
 })
 
+watch(totalLogHeight, () => {
+  if (!autoScroll.value || !atBottom.value) return
+  const container = logContainerRef.value
+  if (!container) return
+  container.scrollTop = container.scrollHeight
+})
+
 onMounted(() => {
+  setupRowResizeObserver()
   connectWs()
   document.addEventListener('click', closeLevelDropdown)
   window.addEventListener('keydown', handleRealtimeKeyDown)
+  const container = logContainerRef.value
+  if (container) {
+    if (viewportHeight.value === 0) viewportHeight.value = container.clientHeight
+    if (scrollTop.value === 0) scrollTop.value = container.scrollTop
+    setupViewportResizeObserver()
+  }
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    touchMediaQuery = window.matchMedia('(any-pointer: coarse)')
+    isTouchDevice.value = touchMediaQuery.matches
+    touchMediaHandler = (e: MediaQueryListEvent) => {
+      isTouchDevice.value = e.matches
+    }
+    if (typeof touchMediaQuery.addEventListener === 'function') {
+      touchMediaQuery.addEventListener('change', touchMediaHandler)
+    } else if (typeof (touchMediaQuery as MediaQueryList).addListener === 'function') {
+      ;(touchMediaQuery as MediaQueryList).addListener(touchMediaHandler)
+    }
+  }
 })
 
 onUnmounted(() => {
   disconnectWs()
+  if (flushRafId !== null) {
+    cancelAnimationFrame(flushRafId)
+    flushRafId = null
+  }
+  pendingLogs = []
+  if (rowResizeObserver) {
+    rowResizeObserver.disconnect()
+    rowResizeObserver = null
+  }
+  if (viewportResizeObserver) {
+    viewportResizeObserver.disconnect()
+    viewportResizeObserver = null
+  }
+  if (touchMediaQuery && touchMediaHandler) {
+    if (typeof touchMediaQuery.removeEventListener === 'function') {
+      touchMediaQuery.removeEventListener('change', touchMediaHandler)
+    } else if (typeof (touchMediaQuery as MediaQueryList).removeListener === 'function') {
+      ;(touchMediaQuery as MediaQueryList).removeListener(touchMediaHandler)
+    }
+    touchMediaQuery = null
+    touchMediaHandler = null
+  }
   document.removeEventListener('click', closeLevelDropdown)
   window.removeEventListener('keydown', handleRealtimeKeyDown)
 })
@@ -896,33 +1123,39 @@ onUnmounted(() => {
             </div>
           </div>
 
+          <div v-if="isTouchDevice" class="realtime-hint">{{ t('log.realtime.swipeHint') }}</div>
+
           <div class="log-area">
             <div class="log-container" ref="logContainerRef" @scroll="handleRealtimeScroll" @touchmove.passive="handleLogTouchMove">
               <div v-if="filteredLogs.length === 0" class="empty-state">
                 <Icon icon="material-symbols:terminal-rounded" width="48" height="48" />
                 <p>{{ wsStatus === 'connected' ? t('log.realtime.waitingLogs') : t('log.realtime.serviceDisconnected') }}</p>
               </div>
-              <div v-else class="log-entries">
+              <div v-else class="log-entries" :style="{ height: totalLogHeight + 'px' }">
                 <div
-                  v-for="(entry, idx) in filteredLogs"
-                  :key="`${entry.timestamp}-${idx}`"
+                  v-for="item in visibleLogs"
+                  :key="item.entry.__id"
                   class="log-entry log-entry-selectable"
-                  :class="{ selected: isLogSelected(entry) }"
+                  :class="{ selected: selectedLogKeys.has(item.entry.__id) }"
                   :style="{
-                    '--entry-level-color': levelColor(entry.level),
-                    '--entry-level-bg': levelBg(entry.level),
-                    ...swipeStyle(logEntryKey(entry)),
+                    '--entry-level-color': item.entry.__color,
+                    '--entry-level-bg': item.entry.__bg,
+                    top: item.top + 'px',
+                    ...swipeStyle(item.entry.__id),
                   }"
-                  @click="handleLogClick($event, entry, idx)"
-                  @contextmenu.prevent="handleLogContextMenu($event, entry)"
-                  @touchstart.passive="handleLogTouchStart($event, entry, idx)"
-                  @touchend.passive="handleLogTouchEnd($event, entry, idx)"
+                  :data-log-id="item.entry.__id"
+                  @click="handleLogClick($event, item.entry, item.idx)"
+                  @contextmenu.prevent="handleLogContextMenu($event, item.entry)"
+                  @touchstart.passive="handleLogTouchStart($event, item.entry, item.idx)"
+                  @touchend.passive="handleLogTouchEnd($event, item.entry, item.idx)"
+                  @vue:mounted="(e: any) => observeRow(e.el as HTMLElement | null, item.entry.__id)"
+                  @vue:unmounted="(e: any) => unobserveRow(e.el as HTMLElement | null)"
                 >
                   <span class="shell-prompt">❯</span>
-                  <span class="log-time">{{ formatTimestamp(entry.timestamp) }}</span>
-                  <span class="log-level-badge">{{ entry.level }}</span>
-                  <span class="log-logger">{{ entry.display || entry.logger_name || 'core' }}</span>
-                  <span class="log-message">{{ entry.message }}</span>
+                  <span class="log-time">{{ formatTimestamp(item.entry.timestamp) }}</span>
+                  <span class="log-level-badge">{{ item.entry.level }}</span>
+                  <span class="log-logger">{{ item.entry.display || item.entry.logger_name || 'core' }}</span>
+                  <span class="log-message">{{ item.entry.message }}</span>
                 </div>
               </div>
             </div>
@@ -1593,6 +1826,16 @@ input:focus-visible {
   white-space: nowrap;
 }
 
+.realtime-hint {
+  flex-shrink: 0;
+  padding: 0 .3rem;
+  color: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 72%, transparent);
+  font-size: .66rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+  user-select: none;
+}
+
 .log-area {
   position: relative;
   flex: 1 1 0;
@@ -1634,22 +1877,25 @@ input:focus-visible {
 }
 
 .log-entries {
-  display: flex;
-  flex-direction: column;
-  gap: .15rem;
+  position: relative;
   padding: .55rem;
+  overflow: hidden;
 }
 
 .log-entry {
+  position: absolute;
+  left: .55rem;
+  right: .55rem;
   padding: .22rem .42rem;
   border-radius: 12px;
   background: var(--entry-level-bg);
-  transition: background .12s ease, transform .12s ease, box-shadow .12s ease;
+  box-sizing: border-box;
+  transition: background .12s ease, box-shadow .12s ease, transform .12s ease;
 }
 
 .log-entry:hover {
-  transform: translateX(2px);
   background: color-mix(in srgb, var(--entry-level-color) 13%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--entry-level-color) 24%, transparent);
 }
 
 .log-entry-selectable {
@@ -1665,7 +1911,6 @@ input:focus-visible {
 }
 
 .log-entry.selected:hover {
-  transform: translateX(2px);
   background: color-mix(in srgb, var(--entry-level-color) 32%, transparent);
 }
 
