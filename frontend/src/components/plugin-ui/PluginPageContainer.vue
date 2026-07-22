@@ -3,12 +3,12 @@
  * 插件页面渲染容器组件（双轨分发）。
  *
  * 根据 schema.mode 选择渲染 XmlRenderer 或 HtmlSandbox。
- * XML 模式直接渲染；HTML 模式仍为占位（Phase F-4）。
  */
 import { computed } from 'vue'
 import type { PageSchemaResponse, PageDetail } from '../../api/types/plugin-ui'
 import type { PluginUIVarStore } from '../../stores/plugin-ui-vars'
 import XmlRenderer from './XmlRenderer.vue'
+import HtmlSandbox from './HtmlSandbox.vue'
 
 const props = defineProps<{
   /** 页面详情 */
@@ -63,11 +63,17 @@ const modeLabel = computed(() => {
           :plugin-name="detail.plugin_name"
           :is-mobile="isMobile"
         />
-        <!-- HTML 模式占位 -->
+        <!-- HTML 模式：使用 HtmlSandbox 渲染 -->
+        <HtmlSandbox
+          v-else-if="schema.mode === 'html' && schema.assets_urls && store"
+          :detail="detail"
+          :schema="schema"
+          :store="store"
+        />
+        <!-- 既无 XML 也无 assets -->
         <div v-else class="plugin-page-placeholder">
-          <span class="material-symbols-rounded placeholder-icon">web</span>
-          <p class="placeholder-text">HTML 沙箱将在 Phase F-4 接入</p>
-          <pre class="placeholder-preview">Assets: {{ JSON.stringify(schema.assets_urls, null, 2) }}</pre>
+          <span class="material-symbols-rounded placeholder-icon">error_outline</span>
+          <p class="placeholder-text">页面缺少可渲染的内容</p>
         </div>
       </div>
 
@@ -85,11 +91,17 @@ const modeLabel = computed(() => {
           <span class="material-symbols-rounded placeholder-icon">code</span>
           <p class="placeholder-text">XML 渲染器需要变量池 Store</p>
         </div>
-        <!-- HTML 模式占位 -->
+        <!-- HTML 模式：使用 HtmlSandbox 渲染 -->
+        <HtmlSandbox
+          v-else-if="schema.mode === 'html' && schema.assets_urls && store"
+          :detail="detail"
+          :schema="schema"
+          :store="store"
+        />
+        <!-- HTML 模式但缺少 assets -->
         <div v-else class="plugin-page-placeholder">
           <span class="material-symbols-rounded placeholder-icon">web</span>
-          <p class="placeholder-text">HTML 沙箱将在 Phase F-4 接入</p>
-          <pre class="placeholder-preview">Assets: {{ JSON.stringify(schema.assets_urls, null, 2) }}</pre>
+          <p class="placeholder-text">HTML 模式需要 assets_urls 资源</p>
         </div>
       </template>
     </div>

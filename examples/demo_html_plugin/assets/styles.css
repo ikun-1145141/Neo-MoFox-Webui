@@ -1,0 +1,103 @@
+/**
+ * Demo HTML Plugin - 插件专属样式
+ *
+ * 此样式由 HTML 沙箱通过 <link> 注入到 Shadow DOM 中。
+ * - 仅在当前插件的 Shadow DOM 内生效，不污染主站
+ * - MD3 CSS 变量（--md-sys-color-*）天然穿透 Shadow DOM，可直接使用
+ * - 也可使用 shared-motion.css 中定义的 --md-sys-motion-* 变量与 keyframes
+ */
+
+:host {
+  /* 覆盖 :host 默认样式，让根容器自然撑开 */
+  display: block;
+  padding: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  font-family: inherit;
+  color: var(--md-sys-color-on-surface, #1a1b20);
+}
+
+/* 自定义滚动条样式 */
+:host {
+  scrollbar-width: thin;
+  scrollbar-color: var(--md-sys-color-outline-variant, #cac4d0) transparent;
+}
+
+/* sys-input / sys-select 在 hbox 中自适应 */
+hbox sys-input,
+hbox sys-textarea,
+hbox sys-select {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 计数器显示加粗放大 */
+#counter-display {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--md-sys-color-primary, #0058bd);
+  font-variant-numeric: tabular-nums;
+  min-width: 60px;
+  text-align: center;
+}
+
+/* 任务表格容器加最小高度避免空态抖动 */
+#task-table {
+  min-height: 200px;
+}
+
+/* 图表容器加边框圆角（sys-chart 自带，这里仅微调） */
+#metrics-chart {
+  border-radius: 16px;
+}
+
+/* 事件日志区固定高度，避免内容跳动 */
+#event-log {
+  min-height: 1.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--md-sys-color-surface-container-low, #f3f3fa);
+  border-radius: 8px;
+  word-break: break-all;
+}
+
+/* dialog 内的输入项间距 */
+sys-dialog vbox {
+  width: 100%;
+  min-width: 400px;
+}
+
+/* 响应式：小屏幕下 grid 改为单列 */
+@media (max-width: 768px) {
+  :host {
+    padding: 1rem;
+  }
+
+  grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  hbox {
+    flex-wrap: wrap;
+  }
+}
+
+/* 自定义动画：计数器变化时的脉冲效果 */
+.counter-pulse {
+  animation: counter-pulse 0.3s var(--md-sys-motion-emphasized, cubic-bezier(0.2, 0, 0, 1));
+}
+
+@keyframes counter-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); color: var(--md-sys-color-tertiary, #705575); }
+  100% { transform: scale(1); }
+}
+
+/* 事件日志高亮动画 */
+.event-log-flash {
+  animation: event-flash 0.5s var(--md-sys-motion-emphasized, cubic-bezier(0.2, 0, 0, 1));
+}
+
+@keyframes event-flash {
+  0% { background: var(--md-sys-color-primary-container, #d9e2ff); }
+  100% { background: var(--md-sys-color-surface-container-low, #f3f3fa); }
+}

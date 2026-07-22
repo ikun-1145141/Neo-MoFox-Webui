@@ -1,0 +1,22 @@
+{
+    "name": "demo_html_plugin",
+    "version": "1.0.0",
+    "description": "HTML 前端 UI 演示插件，展示 sys.* 桥接对象与 Web Components 的命令式用法",
+    "author": "MoFox Team",
+    "dependencies": {
+        "plugins": ["neo-mofox-webui"],
+        "components": ["neo-mofox-webui:service:plugin_ui"]
+    },
+    "include": [
+        {
+            "component_type": "router",
+            "component_name": "demo_html_router",
+            "dependencies": [],
+            "enabled": true
+        }
+    ],
+    "entry_point": "plugin.py",
+    "min_core_version": "1.0.0",
+    "python_dependencies": [],
+    "dependencies_required": true
+}

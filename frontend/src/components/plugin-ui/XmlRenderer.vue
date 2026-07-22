@@ -8,9 +8,9 @@
 import { ref, computed, watch, onUnmounted, type VNode } from 'vue'
 import { useRouter } from 'vue-router'
 import type { PluginUIVarStore } from '../../stores/plugin-ui-vars'
-import { parseXml, processDefinitions, renderElementToVNodes, type XmlRenderContext } from '../../utils/plugin-ui/xml-renderer'
+import { parseXml, processDefinitions, renderElementToVNodes, type XmlRenderContext } from '../../utils/plugin-ui/xml/xml-renderer'
 import { ApiTemplateEngine } from '../../utils/plugin-ui/api-template-engine'
-import type { PipeContext } from '../../utils/plugin-ui/pipe-executor'
+import type { PipeContext } from '../../utils/plugin-ui/xml/pipe-executor'
 import { useToastStore } from '../../utils/toast'
 import { useDialogStore } from '../../utils/dialog'
 

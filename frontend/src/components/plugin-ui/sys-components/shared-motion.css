@@ -1,0 +1,166 @@
+/**
+ * MD3 Motion 共享动画变量与通用 keyframes。
+ *
+ * 在 sys-components/index.ts 顶部 side-effect import，
+ * 使所有 Sys*.vue 组件（以及 defineCustomElement 派生的自定义元素）
+ * 都能引用同一套 motion token。
+ *
+ * CSS 变量天然穿透 Shadow DOM 边界，因此 defineCustomElement
+ * 派生的自定义元素即使在 Shadow DOM 内也能获取这些变量。
+ */
+
+:root {
+  /* MD3 easing curves */
+  --md-sys-motion-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --md-sys-motion-decelerated: cubic-bezier(0, 0, 0, 1);
+  --md-sys-motion-accelerated: cubic-bezier(0.3, 0, 1, 1);
+  --md-sys-motion-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --md-sys-motion-linear: linear;
+
+  /* MD3 duration tokens */
+  --md-sys-motion-duration-x-short: 100ms;
+  --md-sys-motion-duration-short: 150ms;
+  --md-sys-motion-duration-medium: 250ms;
+  --md-sys-motion-duration-long: 400ms;
+  --md-sys-motion-duration-x-long: 600ms;
+}
+
+/* === 通用 keyframes === */
+
+@keyframes sys-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes sys-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes sys-scale-in {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes sys-scale-out {
+  from { transform: scale(1); opacity: 1; }
+  to { transform: scale(0.95); opacity: 0; }
+}
+
+@keyframes sys-slide-down {
+  from { transform: translateY(-8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes sys-slide-up {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes sys-slide-left {
+  from { transform: translateX(8px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes sys-slide-right {
+  from { transform: translateX(-8px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes sys-shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-3px); }
+  40%, 60% { transform: translateX(3px); }
+}
+
+@keyframes sys-ripple {
+  to { transform: scale(2.5); opacity: 0; }
+}
+
+@keyframes sys-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes sys-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes sys-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+
+/* === Vue <Transition> 命名动画工具类 === */
+
+.sys-fade-enter-active,
+.sys-fade-leave-active {
+  transition: opacity var(--md-sys-motion-duration-short) var(--md-sys-motion-standard);
+}
+.sys-fade-enter-from,
+.sys-fade-leave-to {
+  opacity: 0;
+}
+
+.sys-scale-enter-active,
+.sys-scale-leave-active {
+  transition:
+    opacity var(--md-sys-motion-duration-short) var(--md-sys-motion-standard),
+    transform var(--md-sys-motion-duration-medium) var(--md-sys-motion-emphasized);
+}
+.sys-scale-enter-from,
+.sys-scale-leave-to {
+  opacity: 0;
+  transform: scale(0.95);
+}
+
+.sys-slide-down-enter-active,
+.sys-slide-down-leave-active {
+  transition:
+    opacity var(--md-sys-motion-duration-short) var(--md-sys-motion-standard),
+    transform var(--md-sys-motion-duration-medium) var(--md-sys-motion-emphasized);
+}
+.sys-slide-down-enter-from,
+.sys-slide-down-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+/* === 通用 spinner === */
+
+.sys-spinner {
+  display: inline-block;
+  animation: sys-spin 1s var(--md-sys-motion-linear) infinite;
+}
+
+/* === 通用 ripple 容器 === */
+
+.sys-ripple-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.sys-ripple-effect {
+  position: absolute;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.3;
+  pointer-events: none;
+  transform: scale(0);
+  animation: sys-ripple var(--md-sys-motion-duration-medium) var(--md-sys-motion-standard) forwards;
+}
+
+/* === 可访问性：尊重 prefers-reduced-motion === */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

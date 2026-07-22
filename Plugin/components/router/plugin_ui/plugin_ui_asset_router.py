@@ -82,7 +82,7 @@ class PluginUIAssetRouter(BaseRouter):
                     status_code=404, detail=f"no {variant} HTML assets"
                 )
 
-            return self._serve_file(assets.entry_html)
+            return self._serve_file(assets.entry_html, page.plugin_root)
 
         @self.app.get(
             "/{plugin_name}/{page_id}/{variant}/style/{index:int}",
@@ -109,7 +109,7 @@ class PluginUIAssetRouter(BaseRouter):
                     status_code=404, detail=f"style index {index} out of range"
                 )
 
-            return self._serve_file(assets.styles[index])
+            return self._serve_file(assets.styles[index], page.plugin_root)
 
         @self.app.get(
             "/{plugin_name}/{page_id}/{variant}/script/{index:int}",
@@ -136,7 +136,7 @@ class PluginUIAssetRouter(BaseRouter):
                     status_code=404, detail=f"script index {index} out of range"
                 )
 
-            return self._serve_file(assets.scripts[index])
+            return self._serve_file(assets.scripts[index], page.plugin_root)
 
         @self.app.get(
             "/{plugin_name}/{page_id}/{variant}/asset/{rel_path:path}",
@@ -163,15 +163,13 @@ class PluginUIAssetRouter(BaseRouter):
                     status_code=404, detail="assets_dir not declared"
                 )
 
-            # 解析 assets_dir 绝对路径
-            assets_dir = Path(assets.assets_dir).resolve()
-            cwd = Path.cwd().resolve()
-            if not assets_dir.is_relative_to(cwd):
-                raise HTTPException(status_code=403, detail="path traversal blocked")
-
             # 在 assets_dir 内安全解析子路径
+            # assets_dir 自身已在注册时校验过位于 plugin_root 内
             try:
-                abs_path = resolve_asset_in_dir(assets_dir, rel_path)
+                assets_dir = Path(assets.assets_dir)
+                abs_path = resolve_asset_in_dir(
+                    assets_dir, rel_path, page.plugin_root
+                )
             except PermissionError:
                 logger.warning(
                     f"路径穿越尝试: {plugin_name}/{page_id}/{variant}/asset/{rel_path}"
@@ -211,13 +209,15 @@ class PluginUIAssetRouter(BaseRouter):
             return None
         return None
 
-    def _serve_file(self, rel_path: str) -> Response:
+    def _serve_file(self, rel_path: str, plugin_root: Path) -> Response:
         """安全地提供文件响应。
 
         执行运行时路径穿越防御（双保险：注册时已校验一次）。
+        所有相对路径均相对于 plugin_root 解析。
 
         Args:
-            rel_path: 相对于 CWD 的文件路径
+            rel_path: 相对于插件根目录的文件路径
+            plugin_root: 插件根目录绝对路径
 
         Returns:
             FileResponse
@@ -226,7 +226,7 @@ class PluginUIAssetRouter(BaseRouter):
             HTTPException: 文件不存在或路径穿越
         """
         try:
-            abs_path = resolve_safe(rel_path)
+            abs_path = resolve_safe(rel_path, plugin_root)
         except PermissionError:
             logger.warning(f"路径穿越尝试: {rel_path}")
             raise HTTPException(status_code=403, detail="path traversal blocked")

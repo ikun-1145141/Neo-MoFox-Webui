@@ -30,7 +30,7 @@ class PageMode(str, Enum):
 class HTMLAssets(BaseModel):
     """HTML 轨资源声明。
 
-    所有路径相对于主程序工作目录（CWD）。
+    所有路径相对于「插件根目录」（由 plugin_name 通过插件系统 API 解析得到）。
 
     Attributes:
         entry_html: HTML 入口文件相对路径
@@ -39,7 +39,7 @@ class HTMLAssets(BaseModel):
         assets_dir: 静态资源根目录；为空时不暴露任何静态资源
     """
 
-    entry_html: str = Field(..., description="相对于 CWD 的 HTML 入口路径")
+    entry_html: str = Field(..., description="相对于插件根目录的 HTML 入口路径")
     styles: list[str] = Field(default_factory=list, description="CSS 文件相对路径")
     scripts: list[str] = Field(default_factory=list, description="JS 文件相对路径")
     assets_dir: str | None = Field(default=None, description="静态资源根目录")

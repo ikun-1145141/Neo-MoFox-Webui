@@ -54,8 +54,8 @@ class DemoUIRouter(BaseRouter):
     提供条目的增删查改接口，供 XML 前端的 API 模板调用。
     """
 
-    router_name: str = "demo_ui_router"
-    router_description: str = "Demo UI 前端交互 API"
+    name: str = "demo_ui_router"
+    description: str = "Demo UI 前端交互 API"
 
     dependencies: list[str] = []
 

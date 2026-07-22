@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from src.app.plugin_system.api.log_api import get_logger  # type: ignore
+from src.app.plugin_system.api.plugin_api import get_plugin_path  # type: ignore
 from src.core.components.base.service import BaseService  # type: ignore
 
 from ...managers.plugin_ui_manager import get_plugin_ui_manager
@@ -81,6 +82,11 @@ class PluginUIService(BaseService):
         - mode="xml" 时只能传 mobile_xml，不能传 mobile_assets
         - mode="html" 时只能传 mobile_assets，不能传 mobile_xml
 
+        HTML 模式下，所有资源路径以「插件根目录」为基准——
+        系统通过 plugin_name 调用插件系统 API（get_plugin_path）解析出
+        插件根目录的绝对路径，再以此为基准对相对路径做路径穿越校验，
+        确保资源不会跳出插件根目录树。
+
         Args:
             plugin_name: 调用方插件名称
             page_id: 同插件内唯一标识（小写字母、数字、连字符）
@@ -95,6 +101,7 @@ class PluginUIService(BaseService):
                  "styles": ["path/to/style.css"],
                  "scripts": ["path/to/main.js"],
                  "assets_dir": "path/to/assets"}
+                所有路径相对于「插件根目录」（由 plugin_name 解析）
             mobile_xml: XML 模式下的移动端 XML 字符串（可选，空则 fallback 到桌面端）
             mobile_assets: HTML 模式下的移动端资源声明 dict（可选，结构同 assets）
 
@@ -102,7 +109,8 @@ class PluginUIService(BaseService):
             加工后的 RegisteredPage 实例
 
         Raises:
-            ValueError: 参数校验失败（含 mode 非法、mode 与移动端参数不匹配等）
+            ValueError: 参数校验失败（含 mode 非法、mode 与移动端参数不匹配、
+                插件未加载/路径不可用等）
             XMLValidationError: XML 校验失败
             AssetPathError: 路径不合法/穿越
             AssetMissingError: 文件不存在
@@ -143,11 +151,17 @@ class PluginUIService(BaseService):
             f"收到注册请求: {metadata.plugin_name}/{metadata.page_id}"
         )
 
-        # 执行校验
-        PluginUIValidators.validate(metadata)
+        # 确定插件根目录
+        if metadata.mode == PageMode.HTML:
+            # HTML 模式：通过插件名查找插件根目录，再以此作为路径解析基准
+            plugin_root = self._resolve_plugin_root(metadata.plugin_name)
+        else:
+            # XML 模式不读取本地资源，无需 plugin_root；
+            # 仍传一个占位值以满足 RegisteredPage 字段约束
+            plugin_root = Path.cwd().resolve()
 
-        # 确定插件根目录（使用 CWD 作为基准）
-        plugin_root = Path.cwd().resolve()
+        # 执行校验（HTML 模式下校验器会以 plugin_root 为基准做路径穿越检查）
+        PluginUIValidators.validate(metadata, plugin_root)
 
         # 注册到 Manager
         page = await self._manager.register(metadata, plugin_root)
@@ -156,6 +170,34 @@ class PluginUIService(BaseService):
             f"(mode={metadata.mode.value})"
         )
         return page
+
+    @staticmethod
+    def _resolve_plugin_root(plugin_name: str) -> Path:
+        """通过插件名查找插件根目录绝对路径。
+
+        HTML 模式下所有资源相对路径均以此目录为基准。
+        找不到插件时抛 ValueError，让注册流程提前失败。
+
+        Args:
+            plugin_name: 插件名称
+
+        Returns:
+            插件根目录的绝对路径
+
+        Raises:
+            ValueError: 插件未加载或路径不可用
+        """
+        raw_path = get_plugin_path(plugin_name)
+        if not raw_path:
+            raise ValueError(
+                f"无法解析插件根目录：插件 '{plugin_name}' 未加载或未注册路径"
+            )
+        resolved = Path(raw_path).resolve()
+        if not resolved.is_dir():
+            raise ValueError(
+                f"插件根目录不存在或不是目录: {raw_path} (插件: {plugin_name})"
+            )
+        return resolved
 
     async def unregister_ui_page(self, plugin_name: str, page_id: str) -> bool:
         """卸载单个插件 UI 页面。

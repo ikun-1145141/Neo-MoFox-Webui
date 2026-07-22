@@ -253,13 +253,15 @@ class PluginUIValidators:
     """
 
     @classmethod
-    def validate(cls, metadata: "PageRegistration") -> None:
+    def validate(cls, metadata: "PageRegistration", plugin_root: Path) -> None:
         """校验页面注册元数据。
 
         根据 mode 分发到对应的校验流程。同时校验移动端 variant（如有）。
+        HTML 模式下所有资源路径均相对于 plugin_root 解析并做路径穿越校验。
 
         Args:
             metadata: 页面注册入参
+            plugin_root: 插件根目录绝对路径（HTML 模式下作为路径解析基准）
 
         Raises:
             XMLValidationError: XML 校验失败
@@ -275,13 +277,13 @@ class PluginUIValidators:
                 cls._validate_xml(metadata.xml)
         elif metadata.mode == PageMode.HTML:
             if metadata.assets:
-                cls._validate_html_assets(metadata.assets)
+                cls._validate_html_assets(metadata.assets, plugin_root)
 
         # 移动版校验（移动端强制跟桌面端同 mode）
         if metadata.mode == PageMode.XML and metadata.mobile_xml:
             cls._validate_xml(metadata.mobile_xml)
         elif metadata.mode == PageMode.HTML and metadata.mobile_assets:
-            cls._validate_html_assets(metadata.mobile_assets)
+            cls._validate_html_assets(metadata.mobile_assets, plugin_root)
 
     # --- XML 校验 ---
 
@@ -588,14 +590,17 @@ class PluginUIValidators:
     # --- HTML 校验 ---
 
     @classmethod
-    def _validate_html_assets(cls, assets: "HTMLAssets") -> None:
+    def _validate_html_assets(
+        cls, assets: "HTMLAssets", plugin_root: Path
+    ) -> None:
         """校验 HTML 模式的资源声明。
 
-        包含：路径穿越校验、文件存在性、文件大小、扩展名白名单、
-        以及 entry_html 中禁止标签扫描。
+        包含：路径穿越校验（相对于 plugin_root）、文件存在性、文件大小、
+        扩展名白名单、以及 entry_html 中禁止标签扫描。
 
         Args:
             assets: HTML 资源声明
+            plugin_root: 插件根目录绝对路径
 
         Raises:
             AssetPathError: 路径不合法
@@ -603,21 +608,21 @@ class PluginUIValidators:
             AssetSizeError: 文件过大
         """
         # 校验 entry_html
-        cls._validate_single_asset(assets.entry_html, "entry_html")
-        cls._scan_html_forbidden_tags(assets.entry_html)
+        cls._validate_single_asset(assets.entry_html, "entry_html", plugin_root)
+        cls._scan_html_forbidden_tags(assets.entry_html, plugin_root)
 
         # 校验 styles
         for i, style_path in enumerate(assets.styles):
-            cls._validate_single_asset(style_path, f"styles[{i}]")
+            cls._validate_single_asset(style_path, f"styles[{i}]", plugin_root)
 
         # 校验 scripts
         for i, script_path in enumerate(assets.scripts):
-            cls._validate_single_asset(script_path, f"scripts[{i}]")
+            cls._validate_single_asset(script_path, f"scripts[{i}]", plugin_root)
 
         # 校验 assets_dir
         if assets.assets_dir:
             try:
-                resolve_safe_dir(assets.assets_dir)
+                resolve_safe_dir(assets.assets_dir, plugin_root)
             except PermissionError as e:
                 raise AssetPathError(
                     f"assets_dir 路径穿越: {assets.assets_dir}"
@@ -628,12 +633,15 @@ class PluginUIValidators:
                 ) from e
 
     @classmethod
-    def _validate_single_asset(cls, rel_path: str, field_name: str) -> None:
+    def _validate_single_asset(
+        cls, rel_path: str, field_name: str, plugin_root: Path
+    ) -> None:
         """校验单个资源文件。
 
         Args:
             rel_path: 相对路径
             field_name: 字段名（用于错误消息）
+            plugin_root: 插件根目录绝对路径
 
         Raises:
             AssetPathError: 路径不合法
@@ -641,7 +649,7 @@ class PluginUIValidators:
             AssetSizeError: 文件过大
         """
         try:
-            abs_path = resolve_safe(rel_path)
+            abs_path = resolve_safe(rel_path, plugin_root)
         except PermissionError as e:
             raise AssetPathError(f"{field_name} 路径穿越: {rel_path}") from e
         except FileNotFoundError as e:
@@ -663,19 +671,22 @@ class PluginUIValidators:
             )
 
     @classmethod
-    def _scan_html_forbidden_tags(cls, entry_html_path: str) -> None:
+    def _scan_html_forbidden_tags(
+        cls, entry_html_path: str, plugin_root: Path
+    ) -> None:
         """扫描 entry HTML 文件中是否包含禁止的标签。
 
         使用简单的正则扫描而非完整 HTML 解析，足以检测明显违规。
 
         Args:
             entry_html_path: entry HTML 的相对路径
+            plugin_root: 插件根目录绝对路径
 
         Raises:
             XMLValidationError: 发现禁止标签
         """
         try:
-            abs_path = resolve_safe(entry_html_path)
+            abs_path = resolve_safe(entry_html_path, plugin_root)
         except (PermissionError, FileNotFoundError):
             # 路径问题已在 _validate_single_asset 中处理
             return
