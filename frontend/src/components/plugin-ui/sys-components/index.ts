@@ -6,9 +6,13 @@
  *
  * - XML 轨：由 `src/utils/plugin-ui/xml/xml-component-registry.ts`
  *   负责把每个 SFC 注册到 XML 标签 → Vue 组件的映射表。
+ *   XML 标签名可不含连字符（如 `vbox`/`card`），因 XML 走 Vue 的 h() 调用，
+ *   不经过 customElements.define()，不受 HTML 自定义元素命名约束。
  * - HTML 轨：由 `src/utils/plugin-ui/html/custom-element-registry.ts`
  *   负责用 `defineCustomElement` 把每个 SFC 包装为自定义元素并
  *   `customElements.define('sys-*', ...)`。
+ *   HTML 自定义元素名必须含连字符，故布局类一律以 `sys-` 前缀注册
+ *   （`sys-vbox` / `sys-card` 等），与 XML 轨裸名一一对应。
  *
  * 本文件本身只做两件事：
  *   1. side-effect import `shared-motion.css`（让 MD3 motion 变量与
@@ -61,10 +65,20 @@ export { default as SysToast } from './SysToast.vue'
 
 // === 类型导出 ===
 
-/** 全部组件标签名（小写），供 registry 使用 */
+/**
+ * HTML 轨自定义元素标签名清单（小写、含连字符）。
+ *
+ * 用于 `custom-element-registry.ts` 调 `customElements.define()`。
+ * XML 轨的裸名清单不在此处维护 —— XML 走 Vue h()，命名不受
+ * 自定义元素规范约束，由 `xml-component-registry.ts` 自持。
+ *
+ * 布局类裸名（vbox/hbox/grid/card/tabs/dialog/divider/spacer）
+ * 在 HTML 轨一律加 `sys-` 前缀，避免 customElements.define 抛 SyntaxError。
+ */
 export const SYS_COMPONENT_TAGS = [
-  // 布局
-  'vbox', 'hbox', 'grid', 'card', 'tabs', 'dialog', 'divider', 'spacer',
+  // 布局（HTML 轨用 sys-* 前缀）
+  'sys-vbox', 'sys-hbox', 'sys-grid', 'sys-card', 'sys-tabs',
+  'sys-dialog', 'sys-divider', 'sys-spacer',
   // 基础
   'sys-text', 'sys-input', 'sys-textarea', 'sys-select', 'sys-switch',
   'sys-slider', 'sys-date-picker', 'sys-button', 'sys-icon-button',
@@ -75,35 +89,3 @@ export const SYS_COMPONENT_TAGS = [
   'sys-toast',
 ] as const
 
-/** 标签名 → 对应 SFC 的导出名（PascalCase） */
-export const SYS_TAG_TO_EXPORT_NAME: Record<string, string> = {
-  // 布局
-  'vbox': 'SysVbox',
-  'hbox': 'SysHbox',
-  'grid': 'SysGrid',
-  'card': 'SysCard',
-  'tabs': 'SysTabs',
-  'dialog': 'SysDialog',
-  'divider': 'SysDivider',
-  'spacer': 'SysSpacer',
-  // 基础
-  'sys-text': 'SysText',
-  'sys-input': 'SysInput',
-  'sys-textarea': 'SysTextarea',
-  'sys-select': 'SysSelect',
-  'sys-switch': 'SysSwitch',
-  'sys-slider': 'SysSlider',
-  'sys-date-picker': 'SysDatePicker',
-  'sys-button': 'SysButton',
-  'sys-icon-button': 'SysIconButton',
-  'sys-icon': 'SysIcon',
-  'sys-tag': 'SysTag',
-  'sys-badge': 'SysBadge',
-  // 高级
-  'sys-table': 'SysTable',
-  'sys-chart': 'SysChart',
-  'sys-form': 'SysForm',
-  'sys-list': 'SysList',
-  // 浮层
-  'sys-toast': 'SysToast',
-}

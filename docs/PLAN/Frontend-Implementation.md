@@ -555,12 +555,13 @@ XML 的 `<definitions>` 段在渲染前预处理：
 HtmlSandbox.vue onMounted:
   1. 创建容器 div.plugin-html-host
   2. attachShadow({ mode: 'open' })
-  3. 加载 styles → <link> 注入 Shadow DOM
-  4. fetch entry_html → innerHTML 设置到 Shadow DOM
-  5. 注册 Web Components（customElements.define）
-  6. 构建 sys 桥接对象（§10）
-  7. 重写 Shadow DOM 内的 window.fetch / XMLHttpRequest（§12）
-  8. 按顺序加载并执行 scripts
+  3. installFetchProxy（注入 Token / X-API-Key / X-Plugin-Name）—— 必须在资源加载前
+  4. 加载 styles → fetch + <style> 注入 Shadow DOM
+     （<link> 不走 window.fetch，浏览器无法注入 X-API-Key 会被 VerifiedDep 401 拒）
+  5. fetch entry_html → innerHTML 设置到 Shadow DOM（fetch 已被代理）
+  6. 注册 Web Components（customElements.define）
+  7. 构建 sys 桥接对象（§10）
+  8. 按顺序加载并执行 scripts（fetch 已被代理）
 ```
 
 ### 9.2 Shadow DOM 隔离
@@ -710,26 +711,35 @@ sys.i18n = { t: (key, params) => i18n.t(key, params) }
 
 ### 11.2 完整组件清单
 
-| 组件 | XML Vue 组件 | HTML Web Component | 命令式 API |
-|---|---|---|---|
-| 文本 | `SysText.vue` | `sys-text.ts` | `el.setValue(s)` |
-| 输入框 | `SysInput.vue` | `sys-input.ts` | `setValue/getValue/setError/clearError/validate` |
-| 文本域 | `SysTextarea.vue` | `sys-textarea.ts` | 同 input |
-| 下拉 | `SysSelect.vue` | `sys-select.ts` | `setOptions/setValue/getValue` |
-| 开关 | `SysSwitch.vue` | `sys-switch.ts` | `setValue/getValue` |
-| 滑块 | `SysSlider.vue` | `sys-slider.ts` | `setValue/getValue` |
-| 日期 | `SysDatePicker.vue` | `sys-date-picker.ts` | `setValue/getValue` |
-| 按钮 | `SysButton.vue` | `sys-button.ts` | `setText/setIcon/setVariant/setLoading/disable/enable` |
-| 图标按钮 | `SysIconButton.vue` | `sys-icon-button.ts` | `setIcon/setLoading/disable/enable` |
-| 图标 | `SysIcon.vue` | `sys-icon.ts` | `setIcon` |
-| 标签 | `SysTag.vue` | `sys-tag.ts` | `setValue` |
-| 徽章 | `SysBadge.vue` | `sys-badge.ts` | `setValue` |
-| 数据表格 | `SysTable.vue` | `sys-table.ts` | `setData/getSelected/setSelected/gotoPage/setPageSize/sortBy` |
-| 图表 | `SysChart.vue` | `sys-chart.ts` | `setData/setType/exportImage` |
-| 表单 | `SysForm.vue` | `sys-form.ts` | `validate/reset` |
-| 列表 | `SysList.vue` | `sys-list.ts` | `setData` |
-| 对话框 | `SysDialog.vue` | `sys-dialog.ts` | `open/close` |
-| Toast | —（通过指令/sys.ui） | `sys-toast.ts` | `show(msg, level)` |
+> **命名约束**：XML 轨走 Vue `h()`，命名不受 [HTML 自定义元素规范](https://html.spec.whatwg.org/#valid-custom-element-name) 约束，可用裸名（`vbox`/`card`/`hbox`...）。HTML 轨经 `customElements.define()`，必须含连字符 —— 布局类一律以 `sys-` 前缀注册（`sys-vbox`/`sys-card`/`sys-hbox`...），否则抛 `SyntaxError`。
+
+| 组件 | XML Vue 组件 | XML 标签 | HTML 自定义元素标签 | 命令式 API |
+|---|---|---|---|---|
+| 垂直布局 | `SysVbox.vue` | `<vbox>` | `<sys-vbox>` | — |
+| 水平布局 | `SysHbox.vue` | `<hbox>` | `<sys-hbox>` | — |
+| 网格 | `SysGrid.vue` | `<grid>` | `<sys-grid>` | — |
+| 卡片 | `SysCard.vue` | `<card>` | `<sys-card>` | `setTitle` |
+| 标签页 | `SysTabs.vue` | `<tabs>` | `<sys-tabs>` | `setActive` |
+| 对话框 | `SysDialog.vue` | `<dialog>` | `<sys-dialog>` | `open/close` |
+| 分割线 | `SysDivider.vue` | `<divider>` | `<sys-divider>` | — |
+| 弹性空白 | `SysSpacer.vue` | `<spacer>` | `<sys-spacer>` | — |
+| 文本 | `SysText.vue` | `<sys-text>` | `<sys-text>` | `el.setValue(s)` |
+| 输入框 | `SysInput.vue` | `<sys-input>` | `<sys-input>` | `setValue/getValue/setError/clearError/validate` |
+| 文本域 | `SysTextarea.vue` | `<sys-textarea>` | `<sys-textarea>` | 同 input |
+| 下拉 | `SysSelect.vue` | `<sys-select>` | `<sys-select>` | `setOptions/setValue/getValue` |
+| 开关 | `SysSwitch.vue` | `<sys-switch>` | `<sys-switch>` | `setValue/getValue` |
+| 滑块 | `SysSlider.vue` | `<sys-slider>` | `<sys-slider>` | `setValue/getValue` |
+| 日期 | `SysDatePicker.vue` | `<sys-date-picker>` | `<sys-date-picker>` | `setValue/getValue` |
+| 按钮 | `SysButton.vue` | `<sys-button>` | `<sys-button>` | `setText/setIcon/setVariant/setLoading/disable/enable` |
+| 图标按钮 | `SysIconButton.vue` | `<sys-icon-button>` | `<sys-icon-button>` | `setIcon/setLoading/disable/enable` |
+| 图标 | `SysIcon.vue` | `<sys-icon>` | `<sys-icon>` | `setIcon` |
+| 标签 | `SysTag.vue` | `<sys-tag>` | `<sys-tag>` | `setValue` |
+| 徽章 | `SysBadge.vue` | `<sys-badge>` | `<sys-badge>` | `setValue` |
+| 数据表格 | `SysTable.vue` | `<sys-table>` | `<sys-table>` | `setData/getSelected/setSelected/gotoPage/setPageSize/sortBy` |
+| 图表 | `SysChart.vue` | `<sys-chart>` | `<sys-chart>` | `setData/setType/exportImage` |
+| 表单 | `SysForm.vue` | `<sys-form>` | `<sys-form>` | `validate/reset` |
+| 列表 | `SysList.vue` | `<sys-list>` | `<sys-list>` | `setData` |
+| Toast | —（通过指令/sys.ui） | — | `<sys-toast>` | `show(msg, level)` |
 
 ### 11.3 通用方法（所有 Web Components）
 

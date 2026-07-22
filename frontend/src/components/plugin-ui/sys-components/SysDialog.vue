@@ -13,21 +13,26 @@
  *
  * HTML 轨：作者通过 sys.ui.dialog.open(id) 写入变量后由 sys-bridge 触发，
  * 或直接传 open prop 控制。
+ *
+ * 布尔属性约定：HTML 自定义元素 attribute 永远是 string，故
+ * closeOnBackdrop / closeOnEsc / noTransition / open 一律声明为
+ * `boolean | string` 并用 isTrueXxx() computed 强制 coerce ——
+ * 让 close-on-backdrop / close-on-backdrop="true" 两种写法都等价于 true。
  */
-import { watch, onUnmounted } from 'vue'
+import { computed, watch, onUnmounted } from 'vue'
 
 const props = withDefaults(
   defineProps<{
     /** 对话框标题 */
     title?: string
     /** 是否打开 */
-    open?: boolean
+    open?: boolean | string
     /** 点击遮罩关闭（默认 true） */
-    closeOnBackdrop?: boolean
+    closeOnBackdrop?: boolean | string
     /** ESC 关闭（默认 true） */
-    closeOnEsc?: boolean
+    closeOnEsc?: boolean | string
     /** 是否禁用过渡（用于嵌套场景） */
-    noTransition?: boolean
+    noTransition?: boolean | string
   }>(),
   {
     open: false,
@@ -36,6 +41,24 @@ const props = withDefaults(
     noTransition: false,
   }
 )
+
+/**
+ * 把 boolean | string 形态的 prop coerce 为 boolean。
+ * HTML attribute 可能传入 "true" / "false" 字符串，或无值（presence）。
+ */
+function coerceBool(v: boolean | string | undefined, fallback: boolean): boolean {
+  if (v === undefined || v === null) return fallback
+  if (typeof v === 'boolean') return v
+  // string 形态：空字符串（HTML 无值 attribute）或 "true" → true
+  if (v === '' || v === 'true') return true
+  if (v === 'false') return false
+  return fallback
+}
+
+const isOpen = computed(() => coerceBool(props.open, false))
+const isCloseOnBackdrop = computed(() => coerceBool(props.closeOnBackdrop, true))
+const isCloseOnEsc = computed(() => coerceBool(props.closeOnEsc, true))
+const isNoTransition = computed(() => coerceBool(props.noTransition, false))
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -48,18 +71,18 @@ function close(): void {
 }
 
 function onBackdrop(): void {
-  if (props.closeOnBackdrop) close()
+  if (isCloseOnBackdrop.value) close()
 }
 
 function onKeydown(e: KeyboardEvent): void {
-  if (e.key === 'Escape' && props.closeOnEsc) {
+  if (e.key === 'Escape' && isCloseOnEsc.value) {
     e.stopPropagation()
     close()
   }
 }
 
 watch(
-  () => props.open,
+  isOpen,
   (open) => {
     if (open) {
       document.addEventListener('keydown', onKeydown)
@@ -75,18 +98,18 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <Transition :name="noTransition ? undefined : 'sys-dialog-overlay'">
+  <Transition :name="isNoTransition ? undefined : 'sys-dialog-overlay'">
     <div
-      v-if="open"
+      v-if="isOpen"
       class="sys-dialog-overlay"
       @click.self="onBackdrop"
     >
       <Transition
-        :name="noTransition ? undefined : 'sys-dialog-panel'"
+        :name="isNoTransition ? undefined : 'sys-dialog-panel'"
         appear
       >
         <div
-          v-if="open"
+          v-if="isOpen"
           class="sys-dialog"
           role="dialog"
           aria-modal="true"

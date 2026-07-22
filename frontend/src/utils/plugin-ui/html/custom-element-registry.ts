@@ -10,6 +10,13 @@
  *
  * 两者共享同一套 SFC 源。
  *
+ * 命名约束差异：
+ * - XML 轨用裸名（`vbox`/`card`/`hbox`...），因 XML 走 Vue h() 调用，
+ *   不经过 `customElements.define()`，不受 HTML 自定义元素命名约束。
+ * - HTML 轨必须含连字符 —— `customElements.define('vbox', ...)`
+ *   会抛 SyntaxError。故布局类在 HTML 轨一律注册为 `sys-*` 前缀
+ *   （`sys-vbox` / `sys-card` / `sys-hbox`...）。
+ *
  * `customElements.define` 是全局的（不受 Shadow DOM 限制），
  * 所以只需在应用启动时调用一次。多次调用是幂等的。
  */
@@ -17,6 +24,45 @@
 import { defineCustomElement, type Component } from 'vue'
 import * as SysComponents from '../../../components/plugin-ui/sys-components'
 import { SYS_COMPONENT_TAGS } from '../../../components/plugin-ui/sys-components'
+
+/**
+ * Material Symbols 基础 CSS（注入到每个 sys-* 自定义元素的 shadow root）。
+ *
+ * @font-face 声明是全局的（天然穿透 shadow DOM），由 index.html 的
+ * <link rel="stylesheet" href="/material-symbols/index.css"> 加载。
+ * 但 .material-symbols-rounded 类样式（font-family / font-size / display 等）
+ * 不穿透 shadow DOM —— 必须在每个自定义元素 shadow root 内重新声明，
+ * 否则 SFC 内 <span class="material-symbols-rounded"> 渲染为纯文本而非图标。
+ */
+const MATERIAL_SYMBOLS_BASE_CSS = `
+.material-symbols-rounded,
+.material-symbols-outlined,
+.material-symbols-sharp {
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "liga";
+}
+.material-symbols-rounded {
+  font-family: "Material Symbols Rounded";
+}
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined";
+}
+.material-symbols-sharp {
+  font-family: "Material Symbols Sharp";
+}
+`
 
 /** 已注册过的 tag 集合，用于 hasPluginUICustomElement 查询 */
 const registeredTags = new Set<string>()
@@ -32,7 +78,15 @@ const registeredTags = new Set<string>()
 function wrapAsCustomElement(_tagName: string, component: Component): CustomElementConstructor {
   // Vue 3 的 defineCustomElement 接收与 defineComponent 一致的组件选项，
   // SFC 默认导出符合该格式。
-  return defineCustomElement(component as any)
+  // 注：在 vite features.customElement 模式下，SFC <style> 收集到
+  // component.styles 数组，defineCustomElement 会把它们注入 shadow root。
+  // 我们额外追加 Material Symbols 基础 CSS，使图标在 shadow root 内可用。
+  const comp = component as any
+  const existingStyles: string[] = Array.isArray(comp.styles) ? comp.styles : []
+  return defineCustomElement({
+    ...comp,
+    styles: [MATERIAL_SYMBOLS_BASE_CSS, ...existingStyles],
+  } as any)
 }
 
 /**
@@ -42,15 +96,15 @@ function wrapAsCustomElement(_tagName: string, component: Component): CustomElem
  */
 export function registerAllPluginUICustomElements(): void {
   const components: Record<string, Component> = {
-    // 布局
-    vbox: SysComponents.SysVbox,
-    hbox: SysComponents.SysHbox,
-    grid: SysComponents.SysGrid,
-    card: SysComponents.SysCard,
-    tabs: SysComponents.SysTabs,
-    dialog: SysComponents.SysDialog,
-    divider: SysComponents.SysDivider,
-    spacer: SysComponents.SysSpacer,
+    // 布局（HTML 轨注册为 sys-* 前缀，因 customElements.define 必须含连字符）
+    'sys-vbox': SysComponents.SysVbox,
+    'sys-hbox': SysComponents.SysHbox,
+    'sys-grid': SysComponents.SysGrid,
+    'sys-card': SysComponents.SysCard,
+    'sys-tabs': SysComponents.SysTabs,
+    'sys-dialog': SysComponents.SysDialog,
+    'sys-divider': SysComponents.SysDivider,
+    'sys-spacer': SysComponents.SysSpacer,
     // 基础
     'sys-text': SysComponents.SysText,
     'sys-input': SysComponents.SysInput,

@@ -9,6 +9,11 @@
  * 「自定义元素」（用于 HTML 沙箱中的 Web Component）。
  *
  * 两者共享同一套 SFC 源（`components/plugin-ui/sys-components/`）。
+ *
+ * 样式兜底：sys-components SFC 在 vite `features.customElement` 模式下
+ * 编译，<style> 不再自动注入 document.head，而是收集到
+ * `component.styles` 供 defineCustomElement 注入 shadow root。
+ * XML 渲染器在 light DOM 渲染，需手动把 styles 注入 document.head。
  */
 
 import { type Component } from 'vue'
@@ -93,3 +98,64 @@ export function registerAllXmlComponents(): void {
 
 // 模块加载时自动注册
 registerAllXmlComponents()
+
+// === XML 轨 light DOM 样式兜底 ===
+
+/**
+ * 把 sys-components SFC 的 styles 注入 document.head。
+ *
+ * vite `features.customElement` 模式下，SFC 的 <style> 收集到
+ * `component.styles` 数组供 defineCustomElement 注入 shadow root。
+ * XML 渲染器在 light DOM 渲染（无 shadow root），需手动注入
+ * document.head 才能让样式生效。
+ *
+ * 幂等：通过 style 元素 id 去重，多次调用安全。
+ */
+function injectSysComponentStylesForLightDOM(): void {
+  const allComponents: Record<string, Component> = {
+    vbox: SysComponents.SysVbox,
+    hbox: SysComponents.SysHbox,
+    grid: SysComponents.SysGrid,
+    card: SysComponents.SysCard,
+    tabs: SysComponents.SysTabs,
+    dialog: SysComponents.SysDialog,
+    divider: SysComponents.SysDivider,
+    spacer: SysComponents.SysSpacer,
+    'sys-text': SysComponents.SysText,
+    'sys-input': SysComponents.SysInput,
+    'sys-textarea': SysComponents.SysTextarea,
+    'sys-select': SysComponents.SysSelect,
+    'sys-switch': SysComponents.SysSwitch,
+    'sys-slider': SysComponents.SysSlider,
+    'sys-date-picker': SysComponents.SysDatePicker,
+    'sys-button': SysComponents.SysButton,
+    'sys-icon-button': SysComponents.SysIconButton,
+    'sys-icon': SysComponents.SysIcon,
+    'sys-tag': SysComponents.SysTag,
+    'sys-badge': SysComponents.SysBadge,
+    'sys-table': SysComponents.SysTable,
+    'sys-chart': SysComponents.SysChart,
+    'sys-form': SysComponents.SysForm,
+    'sys-list': SysComponents.SysList,
+    'sys-toast': SysComponents.SysToast,
+  }
+
+  for (const [tagName, comp] of Object.entries(allComponents)) {
+    const anyComp = comp as any
+    const styles: unknown = anyComp?.styles
+    if (!Array.isArray(styles)) continue
+    for (let i = 0; i < styles.length; i++) {
+      const css = styles[i]
+      const text = typeof css === 'string' ? css : (css as any)?.code || ''
+      if (!text) continue
+      const styleId = `sys-xml-style-${tagName}-${i}`
+      if (document.getElementById(styleId)) continue
+      const style = document.createElement('style')
+      style.id = styleId
+      style.textContent = text
+      document.head.appendChild(style)
+    }
+  }
+}
+
+injectSysComponentStylesForLightDOM()

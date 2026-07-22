@@ -1,7 +1,7 @@
 /**
  * Demo HTML Plugin - 插件专属样式
  *
- * 此样式由 HTML 沙箱通过 <link> 注入到 Shadow DOM 中。
+ * 此样式由 HTML 沙箱通过 fetch + <style> 注入到 Shadow DOM 中。
  * - 仅在当前插件的 Shadow DOM 内生效，不污染主站
  * - MD3 CSS 变量（--md-sys-color-*）天然穿透 Shadow DOM，可直接使用
  * - 也可使用 shared-motion.css 中定义的 --md-sys-motion-* 变量与 keyframes
@@ -23,10 +23,10 @@
   scrollbar-color: var(--md-sys-color-outline-variant, #cac4d0) transparent;
 }
 
-/* sys-input / sys-select 在 hbox 中自适应 */
-hbox sys-input,
-hbox sys-textarea,
-hbox sys-select {
+/* sys-input / sys-select 在 sys-hbox 中自适应 */
+sys-hbox sys-input,
+sys-hbox sys-textarea,
+sys-hbox sys-select {
   flex: 1;
   min-width: 0;
 }
@@ -61,7 +61,7 @@ hbox sys-select {
 }
 
 /* dialog 内的输入项间距 */
-sys-dialog vbox {
+sys-dialog sys-vbox {
   width: 100%;
   min-width: 400px;
 }
@@ -72,11 +72,11 @@ sys-dialog vbox {
     padding: 1rem;
   }
 
-  grid {
+  sys-grid {
     grid-template-columns: 1fr !important;
   }
 
-  hbox {
+  sys-hbox {
     flex-wrap: wrap;
   }
 }

@@ -4,11 +4,11 @@
  * 创建流程：
  *   1. host.attachShadow({ mode: 'open' })
  *   2. 注入 MD3 CSS 变量穿透 <style>
- *   3. 加载 styles → <link>
- *   4. fetch(entry_html) → shadowRoot.innerHTML
- *   5. 幂等注册 sys-* 自定义元素
- *   6. 构建 sys 桥接对象 → window.__plugin_sys_<pageId>
- *   7. installFetchProxy（注入 token / X-Plugin-Name / BaseResponse 解包）
+ *   3. installFetchProxy（注入 token / X-Plugin-Name）—— 必须在资源加载前
+ *   4. 加载 styles → fetch + <style>（<link> 不走 fetch 代理，无法带 Token）
+ *   5. fetch(entry_html) → shadowRoot.innerHTML（fetch 已被代理）
+ *   6. 幂等注册 sys-* 自定义元素
+ *   7. 构建 sys 桥接对象 → window.__plugin_sys_<pageId>
  *   8. 顺序加载并执行 scripts（每个 script 注入 `const sys = ...` 前缀）
  *
  * 销毁流程：
@@ -61,42 +61,118 @@ export async function createHtmlSandbox(
   const shadowRoot: ShadowRoot = host.shadowRoot ?? host.attachShadow({ mode: 'open' })
 
   // 2. 注入 MD3 CSS 变量穿透规则
-  //    :host 默认继承主站所有自定义属性（CSS 变量天然穿透 shadow boundary）
-  //    这里仅声明一个 fallback，避免插件 CSS 中 var() 拿不到值时崩溃
+  //    不能用 all: initial —— 它会清掉所有 CSS 自定义属性（含 MD3 主题变量），
+  //    导致 :host 内部 var(--md-sys-color-*) 取不到 :root 的主题值。
+  //    Shadow DOM 本身已隔离主文档样式，:host 只需显式继承少数属性即可。
+  //
+  //    不要在 :host 上重声明 --md-sys-color-*：CSS 规范规定
+  //    --x: var(--x, fallback) 是顶层自引用 → 视为 unknown → 用 fallback
+  //    作为固定值，反而覆盖了从 :root 继承的动态主题变量。
+  //    MD3 变量由 md3theme.ts 动态写入 document.documentElement.style，
+  //    CSS 自定义属性天然穿透 shadow DOM，无需在 :host 重复声明。
   const variableBootstrap = document.createElement('style')
   variableBootstrap.textContent = `
     :host {
-      all: initial;
       display: block;
       contain: content;
-      /* 让 MD3 颜色变量穿透（all: initial 会清除继承，需重新声明继承） */
       font-family: inherit;
       color: inherit;
       line-height: inherit;
-      /* MD3 CSS 变量天然穿透 Shadow DOM，无需额外声明 */
+      /* 不使用 all: initial —— MD3 CSS 变量需从 :root 自然穿透到 Shadow DOM */
+      /* 不在此重声明 --md-sys-color-* —— 自引用会固化 fallback 值，破坏主题切换 */
     }
-    /* 提供一套基础的 MD3 兜底色，避免插件 CSS var() 取不到值 */
-    :root, :host {
-      --md-sys-color-primary: var(--md-sys-color-primary, #0058bd);
-      --md-sys-color-on-primary: var(--md-sys-color-on-primary, #ffffff);
-      --md-sys-color-surface: var(--md-sys-color-surface, #fffaf0);
-      --md-sys-color-on-surface: var(--md-sys-color-on-surface, #1a1b20);
-      --md-sys-color-on-surface-variant: var(--md-sys-color-on-surface-variant, #44474e);
-      --md-sys-color-outline: var(--md-sys-color-outline, #74767f);
-      --md-sys-color-outline-variant: var(--md-sys-color-outline-variant, #cac4d0);
-      --md-sys-color-error: var(--md-sys-color-error, #ba1a1a);
+    /*
+     * sys-* 自定义元素默认 display 规则。
+     *
+     * 自定义元素默认是 display: inline（HTML 规范），其内部 SFC 的
+     * <div class="sys-vbox" style="width: 100%"> 等会因父级是 inline 而
+     * 塌缩为 0 宽度 —— 整页不可见。这里统一设为 block，让 SFC 内核的
+     * flex / grid 布局能在 block 容器中正常撑开。
+     *
+     * 仅作用于沙箱 Shadow DOM 内的 sys-* 元素，不污染主站。
+     */
+    sys-vbox, sys-hbox, sys-grid, sys-card, sys-tabs, sys-dialog,
+    sys-divider, sys-spacer,
+    sys-text, sys-input, sys-textarea, sys-select, sys-switch,
+    sys-slider, sys-date-picker, sys-button, sys-icon-button, sys-icon,
+    sys-tag, sys-badge, sys-table, sys-chart, sys-form, sys-list,
+    sys-toast {
+      display: block;
     }
+    /*
+     * Material Symbols 图标字体。
+     *
+     * @font-face 本身是全局的（天然穿透 shadow DOM），但如果主文档的
+     * <link> 加载失败（如 base 路径不匹配），shadow DOM 内就拿不到字体。
+     * 这里在 shadow root 内也声明一次，保证图标一定能渲染。
+     * woff2 路径用绝对路径（含 vite base），dev / build 均一致。
+     */
+    @font-face {
+      font-family: "Material Symbols Rounded";
+      font-style: normal;
+      font-weight: 100 700;
+      font-display: block;
+      src: url("/material-symbols/material-symbols-rounded.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Material Symbols Outlined";
+      font-style: normal;
+      font-weight: 100 700;
+      font-display: block;
+      src: url("/material-symbols/material-symbols-outlined.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Material Symbols Sharp";
+      font-style: normal;
+      font-weight: 100 700;
+      font-display: block;
+      src: url("/material-symbols/material-symbols-sharp.woff2") format("woff2");
+    }
+    .material-symbols-rounded,
+    .material-symbols-outlined,
+    .material-symbols-sharp {
+      font-weight: normal;
+      font-style: normal;
+      font-size: 24px;
+      line-height: 1;
+      letter-spacing: normal;
+      text-transform: none;
+      display: inline-block;
+      white-space: nowrap;
+      word-wrap: normal;
+      direction: ltr;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+      font-feature-settings: "liga";
+    }
+    .material-symbols-rounded { font-family: "Material Symbols Rounded"; }
+    .material-symbols-outlined { font-family: "Material Symbols Outlined"; }
+    .material-symbols-sharp { font-family: "Material Symbols Sharp"; }
   `
   shadowRoot.appendChild(variableBootstrap)
 
-  // 3. 加载 styles
+  // 3. 安装 fetch 代理（提前到资源加载之前）
+  //    - 后端 plugin_ui_asset_router 对 entry/style/script/asset 强制 VerifiedDep
+  //    - <link> 不走 window.fetch，浏览器无法注入 X-API-Key，故 styles 改用 fetch + <style>
+  //    - 此处的 fetchProxyCtx 复用给 sys 桥接，避免重复构造
+  const toastStore = useToastStore()
+  const fetchProxyCtx: FetchProxyContext = {
+    pluginName,
+    getToken: () => sessionStorage.getItem('neo_token'),
+    onError: (msg) => toastStore.show(msg, 'error'),
+  }
+  const uninstallProxy = installFetchProxy(fetchProxyCtx)
+
+  // 4. 加载 styles（fetch 拿 textContent 注入 <style>，自动走代理带 Token）
   const styleUrls = assetsUrls.styles || []
   await Promise.all(
     styleUrls.map((url) => loadStyle(shadowRoot, url))
   )
 
-  // 4. 加载 entry HTML
-  const entryUrls = assetsUrls.entry || []
+  // 5. 加载 entry HTML（fetch 已被代理，自动注入 X-API-Key / X-Plugin-Name）
+  //    后端 plugin_ui_manager 生成的 key 为 `entry_html`（与注册时的 assets dict 一致）
+  const entryUrls = assetsUrls.entry_html || assetsUrls.entry || []
   if (entryUrls.length > 0) {
     try {
       const response = await fetch(entryUrls[0])
@@ -127,16 +203,10 @@ export async function createHtmlSandbox(
     }
   }
 
-  // 5. 幂等注册自定义元素
+  // 6. 幂等注册自定义元素
   registerAllPluginUICustomElements()
 
-  // 6. 构建 sys 桥接
-  const toastStore = useToastStore()
-  const fetchProxyCtx: FetchProxyContext = {
-    pluginName,
-    getToken: () => sessionStorage.getItem('neo_token'),
-    onError: (msg) => toastStore.show(msg, 'error'),
-  }
+  // 7. 构建 sys 桥接（fetch 代理已在 step 3 安装，复用 fetchProxyCtx）
   const sys = createSysBridge({
     store,
     apiEngine,
@@ -145,9 +215,6 @@ export async function createHtmlSandbox(
     router,
     fetchProxyCtx,
   })
-
-  // 7. 安装 fetch 代理
-  const uninstallProxy = installFetchProxy(fetchProxyCtx)
 
   // 8. 执行脚本：内联 + 外链
   try {
@@ -193,17 +260,22 @@ export async function createHtmlSandbox(
 let capturedInlineScripts: HTMLScriptElement[] = []
 
 async function loadStyle(shadowRoot: ShadowRoot, url: string): Promise<void> {
-  return new Promise((resolve) => {
-    const link = document.createElement('link')
-    link.rel = 'stylesheet'
-    link.href = url
-    link.onload = () => resolve()
-    link.onerror = () => {
-      console.warn(`[HtmlSandbox] 样式加载失败: ${url}`)
-      resolve()
+  // 不能用 <link rel="stylesheet">：浏览器对 <link> 请求不会走 window.fetch，
+  // 因此无法注入 X-API-Key / X-Plugin-Name，会被后端 VerifiedDep 拒为 401。
+  // 改用 fetch 拿 CSS 文本（自动经过 installFetchProxy 注入鉴权头），注入 <style>。
+  try {
+    const response = await fetch(url)
+    if (!response.ok) {
+      console.warn(`[HtmlSandbox] 样式加载失败: ${url} (HTTP ${response.status})`)
+      return
     }
-    shadowRoot.appendChild(link)
-  })
+    const cssText = await response.text()
+    const style = document.createElement('style')
+    style.textContent = cssText
+    shadowRoot.appendChild(style)
+  } catch (e) {
+    console.warn(`[HtmlSandbox] 样式加载异常: ${url}`, e)
+  }
 }
 
 /**

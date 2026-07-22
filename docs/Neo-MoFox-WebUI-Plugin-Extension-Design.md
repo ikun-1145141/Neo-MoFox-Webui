@@ -361,8 +361,13 @@ XML 轨服务的是 **"快速搭好用的页面"**；HTML 轨服务的是 **"需
 
 WebUI 运行时会把以下自定义元素注入到 HTML 沙箱中。**它们底层与 XML 轨的同名组件共享内核，但作为 Web Components 暴露**，并提供完整的命令式 JS API（详见 10.7 节）：
 
+> **命名约束**：HTML 自定义元素名必须含连字符（[HTML 规范](https://html.spec.whatwg.org/#valid-custom-element-name)）。XML 轨用裸名（`vbox`/`card`/`hbox` 等，走 Vue `h()` 不受限）；HTML 轨一律 `sys-*` 前缀（`sys-vbox`/`sys-card`/`sys-hbox` 等），否则 `customElements.define` 会抛 `SyntaxError`。
+
 | 元素 | 等价 XML 组件 | HTML 轨常用控制方式 |
 |---|---|---|
+| `<sys-vbox>` / `<sys-hbox>` / `<sys-grid>` / `<sys-spacer>` / `<sys-divider>` | `<vbox>` / `<hbox>` / `<grid>` / `<spacer>` / `<divider>` | 纯布局容器，常配合 `gap`/`align`/`padding` 使用 |
+| `<sys-card>` | `<card>` | `title` 属性 + 命令式 `el.setTitle(...)` |
+| `<sys-tabs>` | `<tabs>` | 子元素 `<sys-tab>`，命令式 `el.setActive(...)` |
 | `<sys-text>` | `<sys-text>` | `el.textContent = '...'` 或 `el.setValue('...')` |
 | `<sys-input>` | `<sys-input>` | `el.setValue(v)` / `el.getValue()` / 监听 `change` |
 | `<sys-textarea>` | `<sys-textarea>` | 同 input |
@@ -429,6 +434,8 @@ HTML 模式 **不是 iframe**，是同窗口下的隔离区域：
 | `sys.global.user.*` | **删除**（无多用户登录场景） |
 
 > **fetch 重写约定**：HTML 沙箱中的 `window.fetch` 与 `XMLHttpRequest` **不会被禁用**，而是被系统改写为指向 `sys.request` 的同一条链路。无论插件代码是 `fetch('/api/users')` 还是 `sys.request('/api/users')`，最终都会经过同一条 Token 注入、错误拦截、`X-Plugin-Name` 标注、`BaseResponse` 解包链。这是为了兼容第三方库（它们通常默认调用 `fetch`），同时仍然保证全站统一拦截。
+
+> **资源加载时序约定**：`installFetchProxy()` 必须在 entry HTML / styles / scripts 任何 `fetch()` 之前完成。CSS 资源**不能**用 `<link rel="stylesheet">`（浏览器对 `<link>` 请求不走 `window.fetch`，无法注入 `X-API-Key`，会被后端 `VerifiedDep` 拒为 401），改用 `fetch()` 取 CSS 文本 + 注入 `<style>`。详见 §9.1 渲染流程。
 
 ### 5.5 CSS 变量与主题接入
 
@@ -670,16 +677,18 @@ WebUI 主程序通过 viewport 宽度阈值判断当前是 desktop 还是 mobile
 > 本表用于实现侧 / 文档侧的快速对照。XML 列与 HTML 列同名表示底层共享内核。
 > v3.1 起：原"系统级 / 嵌入组件"清单整体移出——`<plugin-page-picker>` 是 WebUI 主程序自身的官方组件；`<sys-include>` / `<sys-bind>` / `<sys-toast-anchor>` 不再作为插件可写标签存在。
 
-### 10.1 布局类（仅 XML 提供，HTML 用户用原生 div / CSS）
+### 10.1 布局类（XML 裸名 / HTML `sys-*` 前缀）
 
-| XML 标签 | 作用 |
-|---|---|
-| `<vbox>` / `<hbox>` | 纵 / 横排列 |
-| `<grid>` | 网格 |
-| `<card>` | MD3 卡片 |
-| `<tabs>` / `<tab>` | 标签页 |
-| `<dialog>` | 对话框（HTML 用 `<sys-dialog>`） |
-| `<divider>` / `<spacer>` | 分割线 / 弹性空白 |
+XML 轨走 Vue `h()`，命名不受自定义元素规范约束，可用裸名；HTML 轨经 `customElements.define()`，必须含连字符，故一律以 `sys-` 前缀注册（与 §5.2 表对应）。
+
+| XML 标签 | HTML 标签 | 作用 |
+|---|---|---|
+| `<vbox>` / `<hbox>` | `<sys-vbox>` / `<sys-hbox>` | 纵 / 横排列 |
+| `<grid>` | `<sys-grid>` | 网格 |
+| `<card>` | `<sys-card>` | MD3 卡片 |
+| `<tabs>` / `<tab>` | `<sys-tabs>` / `<sys-tab>` | 标签页 |
+| `<dialog>` | `<sys-dialog>` | 对话框 |
+| `<divider>` / `<spacer>` | `<sys-divider>` / `<sys-spacer>` | 分割线 / 弹性空白 |
 
 ### 10.2 基础输入与展示（双轨同名）
 

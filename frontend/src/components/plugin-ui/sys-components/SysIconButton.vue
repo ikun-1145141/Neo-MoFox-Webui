@@ -1,5 +1,10 @@
 <script setup lang="ts">
-/** SysIconButton - 图标按钮组件。 */
+/**
+ * SysIconButton - 图标按钮组件。
+ *
+ * 事件说明：不 emit('click') —— 与 SysButton 同理，原生 click 冒泡
+ * 到自定义元素，外部 addEventListener('click') 即可接收。
+ */
 import { ref } from 'vue'
 
 const props = withDefaults(
@@ -18,10 +23,6 @@ const props = withDefaults(
   }
 )
 
-const emit = defineEmits<{
-  (e: 'click', ev: MouseEvent): void
-}>()
-
 const ripples = ref<Array<{ id: number; x: number; y: number; size: number }>>([])
 let rippleId = 0
 
@@ -37,7 +38,7 @@ function onClick(ev: MouseEvent): void {
   window.setTimeout(() => {
     ripples.value = ripples.value.filter((r) => r.id !== id)
   }, 600)
-  emit('click', ev)
+  // 不 emit('click', ev) —— 原生 MouseEvent 会自然冒泡到自定义元素
 }
 
 const sizes: Record<string, string> = {

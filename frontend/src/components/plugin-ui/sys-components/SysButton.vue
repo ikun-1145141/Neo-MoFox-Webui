@@ -4,6 +4,10 @@
  *
  * 变体：filled / outlined / text / tonal / elevated
  * 支持 loading 状态、icon、ripple 涟漪动画。
+ *
+ * 事件说明：不 emit('click') —— 内部 <button> 的原生 click 事件
+ * 自然冒泡到 <sys-button> 自定义元素，外部 addEventListener('click')
+ * 即可接收。若 emit('click') 会导致 CustomEvent 与 MouseEvent 双触发。
  */
 import { ref } from 'vue'
 
@@ -24,17 +28,13 @@ const props = withDefaults(
   }
 )
 
-const emit = defineEmits<{
-  (e: 'click', ev: MouseEvent): void
-}>()
-
 const ripples = ref<Array<{ id: number; x: number; y: number; size: number }>>([])
 let rippleId = 0
 
 function onClick(ev: MouseEvent): void {
   if (props.disabled || props.loading === 'true' || props.loading === true) return
 
-  // ripple
+  // ripple 动画
   const target = ev.currentTarget as HTMLElement
   const rect = target.getBoundingClientRect()
   const size = Math.max(rect.width, rect.height)
@@ -46,7 +46,7 @@ function onClick(ev: MouseEvent): void {
     ripples.value = ripples.value.filter((r) => r.id !== id)
   }, 600)
 
-  emit('click', ev)
+  // 不 emit('click', ev) —— 原生 MouseEvent 会自然冒泡到自定义元素
 }
 
 const isLoading = () => props.loading === 'true' || props.loading === true

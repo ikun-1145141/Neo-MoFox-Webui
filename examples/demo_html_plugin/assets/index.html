@@ -5,7 +5,7 @@
   - <script> 标签会被沙箱捕获，并在注入 sys 引用后执行
   - <sys-*> 自定义元素已由系统统一注册，可直接使用
   - MD3 CSS 变量（--md-sys-color-*）天然穿透 Shadow DOM
-  - 插件 CSS 在 styles.css 中，由沙箱通过 <link> 注入
+  - 插件 CSS 在 styles.css 中，由沙箱通过 fetch + <style> 注入（避开 <link> 无法带 Token 的问题）
 
   作者侧约定：
   - 通过 const sys = window.__plugin_sys_<pageId> 访问桥接对象（沙箱已自动注入）
@@ -21,14 +21,14 @@
 <body>
   <!--
     根容器：使用 sys-* 组件构建 UI
-    布局组件（vbox/hbox/grid/card）和功能组件（sys-button/sys-input 等）
+    布局组件（sys-vbox/sys-hbox/sys-grid/sys-card）和功能组件（sys-button/sys-input 等）
     都已注册为自定义元素，可以直接在 HTML 中使用。
   -->
-  <vbox gap="1.5rem" padding="0">
+  <sys-vbox gap="1.5rem" padding="0">
 
     <!-- ========== 1. 标题区 ========== -->
-    <card title="HTML Demo 仪表板" variant="elevated" padding="1.5rem">
-      <vbox gap="0.75rem">
+    <sys-card title="HTML Demo 仪表板" variant="elevated" padding="1.5rem">
+      <sys-vbox gap="0.75rem">
         <sys-text variant="headline">欢迎使用 HTML 轨插件 UI</sys-text>
         <sys-text variant="body">
           本页面演示 HTML 模式的全部能力：sys.* 桥接对象、Web Components 命令式 API、
@@ -38,39 +38,39 @@
           与 XML 轨的声明式风格不同，HTML 轨主推 JS 命令式控制 —— 读写 sys.vars、
           调用 sys.request、直接对 Web Components 调方法。
         </sys-text>
-      </vbox>
-    </card>
+      </sys-vbox>
+    </sys-card>
 
     <!-- ========== 2. sys.vars 响应式演示 ========== -->
-    <card title="① sys.vars 响应式变量池" variant="outlined">
-      <vbox gap="0.75rem">
+    <sys-card title="① sys.vars 响应式变量池" variant="outlined">
+      <sys-vbox gap="0.75rem">
         <sys-text variant="body">
           通过 sys.vars 读写 page scope 变量。下方计数器的值存储在 sys.vars.counter，
           多个组件可共享同一变量。
         </sys-text>
-        <hbox gap="1rem" align="center">
+        <sys-hbox gap="1rem" align="center">
           <sys-button id="dec-btn" variant="outlined" icon="remove">减 1</sys-button>
           <sys-text id="counter-display" variant="title" bold>0</sys-text>
           <sys-button id="inc-btn" variant="filled" icon="add">加 1</sys-button>
           <sys-button id="reset-btn" variant="tonal" icon="restart_alt">重置</sys-button>
-        </hbox>
+        </sys-hbox>
         <sys-text variant="caption">
           当前 sys.vars.counter = <span id="counter-raw">0</span>
           （此文本由 JS 手动更新，演示两种更新策略）
         </sys-text>
-      </vbox>
-    </card>
+      </sys-vbox>
+    </sys-card>
 
     <!-- ========== 3. sys.request + sys-table ========== -->
-    <card title="② sys.request + sys-table 数据交互" variant="elevated">
-      <vbox gap="0.75rem">
+    <sys-card title="② sys.request + sys-table 数据交互" variant="elevated">
+      <sys-vbox gap="0.75rem">
         <sys-text variant="body">
           通过 sys.request() 调用后端 API。fetch 代理会自动注入 Token、X-Plugin-Name，
           并按 BaseResponse 协议解包到 .data 字段。
         </sys-text>
 
         <!-- 任务输入表单 -->
-        <hbox gap="0.5rem" align="flex-end">
+        <sys-hbox gap="0.5rem" align="flex-end">
           <sys-input id="task-input" label="新任务标题" placeholder="输入任务标题..." style="flex: 1"></sys-input>
           <sys-select id="priority-select" label="优先级" style="width: 140px">
             <option value="low">低</option>
@@ -78,102 +78,102 @@
             <option value="high">高</option>
           </sys-select>
           <sys-button id="add-task-btn" variant="filled" icon="add">添加</sys-button>
-        </hbox>
+        </sys-hbox>
 
         <!-- 操作按钮 -->
-        <hbox gap="0.5rem" align="center">
+        <sys-hbox gap="0.5rem" align="center">
           <sys-button id="refresh-tasks-btn" variant="text" icon="refresh">刷新列表</sys-button>
           <sys-button id="show-stats-btn" variant="text" icon="bar_chart">查看统计</sys-button>
-          <spacer></spacer>
+          <sys-spacer></sys-spacer>
           <sys-text id="task-count" variant="caption">共 0 条任务</sys-text>
-        </hbox>
+        </sys-hbox>
 
         <!-- 任务表格 -->
         <sys-table id="task-table" striped="true" hoverable></sys-table>
-      </vbox>
-    </card>
+      </sys-vbox>
+    </sys-card>
 
     <!-- ========== 4. sys-chart 图表演示 ========== -->
-    <card title="③ sys.chart 图表（sys.request 获取数据）" variant="elevated">
-      <vbox gap="0.75rem">
+    <sys-card title="③ sys.chart 图表（sys.request 获取数据）" variant="elevated">
+      <sys-vbox gap="0.75rem">
         <sys-text variant="body">
           调用 /demo-html/metrics 获取 7 天监控数据，渲染为折线图。
         </sys-text>
-        <hbox gap="0.5rem" align="center">
+        <sys-hbox gap="0.5rem" align="center">
           <sys-button id="refresh-chart-btn" variant="tonal" icon="refresh">刷新图表数据</sys-button>
           <sys-text id="chart-status" variant="caption">尚未加载</sys-text>
-        </hbox>
+        </sys-hbox>
         <sys-chart id="metrics-chart" type="line" height="320px"></sys-chart>
-      </vbox>
-    </card>
+      </sys-vbox>
+    </sys-card>
 
     <!-- ========== 5. sys.ui 交互演示 ========== -->
-    <card title="④ sys.ui 通知与对话框" variant="outlined">
-      <grid columns="2" gap="1rem">
-        <vbox gap="0.5rem">
+    <sys-card title="④ sys.ui 通知与对话框" variant="outlined">
+      <sys-grid columns="2" gap="1rem">
+        <sys-vbox gap="0.5rem">
           <sys-text variant="subtitle">Toast 通知</sys-text>
-          <hbox gap="0.5rem" wrap="true">
+          <sys-hbox gap="0.5rem" wrap="true">
             <sys-button id="toast-info-btn" variant="outlined">Info Toast</sys-button>
             <sys-button id="toast-success-btn" variant="outlined">Success Toast</sys-button>
             <sys-button id="toast-error-btn" variant="outlined">Error Toast</sys-button>
-          </hbox>
-        </vbox>
+          </sys-hbox>
+        </sys-vbox>
 
-        <vbox gap="0.5rem">
+        <sys-vbox gap="0.5rem">
           <sys-text variant="subtitle">对话框</sys-text>
-          <hbox gap="0.5rem" wrap="true">
+          <sys-hbox gap="0.5rem" wrap="true">
             <sys-button id="alert-btn" variant="outlined">Alert</sys-button>
             <sys-button id="confirm-btn" variant="outlined">Confirm</sys-button>
             <sys-button id="open-dialog-btn" variant="filled">自定义 Dialog</sys-button>
-          </hbox>
-        </vbox>
-      </grid>
-    </card>
+          </sys-hbox>
+        </sys-vbox>
+      </sys-grid>
+    </sys-card>
 
     <!-- ========== 6. sys.bus 事件总线 ========== -->
-    <card title="⑤ sys.bus 事件总线" variant="outlined">
-      <vbox gap="0.75rem">
+    <sys-card title="⑤ sys.bus 事件总线" variant="outlined">
+      <sys-vbox gap="0.75rem">
         <sys-text variant="body">
           sys.bus 提供 page 级事件总线，用于跨组件通信。
           下方案例：点击"发送事件"按钮 → 触发 'demo:event' 事件 →
           监听器更新文本 + 弹 Toast。
         </sys-text>
-        <hbox gap="0.5rem" align="center">
+        <sys-hbox gap="0.5rem" align="center">
           <sys-input id="event-input" placeholder="输入事件载荷..." style="flex: 1"></sys-input>
           <sys-button id="emit-event-btn" variant="filled" icon="send">发送事件</sys-button>
-        </hbox>
+        </sys-hbox>
         <sys-text id="event-log" variant="caption">事件日志：（尚未触发）</sys-text>
-      </vbox>
-    </card>
+      </sys-vbox>
+    </sys-card>
 
     <!-- ========== 7. sys.theme / sys.format / sys.i18n / sys.global ========== -->
-    <card title="⑥ 系统信息与工具" variant="outlined">
-      <grid columns="2" gap="1rem">
-        <vbox gap="0.5rem">
+    <sys-card title="⑥ 系统信息与工具" variant="outlined">
+      <sys-grid columns="2" gap="1rem">
+        <sys-vbox gap="0.5rem">
           <sys-text variant="subtitle">sys.theme（只读）</sys-text>
           <sys-text id="theme-info" variant="body">加载中...</sys-text>
-        </vbox>
-        <vbox gap="0.5rem">
+        </sys-vbox>
+        <sys-vbox gap="0.5rem">
           <sys-text variant="subtitle">sys.global（只读）</sys-text>
           <sys-text id="global-info" variant="body">加载中...</sys-text>
-        </vbox>
-        <vbox gap="0.5rem">
+        </sys-vbox>
+        <sys-vbox gap="0.5rem">
           <sys-text variant="subtitle">sys.format</sys-text>
           <sys-text id="format-demo" variant="body">加载中...</sys-text>
-        </vbox>
-        <vbox gap="0.5rem">
+        </sys-vbox>
+        <sys-vbox gap="0.5rem">
           <sys-text variant="subtitle">sys.route</sys-text>
-          <hbox gap="0.5rem">
+          <sys-hbox gap="0.5rem">
             <sys-text id="route-info" variant="body" style="flex: 1">加载中...</sys-text>
             <sys-button id="route-back-btn" variant="outlined" icon="arrow_back">返回</sys-button>
-          </hbox>
-        </vbox>
-      </grid>
-    </card>
+          </sys-hbox>
+        </sys-vbox>
+      </sys-grid>
+    </sys-card>
 
     <!-- ========== 8. 自定义 Dialog（由 sys.ui.dialog.open 触发） ========== -->
     <sys-dialog id="custom-dialog" title="自定义对话框" close-on-backdrop="true">
-      <vbox gap="0.75rem">
+      <sys-vbox gap="0.75rem">
         <sys-text variant="body">
           这是一个通过 &lt;sys-dialog&gt; 元素声明的对话框。
           可通过以下方式控制开关：
@@ -189,13 +189,13 @@
           <option value="a">选项 A</option>
           <option value="b">选项 B</option>
         </sys-select>
-      </vbox>
+      </sys-vbox>
       <template #footer>
         <sys-button id="dialog-cancel-btn" variant="text">取消</sys-button>
         <sys-button id="dialog-confirm-btn" variant="filled">确认</sys-button>
       </template>
     </sys-dialog>
 
-  </vbox>
+  </sys-vbox>
 </body>
 </html>

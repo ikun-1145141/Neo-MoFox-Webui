@@ -55,7 +55,7 @@ class DemoHTMLPlugin(BasePlugin):
             assets={
                 "entry_html": "assets/index.html",
                 "styles": ["assets/styles.css"],
-                "scripts": ["assets/app.js"],
+                "scripts": ["assets/script.js"],
                 "assets_dir": "assets",
             },
         )
