@@ -74,7 +74,12 @@ export async function createHtmlSandbox(
   variableBootstrap.textContent = `
     :host {
       display: block;
-      contain: content;
+      /* 仅做 layout + style 隔离，不含 paint。
+       * contain:paint 会把超出 :host 盒子的内容裁掉，导致内容超出
+       * .html-sandbox-host 高度时无法被外层 overflow:auto 滚动条接管。
+       * 配合外层 wrapper/host 使用 min-height:100%（可增长），
+       * 让 Shadow 内容自然撑开 host，由 .plugin-page-content 滚动。 */
+      contain: layout style;
       font-family: inherit;
       color: inherit;
       line-height: inherit;
@@ -172,7 +177,7 @@ export async function createHtmlSandbox(
 
   // 5. 加载 entry HTML（fetch 已被代理，自动注入 X-API-Key / X-Plugin-Name）
   //    后端 plugin_ui_manager 生成的 key 为 `entry_html`（与注册时的 assets dict 一致）
-  const entryUrls = assetsUrls.entry_html || assetsUrls.entry || []
+  const entryUrls = assetsUrls.entry_html || []
   if (entryUrls.length > 0) {
     try {
       const response = await fetch(entryUrls[0])

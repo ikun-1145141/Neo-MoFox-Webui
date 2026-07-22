@@ -5,7 +5,7 @@
  * 接收 XML 字符串，通过 xml-renderer.ts 转换为 Vue VNode 树进行渲染。
  * 管理 <definitions> 预处理、变量池初始化、管道上下文构建。
  */
-import { ref, computed, watch, onUnmounted, type VNode } from 'vue'
+import { ref, computed, watch, onUnmounted, defineComponent, type VNode } from 'vue'
 import { useRouter } from 'vue-router'
 import type { PluginUIVarStore } from '../../stores/plugin-ui-vars'
 import { parseXml, processDefinitions, renderElementToVNodes, type XmlRenderContext } from '../../utils/plugin-ui/xml/xml-renderer'
@@ -13,6 +13,29 @@ import { ApiTemplateEngine } from '../../utils/plugin-ui/api-template-engine'
 import type { PipeContext } from '../../utils/plugin-ui/xml/pipe-executor'
 import { useToastStore } from '../../utils/toast'
 import { useDialogStore } from '../../utils/dialog'
+
+/**
+ * 稳定的 VNode 包装组件。
+ *
+ * 关键设计：组件类型（VNodeRenderer）在父组件每次重渲染时保持稳定，
+ * 仅 :vnode prop 发生变化。这样 Vue 会 patch 现有实例而不是 remount。
+ *
+ * 若使用 <component :is="() => vnode">，每次渲染都会创建新的箭头函数
+ * 引用，Vue 会把新函数视为不同的组件类型 → 触发 remount →
+ * 丢失内部状态（focus / 输入光标 / 内部 ref 等），表现为"触碰即重载"。
+ */
+const VNodeRenderer = defineComponent({
+  name: 'VNodeRenderer',
+  props: {
+    vnode: {
+      type: Object as () => VNode,
+      required: true,
+    },
+  },
+  render() {
+    return this.vnode
+  },
+})
 
 const props = defineProps<{
   /** XML 字符串 */
@@ -156,10 +179,10 @@ onUnmounted(() => {
 
     <!-- 正常渲染 -->
     <template v-else>
-      <component
+      <VNodeRenderer
         v-for="(vnode, index) in vnodes"
         :key="index"
-        :is="() => vnode"
+        :vnode="vnode"
       />
     </template>
   </div>

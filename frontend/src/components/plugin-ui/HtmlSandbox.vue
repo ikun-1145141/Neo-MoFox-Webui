@@ -111,14 +111,17 @@ watch(
 <style scoped>
 .html-sandbox-wrapper {
   width: 100%;
-  height: 100%;
+  /* 用 min-height 而非 height：让 wrapper 能随 Shadow DOM 内容增长，
+   * 从而使外层 .plugin-page-content 的 overflow:auto 触发滚动。
+   * 若用 height:100%，wrapper 高度被锁死在父容器高度，超出部分被
+   * Shadow DOM 内的 :host contain 规则裁剪，无法滚动。 */
+  min-height: 100%;
   position: relative;
-  min-height: 200px;
 }
 
 .html-sandbox-host {
   width: 100%;
-  height: 100%;
+  min-height: 100%;
 }
 
 .html-sandbox-loading,

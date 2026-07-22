@@ -1,6 +1,14 @@
 <script setup lang="ts">
-/** SysTextarea - 多行文本输入组件。 */
-import { ref, watch } from 'vue'
+/**
+ * SysTextarea - 多行文本输入组件。
+ *
+ * 作为自定义元素使用时（HTML 轨），<sys-textarea>.value 必须能取到
+ * 用户当前输入的文本（与原生 <textarea>.value 行为一致）。Vue 自定义元素的
+ * prop 不会随内部 native textarea 的输入自动回流，故在 onMounted 时
+ * 显式在 host 实例上重定义 value 属性，getter 返回 liveValue，
+ * setter 同步 liveValue 并 emit change。
+ */
+import { ref, watch, onMounted } from 'vue'
 
 const props = defineProps<{
   label?: string
@@ -21,6 +29,9 @@ const emit = defineEmits<{
 const isFocused = ref(false)
 const shakeKey = ref(0)
 
+/** native <textarea> 元素引用，用于反查 host 自定义元素 */
+const innerTextareaRef = ref<HTMLTextAreaElement | null>(null)
+
 watch(
   () => props.error,
   (err, prev) => {
@@ -28,9 +39,54 @@ watch(
   }
 )
 
+/**
+ * 实时值：跟踪 prop 变化与用户输入。
+ * 说明同 SysInput.vue 的 liveValue。
+ */
+const liveValue = ref<string>(props.value ?? '')
+
+watch(
+  () => props.value,
+  (v) => {
+    liveValue.value = v ?? ''
+  }
+)
+
 function handleInput(event: Event): void {
-  emit('change', (event.target as HTMLTextAreaElement).value)
+  const target = event.target as HTMLTextAreaElement
+  liveValue.value = target.value
+  emit('change', target.value)
 }
+
+onMounted(() => {
+  // 让 <sys-textarea>.value 返回用户实际输入的文本。
+  // 详见 SysInput.vue 同段说明（Vue 3.5 CE 的 _resolveProps 用
+  // 非 configurable 访问器定义 prop，无法用 Object.defineProperty
+  // 重定义；改为覆写 _getProp / _setProp 实例方法）。
+  const nativeTextarea = innerTextareaRef.value
+  if (!nativeTextarea) return
+  const rootNode = nativeTextarea.getRootNode()
+  const host = rootNode instanceof ShadowRoot
+    ? (rootNode.host as any | null)
+    : (nativeTextarea.closest('sys-textarea') as any | null)
+  if (!host || typeof host._getProp !== 'function') return
+
+  const originalGetProp = host._getProp.bind(host)
+  host._getProp = (key: string) => {
+    if (key === 'value') {
+      return liveValue.value
+    }
+    return originalGetProp(key)
+  }
+
+  const originalSetProp = host._setProp.bind(host)
+  host._setProp = (key: string, val: any, shouldReflect?: boolean, shouldUpdate?: boolean) => {
+    if (key === 'value') {
+      liveValue.value = val == null ? '' : String(val)
+    }
+    return originalSetProp(key, val, shouldReflect, shouldUpdate)
+  }
+})
 </script>
 
 <template>
@@ -41,10 +97,11 @@ function handleInput(event: Event): void {
       :class="{ 'sys-textarea-label--focused': isFocused || (value !== undefined && value !== '') }"
     >{{ label }}</label>
     <textarea
+      ref="innerTextareaRef"
       class="sys-textarea"
       :class="{ 'sys-textarea--error': error, 'sys-textarea--focused': isFocused }"
       :placeholder="placeholder"
-      :value="value"
+      :value="liveValue"
       :disabled="disabled"
       :rows="parseInt(rows || '3')"
       :maxlength="maxlength ? parseInt(String(maxlength)) : undefined"
