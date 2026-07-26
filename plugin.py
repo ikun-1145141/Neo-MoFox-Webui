@@ -1,0 +1,103 @@
+"""Neo-MoFox-Webui 插件入口。
+
+提供 WebUI 后端支持。
+"""
+
+from __future__ import annotations
+
+from src.core.components.base.plugin import BasePlugin
+from src.core.components.loader import register_plugin
+from src.app.plugin_system.api.log_api import get_logger
+
+from .components.router.auth_router import AuthRouter
+from .components.router.chat_router import ChatRouter
+from .components.router.dashboard_router import DashboardRouter
+from .components.router.llm_metrics_router import LLMMetricsRouter
+from .components.router.request_inspector_router import RequestInspectorRouter
+from .components.router.wallpaper_router import WallpaperRouter
+from .components.router.webui_router import WebuiSettingsRouter
+from .components.router.system_router import SystemRouter
+from .components.router.plugin_router import PluginRouter
+from .components.router.frontend_router import FrontendRouter
+from .components.router.log_router import LogRouter
+from .components.router.config import (
+    MainConfigRouter,
+    BotConfigRouter,
+    ModelConfigRouter,
+    McpConfigRouter,
+    PluginConfigRouter,
+)
+from .components.router.plugin_ui import (
+    PluginUIRouter,
+    PluginUIAssetRouter,
+)
+from .components.services.plugin_ui_service import PluginUIService
+from .components.handlers import WebuiStartupPanelHandler, LogBroadcastHandler, ChatBroadcastHandler
+
+logger = get_logger("webui_plugin")
+
+
+@register_plugin
+class WebuiPlugin(BasePlugin):
+    """WebUI 插件。
+
+    提供 WebUI 的后端支持，包括：
+    - 设置管理 API
+    - 静态文件服务（未来）
+    - Git 更新管理（未来）
+    - 插件 UI 扩展系统
+    """
+
+    plugin_name: str = "neo-mofox-webui"
+    plugin_description: str = "Neo-MoFox WebUI 后端插件"
+    plugin_version: str = "1.0.0"
+
+    configs: list[type] = []
+    dependent_components: list[str] = []
+
+    def get_components(self) -> list[type]:
+        """获取插件内所有组件类。
+
+        Returns:
+            组件类列表
+        """
+        components: list[type] = [
+            AuthRouter,
+            ChatRouter,
+            DashboardRouter,
+            LLMMetricsRouter,
+            RequestInspectorRouter,
+            WebuiSettingsRouter,
+            WallpaperRouter,
+            SystemRouter,
+            PluginRouter,
+            FrontendRouter,
+            LogRouter,
+            WebuiStartupPanelHandler,
+            LogBroadcastHandler,
+            ChatBroadcastHandler,
+            # 配置管理路由
+            MainConfigRouter,
+            BotConfigRouter,
+            ModelConfigRouter,
+            McpConfigRouter,
+            PluginConfigRouter,
+            # 插件 UI 扩展系统
+            PluginUIService,
+            PluginUIRouter,
+            PluginUIAssetRouter,
+        ]
+        return components
+
+    async def on_plugin_loaded(self) -> None:
+        """插件加载钩子。"""
+        logger.info(f"WebUI 插件 v{self.plugin_version} 已加载")
+        logger.info("API 路径: /api/webui")
+        logger.info("认证路径: /api/auth")
+        logger.info("插件管理路径: /api/plugin")
+        logger.info("插件 UI 扩展路径: /webui/api/plugin-ui")
+
+    async def on_plugin_unloaded(self) -> None:
+        """插件卸载钩子。"""
+        logger.info("WebUI 插件即将卸载")
+        # 不做 Registry 清理——内存态生死跟进程走，进程退出天然清空
