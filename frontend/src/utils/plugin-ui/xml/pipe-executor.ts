@@ -8,7 +8,7 @@
  */
 
 import type { Router } from 'vue-router'
-import type { PluginUIVarStore } from '../../../stores/plugin-ui-vars'
+import type { PluginUIVarStore } from '../plugin-ui-vars'
 import type { ApiTemplateEngine } from '../api-template-engine'
 import { resolvePlaceholderSync } from '../placeholder-parser'
 import { safeEvaluate } from '../expression-evaluator'

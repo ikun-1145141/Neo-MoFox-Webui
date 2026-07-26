@@ -8,7 +8,7 @@
  */
 
 import instance from '../../api/third-party'
-import type { PluginUIVarStore } from '../../stores/plugin-ui-vars'
+import type { PluginUIVarStore } from './plugin-ui-vars'
 import { resolvePlaceholderSync } from './placeholder-parser'
 import { safeEvaluate } from './expression-evaluator'
 

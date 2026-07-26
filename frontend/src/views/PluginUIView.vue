@@ -13,7 +13,7 @@ import PluginNavList from '../components/plugin-ui/PluginNavList.vue'
 import PluginPageContainer from '../components/plugin-ui/PluginPageContainer.vue'
 import { listPluginPages, getPageDetail, getPageSchema } from '../api/modules/plugin-ui'
 import type { PageSummary, PageDetail, PageSchemaResponse } from '../api/types/plugin-ui'
-import { createPluginUIVarStore, type PluginUIVarStore } from '../stores/plugin-ui-vars'
+import { createPluginUIVarStore, type PluginUIVarStore } from '../utils/plugin-ui/plugin-ui-vars'
 import { useI18n } from '../utils/i18n'
 
 const route = useRoute()
