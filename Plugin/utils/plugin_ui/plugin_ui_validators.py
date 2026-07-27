@@ -10,7 +10,7 @@ import html
 import json
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from lxml import etree
 
@@ -20,6 +20,7 @@ from .plugin_ui_constants import (
     EXPRESSION_FORBIDDEN_KEYWORDS,
     HTML_FORBIDDEN_TAGS,
     MAX_ASSET_SIZE_BYTES,
+    MAX_I18N_FILE_SIZE_BYTES,
     XML_ALLOWED_TAGS,
     XML_FORBIDDEN_TAGS,
 )
@@ -59,6 +60,10 @@ class AssetSizeError(Exception):
 # --- lark 占位符表达式语法 ---
 
 # 占位符表达式的 lark 语法定义
+#
+# 字符串字面量同时支持单引号和双引号，与前端 expression-evaluator 的 tokenizer
+# 行为一致：XML 属性常用单引号包裹表达式（如 on-click="notify: '添加成功'"），
+# 因此 t('key') 这样的写法必须能通过校验。
 EXPRESSION_GRAMMAR = r"""
     ?start: expr
 
@@ -79,16 +84,20 @@ EXPRESSION_GRAMMAR = r"""
 
     ?atom: "(" expr ")"
          | function_call
+         | object_literal
          | identifier
          | literal
 
     function_call: NAME "(" arguments? ")"
     arguments: expr ("," expr)*
 
+    object_literal: "{" (object_pair ("," object_pair)*)? "}"
+    object_pair: STRING ":" expr
+
     identifier: NAME ("." NAME)*
 
     ?literal: NUMBER -> number
-            | ESCAPED_STRING -> string
+            | STRING -> string
             | "true" -> true
             | "false" -> false
             | "null" -> null
@@ -97,8 +106,10 @@ EXPRESSION_GRAMMAR = r"""
 
     NAME: /[a-zA-Z_][a-zA-Z0-9_]*/
 
+    STRING: /"([^"\\]|\\.)*"/
+          | /'([^'\\]|\\.)*'/
+
     %import common.NUMBER
-    %import common.ESCAPED_STRING
     %import common.WS
     %ignore WS
 """
@@ -111,8 +122,15 @@ def _extract_placeholders(text: str) -> list[str]:
     例如 '{"name": "{username}"}' 会正确提取出最内层的 'username'，
     而不会把 JSON 结构误识别为表达式。
 
-    仅提取最内层（叶子）占位符，因为外层带嵌套 { 的内容（如 JSON body）
-    本身不是表达式，真正的占位符表达式不允许包含裸花括号。
+    当占位符内容包含嵌套 ``{`` 时，有两种可能：
+    1. 占位符表达式内含对象字面量（如 ``t('key', {'name': val})``）——
+       应作为单个表达式整体提取。
+    2. JSON 等结构内嵌套了占位符（如 ``"key": "{val}"``）——
+       应递归提取内部真正的占位符。
+
+    通过先用 lark 解析器尝试把内容当作单个表达式解析来区分：
+    解析成功 → 情况 1，整体作为一个占位符；
+    解析失败 → 情况 2，递归提取内部占位符。
 
     Args:
         text: 待提取的源文本
@@ -150,16 +168,22 @@ def _extract_placeholders(text: str) -> list[str]:
                     expr += text[i]
                 i += 1
 
-            # 只有不含嵌套 { 的才是真正的占位符表达式
-            # 如果 expr 内含 {，说明是 JSON 等结构，不是简单表达式
-            # 此时递归提取内部的真正占位符
-            if "{" in expr:
-                inner_placeholders = _extract_placeholders(expr)
-                results.extend(inner_placeholders)
+            trimmed = expr.strip()
+            if not trimmed:
+                continue
+
+            if "{" not in trimmed:
+                # 无嵌套花括号 → 简单占位符表达式
+                results.append(trimmed)
             else:
-                trimmed = expr.strip()
-                if trimmed:
+                # 含嵌套花括号：可能是对象字面量表达式，也可能是 JSON 内嵌占位符
+                # 先尝试当作单个表达式解析；成功则整体提取，失败则递归提取内部
+                try:
+                    _get_lark_parser().parse(trimmed)
                     results.append(trimmed)
+                except Exception:
+                    inner_placeholders = _extract_placeholders(trimmed)
+                    results.extend(inner_placeholders)
             continue
 
         i += 1
@@ -284,6 +308,98 @@ class PluginUIValidators:
             cls._validate_xml(metadata.mobile_xml)
         elif metadata.mode == PageMode.HTML and metadata.mobile_assets:
             cls._validate_html_assets(metadata.mobile_assets, plugin_root)
+
+    @classmethod
+    def validate_i18n(
+        cls, metadata: "PageRegistration", plugin_root: Path
+    ) -> dict[str, dict[str, Any]] | None:
+        """校验并加载 i18n JSON bundle。
+
+        当 ``metadata.i18n_path`` 为空时直接返回 None。
+        否则以 ``plugin_root`` 为基准做路径穿越校验、文件存在性校验、
+        大小校验，并 JSON 解析为 ``dict[str, dict[str, Any]]``。
+
+        Args:
+            metadata: 页面注册入参
+            plugin_root: 插件根目录绝对路径
+
+        Returns:
+            解析后的 i18n bundle（``{"zh-CN": {...}, "en-US": {...}}``），
+            或 None（未声明 i18n_path 时）
+
+        Raises:
+            AssetPathError: 路径穿越或扩展名不合法
+            AssetMissingError: 文件不存在
+            AssetSizeError: 文件过大
+            ValueError: JSON 解析失败或结构不合法
+        """
+        if not metadata.i18n_path:
+            return None
+
+        try:
+            abs_path = resolve_safe(metadata.i18n_path, plugin_root)
+        except PermissionError as e:
+            raise AssetPathError(
+                f"i18n_path 路径穿越: {metadata.i18n_path}"
+            ) from e
+        except FileNotFoundError as e:
+            raise AssetMissingError(
+                f"i18n_path 文件不存在: {metadata.i18n_path}"
+            ) from e
+
+        # 扩展名（已在 model 层校验 .json 后缀，这里二次保险）
+        ext = abs_path.suffix.lower()
+        if ext != ".json":
+            raise AssetPathError(
+                f"i18n_path 扩展名不允许: {ext} (file: {metadata.i18n_path})"
+            )
+
+        # 文件大小
+        size = abs_path.stat().st_size
+        if size > MAX_I18N_FILE_SIZE_BYTES:
+            raise AssetSizeError(
+                f"i18n_path 文件过大: {metadata.i18n_path} "
+                f"({size} bytes > {MAX_I18N_FILE_SIZE_BYTES} bytes)"
+            )
+
+        # 读取并解析 JSON
+        try:
+            content = abs_path.read_text(encoding="utf-8")
+        except OSError as e:
+            raise AssetMissingError(
+                f"i18n_path 文件读取失败: {metadata.i18n_path} ({e})"
+            ) from e
+
+        try:
+            parsed = json.loads(content)
+        except (json.JSONDecodeError, ValueError) as e:
+            raise ValueError(
+                f"i18n_path JSON 解析失败: {metadata.i18n_path} — {e}"
+            ) from e
+
+        # 结构校验：必须是 dict[str, dict]
+        if not isinstance(parsed, dict):
+            raise ValueError(
+                f"i18n_path 顶层必须为对象: {metadata.i18n_path} "
+                f"(实际类型: {type(parsed).__name__})"
+            )
+        for locale_key, locale_value in parsed.items():
+            if not isinstance(locale_key, str):
+                raise ValueError(
+                    f"i18n_path locale 键必须为字符串: {metadata.i18n_path} "
+                    f"(实际类型: {type(locale_key).__name__})"
+                )
+            if locale_value is None:
+                # 允许 locale 值为 null（等同于该 locale 无翻译，走 fallback）
+                continue
+            if not isinstance(locale_value, dict):
+                raise ValueError(
+                    f"i18n_path locale '{locale_key}' 的值必须为对象或 null: "
+                    f"{metadata.i18n_path} "
+                    f"(实际类型: {type(locale_value).__name__})"
+                )
+
+        return parsed  # type: ignore[return-value]
 
     # --- XML 校验 ---
 

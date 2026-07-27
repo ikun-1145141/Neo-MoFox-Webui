@@ -72,6 +72,7 @@ class PluginUIService(BaseService):
         assets: dict | None = None,
         mobile_xml: str | None = None,
         mobile_assets: dict | None = None,
+        i18n_path: str | None = None,
     ) -> RegisteredPage:
         """注册一个插件 UI 页面。
 
@@ -87,6 +88,10 @@ class PluginUIService(BaseService):
         插件根目录的绝对路径，再以此为基准对相对路径做路径穿越校验，
         确保资源不会跳出插件根目录树。
 
+        i18n_path 同样以「插件根目录」为基准；XML 模式下若声明了 i18n_path，
+        也会调用 _resolve_plugin_root 解析真实插件根目录（不再用占位值），
+        以确保路径穿越校验有意义。
+
         Args:
             plugin_name: 调用方插件名称
             page_id: 同插件内唯一标识（小写字母、数字、连字符）
@@ -101,16 +106,20 @@ class PluginUIService(BaseService):
                  "styles": ["path/to/style.css"],
                  "scripts": ["path/to/main.js"],
                  "assets_dir": "path/to/assets"}
-                所有路径相对于「插件根目录」（由 plugin_name 解析）
+                 所有路径相对于「插件根目录」（由 plugin_name 解析）
             mobile_xml: XML 模式下的移动端 XML 字符串（可选，空则 fallback 到桌面端）
             mobile_assets: HTML 模式下的移动端资源声明 dict（可选，结构同 assets）
+            i18n_path: i18n JSON 文件相对插件根目录的路径（可选）。
+                文件结构为 {"zh-CN": {...}, "en-US": {...}}，每个 locale 下是嵌套 dict。
+                前端注册时会自动在最外层包一层 {plugin_name: ...}，使插件 key 自动
+                落入 <plugin_name>.<key> 命名空间，避免与 WebUI 内置 key 冲突。
 
         Returns:
             加工后的 RegisteredPage 实例
 
         Raises:
             ValueError: 参数校验失败（含 mode 非法、mode 与移动端参数不匹配、
-                插件未加载/路径不可用等）
+                插件未加载/路径不可用、i18n JSON 解析或结构不合法等）
             XMLValidationError: XML 校验失败
             AssetPathError: 路径不合法/穿越
             AssetMissingError: 文件不存在
@@ -145,6 +154,7 @@ class PluginUIService(BaseService):
             assets=assets_obj,
             mobile_xml=mobile_xml,
             mobile_assets=mobile_assets_obj,
+            i18n_path=i18n_path,
         )
 
         logger.debug(
@@ -152,22 +162,28 @@ class PluginUIService(BaseService):
         )
 
         # 确定插件根目录
-        if metadata.mode == PageMode.HTML:
-            # HTML 模式：通过插件名查找插件根目录，再以此作为路径解析基准
+        # HTML 模式或声明了 i18n_path 时都需要真实 plugin_root 做路径穿越校验；
+        # 纯 XML 模式且无 i18n 时不读取本地资源，可用占位值满足字段约束
+        needs_plugin_root = (
+            metadata.mode == PageMode.HTML or metadata.i18n_path is not None
+        )
+        if needs_plugin_root:
             plugin_root = self._resolve_plugin_root(metadata.plugin_name)
         else:
-            # XML 模式不读取本地资源，无需 plugin_root；
-            # 仍传一个占位值以满足 RegisteredPage 字段约束
             plugin_root = Path.cwd().resolve()
 
         # 执行校验（HTML 模式下校验器会以 plugin_root 为基准做路径穿越检查）
         PluginUIValidators.validate(metadata, plugin_root)
 
+        # 校验并加载 i18n bundle（若有）
+        i18n_bundle = PluginUIValidators.validate_i18n(metadata, plugin_root)
+
         # 注册到 Manager
-        page = await self._manager.register(metadata, plugin_root)
+        page = await self._manager.register(metadata, plugin_root, i18n_bundle)
         logger.info(
             f"页面注册成功: {metadata.plugin_name}/{metadata.page_id} "
-            f"(mode={metadata.mode.value})"
+            f"(mode={metadata.mode.value}"
+            f"{', i18n=yes' if i18n_bundle else ', i18n=no'})"
         )
         return page
 

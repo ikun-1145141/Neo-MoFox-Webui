@@ -6,9 +6,13 @@
  */
 
 import { reactive, readonly } from 'vue'
+import { t as i18nT } from '../i18n'
 
 /**
  * 变量池 Store 接口。
+ *
+ * 同时实现 expression-evaluator 的 VariableResolver 接口（get/pluginName/tFn），
+ * 使占位符表达式中的 ``t('key')`` 内置函数能自动加 pluginName 前缀。
  */
 export interface PluginUIVarStore {
   /** page scope：进入页面创建 / 离开销毁 */
@@ -19,6 +23,15 @@ export interface PluginUIVarStore {
 
   /** global scope：只读，WebUI 主程序写入 */
   readonly global: Readonly<Record<string, any>>
+
+  /** 当前页面所属插件名（用于 i18n key 自动加前缀） */
+  readonly pluginName: string
+
+  /**
+   * i18n 翻译函数代理（用于 expression-evaluator 内置 t()）。
+   * 调用时会自动把 key 拼成 ``<pluginName>.<key>`` 后转给全局 t()。
+   */
+  readonly tFn: (key: string, params?: Record<string, string>) => string
 
   /** 取值（自动按 page → plugin → global 优先级解析路径） */
   get(path: string): any
@@ -117,10 +130,17 @@ export function createPluginUIVarStore(pluginName: string): PluginUIVarStore {
   const plugin = getOrCreatePluginScope(pluginName)
   const global = readonly(globalVars)
 
+  // i18n 翻译代理：把 expression-evaluator 里的 t('key') 调用自动加上 pluginName 前缀
+  // 这样插件作者在 XML 里写 {t('welcome')} 实际解析为 t('myplugin.welcome')
+  const tFn = (key: string, params?: Record<string, string>): string =>
+    i18nT(`${pluginName}.${key}`, params)
+
   return {
     page,
     plugin,
     global,
+    pluginName,
+    tFn,
 
     get(path: string): any {
       // 按优先级：page → plugin → global

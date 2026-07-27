@@ -14,7 +14,7 @@ import PluginPageContainer from '../components/plugin-ui/PluginPageContainer.vue
 import { listPluginPages, getPageDetail, getPageSchema } from '../api/modules/plugin-ui'
 import type { PageSummary, PageDetail, PageSchemaResponse } from '../api/types/plugin-ui'
 import { createPluginUIVarStore, type PluginUIVarStore } from '../utils/plugin-ui/plugin-ui-vars'
-import { useI18n } from '../utils/i18n'
+import { useI18n, registerPluginI18n, unregisterPluginI18n } from '../utils/i18n'
 
 const route = useRoute()
 const router = useRouter()
@@ -58,6 +58,9 @@ const isMobile = ref(
 
 /** 当前页面的变量池 Store */
 const currentStore = ref<PluginUIVarStore | null>(null)
+
+/** 当前已注册 i18n 的 (pluginName, pageId)，用于切页/卸载时精确反注册 */
+const registeredI18nKey = ref<{ pluginName: string; pageId: string } | null>(null)
 
 /** 移动端导航下拉框是否打开 */
 const isMobileNavOpen = ref(false)
@@ -139,6 +142,11 @@ onBeforeUnmount(() => {
     currentStore.value.destroyPageScope()
     currentStore.value = null
   }
+  // 反注册当前页面的 i18n bundle，避免遗留 key 污染其他页面
+  if (registeredI18nKey.value) {
+    unregisterPluginI18n(registeredI18nKey.value.pluginName, registeredI18nKey.value.pageId)
+    registeredI18nKey.value = null
+  }
 })
 
 /** 加载所有已注册的插件页面 */
@@ -168,6 +176,11 @@ watch(
       currentVariant.value = null
       contentError.value = null
       isFallback.value = false
+      // 清空 i18n 注册，避免上一个页面的 key 残留
+      if (registeredI18nKey.value) {
+        unregisterPluginI18n(registeredI18nKey.value.pluginName, registeredI18nKey.value.pageId)
+        registeredI18nKey.value = null
+      }
       return
     }
 
@@ -196,6 +209,12 @@ async function loadPage(pluginName: string, pageId: string): Promise<void> {
   // 销毁旧 page scope
   if (currentStore.value) {
     currentStore.value.destroyPageScope()
+  }
+
+  // 反注册上一页的 i18n bundle（若有），避免上一页的 key 残留污染当前页
+  if (registeredI18nKey.value) {
+    unregisterPluginI18n(registeredI18nKey.value.pluginName, registeredI18nKey.value.pageId)
+    registeredI18nKey.value = null
   }
 
   try {
@@ -236,6 +255,13 @@ async function loadPage(pluginName: string, pageId: string): Promise<void> {
 
     currentSchema.value = schema
     currentVariant.value = actualVariant
+
+    // 6. 注册该页面的 i18n bundle（无论 desktop/mobile variant 都返回同一份 i18n）
+    //    未声明 i18n_path 的页面 schema.i18n 为 null，跳过注册即可
+    if (schema.i18n && typeof schema.i18n === 'object') {
+      registerPluginI18n(pluginName, pageId, schema.i18n)
+      registeredI18nKey.value = { pluginName, pageId }
+    }
   } catch (err: any) {
     contentError.value = err?.message || t('pluginUI.loadFailed')
     currentDetail.value = null

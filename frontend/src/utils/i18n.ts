@@ -1844,7 +1844,100 @@ function isLocale(value: unknown): value is Locale {
   return value === 'zh-CN' || value === 'en-US'
 }
 
+// === 插件自定义 i18n bundle 存储 ===
+//
+// 设计要点：
+// - bundle 以 `${pluginName}::${pageId}` 为 key 存储，便于页面级精确注册/卸载。
+// - pluginMessages 是响应式 ref，每次注册/卸载都重建引用以触发 Vue 重新计算
+//   所有依赖 t() 的 computed。
+// - 每个 bundle 的内容会被包一层 { [pluginName]: bundle[locale] } 后深合并，
+//   使插件 key 自动落入 `<pluginName>.<key>` 命名空间，
+//   与内置 messages 平级查找，无冲突风险。
+// - resolveMessage 查询顺序：pluginMessages[locale] → messages[locale] →
+//   pluginMessages[DEFAULT_LOCALE] → messages[DEFAULT_LOCALE] → key 字面量。
+const pluginBundles = new Map<string, Record<Locale, Record<string, unknown>>>()
+const pluginMessages = ref<Record<Locale, Record<string, unknown>>>({
+  'zh-CN': {},
+  'en-US': {},
+})
+
+/**
+ * 把 bundle 的每个 locale 内容包一层 { [pluginName]: ... } 后深合并到目标对象。
+ *
+ * @param target - 目标对象（会被原地修改）
+ * @param pluginName - 插件名称（作为命名空间前缀）
+ * @param bundle - 单个页面的 i18n bundle
+ */
+function mergeBundleInto(
+  target: Record<string, unknown>,
+  pluginName: string,
+  localeBundle: Record<string, unknown> | null | undefined,
+): void {
+  if (!localeBundle || typeof localeBundle !== 'object') return
+  target[pluginName] = deepMerge(
+    target[pluginName] as Record<string, unknown> | undefined,
+    localeBundle,
+  )
+}
+
+/**
+ * 深合并两个对象（后者覆盖前者同名 key，对象递归合并，数组和非对象直接覆盖）。
+ */
+function deepMerge(
+  a: Record<string, unknown> | undefined,
+  b: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!a) return structuredClone(b)
+  const result: Record<string, unknown> = { ...a }
+  for (const key of Object.keys(b)) {
+    const av = result[key]
+    const bv = b[key]
+    if (
+      av && typeof av === 'object' && !Array.isArray(av) &&
+      bv && typeof bv === 'object' && !Array.isArray(bv)
+    ) {
+      result[key] = deepMerge(av as Record<string, unknown>, bv as Record<string, unknown>)
+    } else {
+      result[key] = bv
+    }
+  }
+  return result
+}
+
+/**
+ * 重建 pluginMessages（每次注册/卸载后调用）。
+ *
+ * 遍历当前所有 pluginBundles，把每个 bundle 在每个 locale 下
+ * 包一层 { [pluginName]: ... } 后深合并。
+ */
+function rebuildPluginMessages(): void {
+  const next: Record<Locale, Record<string, unknown>> = {
+    'zh-CN': {},
+    'en-US': {},
+  }
+  for (const bundle of pluginBundles.values()) {
+    // bundle 来自后端，结构为 { 'zh-CN': {...}, 'en-US': {...} }；
+    // 但插件可能只声明一个 locale，缺失的 locale 走 fallback（resolveMessage 处理）
+    const pluginName = bundle.__pluginName as string
+    if (!pluginName) continue
+    for (const loc of ['zh-CN', 'en-US'] as Locale[]) {
+      mergeBundleInto(next[loc], pluginName, bundle[loc] as Record<string, unknown> | undefined)
+    }
+  }
+  pluginMessages.value = next
+}
+
 function resolveMessage(localeValue: Locale, key: string): string | undefined {
+  // 先查插件注册的 messages
+  const fromPlugin = key.split('.').reduce<unknown>((current, segment) => {
+    if (current && typeof current === 'object' && segment in current) {
+      return (current as Record<string, unknown>)[segment]
+    }
+    return undefined
+  }, pluginMessages.value[localeValue]) as string | undefined
+  if (fromPlugin !== undefined) return fromPlugin
+
+  // 再查内置静态 messages
   return key.split('.').reduce<unknown>((current, segment) => {
     if (current && typeof current === 'object' && segment in current) {
       return (current as Record<string, unknown>)[segment]
@@ -1861,14 +1954,14 @@ export function setLocale(nextLocale: Locale) {
 
 export function t(key: string, params?: Record<string, string>): string {
   let message = resolveMessage(locale.value, key) ?? resolveMessage(DEFAULT_LOCALE, key) ?? key
-  
+
   // 替换参数
   if (params) {
     Object.entries(params).forEach(([paramKey, paramValue]) => {
       message = message.replace(new RegExp(`\\{${paramKey}\\}`, 'g'), paramValue)
     })
   }
-  
+
   return message
 }
 
@@ -1877,6 +1970,54 @@ export function useI18n() {
     locale: readonly(locale),
     setLocale,
     t,
+  }
+}
+
+// === 插件 i18n 注册 API ===
+//
+// 供 PluginUIView 在加载页面 schema 时调用。
+// bundle 来自后端 PageSchemaResponse.i18n（已是 { 'zh-CN': {...}, 'en-US': {...} } 结构）。
+// 内部会在 bundle 上挂一个 __pluginName 标记，rebuildPluginMessages 时据此分命名空间。
+
+/**
+ * 注册一个插件页面的 i18n bundle。
+ *
+ * 同一 (pluginName, pageId) 重复注册视为更新（覆盖旧 bundle）。
+ * 调用后 pluginMessages 会立即重建，所有依赖 t() 的 computed 自动失效。
+ *
+ * @param pluginName - 插件名称（作为 key 的命名空间前缀）
+ * @param pageId - 页面标识
+ * @param bundle - i18n bundle，结构 { 'zh-CN': {...}, 'en-US': {...} }
+ */
+export function registerPluginI18n(
+  pluginName: string,
+  pageId: string,
+  bundle: Record<string, Record<string, unknown>>,
+): void {
+  if (!pluginName || !pageId || !bundle) return
+  const key = `${pluginName}::${pageId}`
+  // 把 bundle 标准化为 { zh-CN, en-US, __pluginName } 三字段
+  const normalized = {
+    'zh-CN': (bundle['zh-CN'] as Record<string, unknown> | undefined) ?? {},
+    'en-US': (bundle['en-US'] as Record<string, unknown> | undefined) ?? {},
+    __pluginName: pluginName,
+  } as Record<Locale, Record<string, unknown>> & { __pluginName: string }
+  pluginBundles.set(key, normalized)
+  rebuildPluginMessages()
+}
+
+/**
+ * 卸载一个插件页面的 i18n bundle。
+ *
+ * 幂等：未注册时静默返回。
+ *
+ * @param pluginName - 插件名称
+ * @param pageId - 页面标识
+ */
+export function unregisterPluginI18n(pluginName: string, pageId: string): void {
+  const key = `${pluginName}::${pageId}`
+  if (pluginBundles.delete(key)) {
+    rebuildPluginMessages()
   }
 }
 

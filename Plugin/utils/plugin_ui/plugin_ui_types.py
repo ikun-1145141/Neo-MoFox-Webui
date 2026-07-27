@@ -10,6 +10,7 @@ import re
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -97,6 +98,10 @@ class PageRegistration(BaseModel):
         assets: HTML 模式下的资源声明（桌面端）
         mobile_xml: XML 模式下的移动端 XML 字符串（可空，空则移动端 fallback 到桌面端）
         mobile_assets: HTML 模式下的移动端资源声明（可空，空则移动端 fallback 到桌面端）
+        i18n_path: i18n JSON 文件相对插件根目录的路径（可空）。文件结构为
+            ``{"zh-CN": {...}, "en-US": {...}}``，每个 locale 下的内容是嵌套 dict。
+            前端注册时会自动在最外层包一层 ``{plugin_name: ...}``，使插件 key
+            自动落入 ``<plugin_name>.<key>`` 命名空间，避免与 WebUI 内置 key 冲突。
     """
 
     plugin_name: str = Field(..., description="插件名称")
@@ -118,6 +123,10 @@ class PageRegistration(BaseModel):
     mobile_assets: HTMLAssets | None = Field(
         default=None, description="HTML 模式下的移动端资源声明"
     )
+    i18n_path: str | None = Field(
+        default=None,
+        description="i18n JSON 文件相对插件根目录的路径；为空表示该页面不注册自定义翻译",
+    )
 
     @field_validator("page_id")
     @classmethod
@@ -127,6 +136,16 @@ class PageRegistration(BaseModel):
             raise ValueError(
                 f"page_id 不合法: '{v}'，必须匹配 {PAGE_ID_PATTERN}"
             )
+        return v
+
+    @field_validator("i18n_path")
+    @classmethod
+    def validate_i18n_path(cls, v: str | None) -> str | None:
+        """校验 i18n_path 路径合法性（仅做格式校验，文件 IO 校验在 validators 层）。"""
+        if v is None:
+            return v
+        if not v.endswith(".json"):
+            raise ValueError(f"i18n_path 必须以 .json 结尾: {v}")
         return v
 
     @model_validator(mode="after")
@@ -171,6 +190,10 @@ class RegisteredPage(BaseModel):
         assets: 资源声明（桌面端，HTML 模式）
         mobile_xml: 移动端 XML 字符串（XML 模式）
         mobile_assets: 移动端资源声明（HTML 模式）
+        i18n_path: i18n JSON 文件相对路径（可空）
+        i18n: 已解析的 i18n bundle（结构 ``{"zh-CN": {...}, "en-US": {...}}``）；
+            与 i18n_path 不同，这是文件读取并 JSON 解析后的结果，避免每次 /schema
+            请求都重新读盘。为 None 表示该页面未注册自定义翻译。
         route_path: 系统生成的路由路径
         desktop_assets_urls: HTML 模式下桌面端资源绝对 URL
         mobile_assets_urls: HTML 模式下移动端资源绝对 URL
@@ -189,6 +212,8 @@ class RegisteredPage(BaseModel):
     assets: HTMLAssets | None = None
     mobile_xml: str | None = None
     mobile_assets: HTMLAssets | None = None
+    i18n_path: str | None = None
+    i18n: dict[str, dict[str, Any]] | None = None
     route_path: str
     desktop_assets_urls: dict[str, list[str]] | None = None
     mobile_assets_urls: dict[str, list[str]] | None = None
@@ -268,6 +293,10 @@ class PageSchemaResponse(BaseModel):
         mode: 渲染模式
         xml: XML 字符串（XML 模式）
         assets_urls: 资源 URL 集合（HTML 模式）
+        i18n: 该页面的 i18n bundle（``{"zh-CN": {...}, "en-US": {...}}``）；
+            前端拿到后会注册到响应式 store，使 ``t('<plugin_name>.<key>')``
+            与 XML ``{t('key')}`` / HTML ``sys.i18n.t('key')`` 都能命中。
+            为 None 表示该页面未注册自定义翻译。
     """
 
     plugin_name: str
@@ -275,6 +304,7 @@ class PageSchemaResponse(BaseModel):
     mode: PageMode
     xml: str | None = None
     assets_urls: dict[str, list[str]] | None = None
+    i18n: dict[str, dict[str, Any]] | None = None
 
 
 # --- 内部工具函数 ---
