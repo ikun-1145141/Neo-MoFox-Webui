@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**集成插件市场的现代化 Neo-MoFox 机器人 Web 管理界面**
+**现代化、类型安全的 Neo-MoFox 机器人 Web 管理界面**
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -22,9 +22,7 @@
 | **设计语言** | Material Design 3（MD3） |
 | **持久化路径** | `data/WebUI_data`（所有数据的统一根目录） |
 
-Neo-MoFox-WebUI 以单个 `neo-mofox-webui` 插件接入 Neo-MoFox。1.0.19 已将插件市场页面、索引服务和安全安装器集成到 WebUI 插件内部，不再依赖独立的 `plugin_market_webui`。
-
-核心能力包括配置管理与热重载、插件管理、插件 UI 扩展、日志与聊天监视、LLM 指标、请求检查器，以及可完整关闭的插件市场。插件市场的安全配置和运行方式见 [集成插件市场文档](docs/plugin-market.md)。
+Neo-MoFox-WebUI 以插件的形式接入 Neo-MoFox 框架。目前仅有一个后端插件，暂不支持多插件扩展。
 
 ---
 
@@ -35,13 +33,11 @@ Neo-MoFox-WebUI 以单个 `neo-mofox-webui` 插件接入 Neo-MoFox。1.0.19 已�
 ```
 Plugin/
 ├── manifest.json               # 插件元数据
-├── market_config.py            # 市场连接和安装安全策略
 ├── components/                 # 组件层：定义直接用于 UI 注册的元数据
 ├── handlers/                   # 事件处理层：处理来自 Adapter 的事件
 ├── managers/                   # 转发层：前端请求的业务逻辑中转
 │   ├── git_updater.py          # Git 更新管理器
-│   ├── config_manager.py       # 配置分发与校验管理器
-│   └── plugin_market_service.py # 市场索引与安全安装器
+│   └── config_manager.py       # 配置分发与校验管理器
 ├── storage/                    # 存储层
 │   ├── base.py                 # 基于 Neo 框架 json_storage 的统一封装（base_storage）
 │   ├── settings.py             # WebUI 全局设置对象（继承 base.py）
@@ -49,15 +45,6 @@ Plugin/
 ├── utils/                      # 工具层：可复用的工具类与常量
 └── plugin.py                   # 插件入口
 ```
-
-### 1.0.19 插件市场安全边界
-
-- `market.enabled = false` 时不注册市场 Router，页面和全部市场 API 返回 404。
-- `install.enabled = false` 时不注册安装 API，仍可只读浏览市场。
-- 安装默认关闭，覆盖和安装后立即加载也默认关闭。
-- 安装同时要求 WebUI API Key 和独立的 `X-Plugin-Install-Token`。
-- 已安装且有配置的插件显示“配置”，跳转到对应插件配置页面。
-- 1.0.16 已有的 Bot、Model、MCP、插件配置和插件本体热重载全部保留。
 
 ### 2.2 各层职责说明
 
