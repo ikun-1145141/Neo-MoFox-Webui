@@ -19,6 +19,7 @@ from .components.router.webui_router import WebuiSettingsRouter
 from .components.router.system_router import SystemRouter
 from .components.router.plugin_router import PluginRouter
 from .components.router.frontend_router import FrontendRouter
+from .components.router.plugin_market_router import PluginMarketRouter
 from .components.router.log_router import LogRouter
 from .components.router.config import (
     MainConfigRouter,
@@ -33,6 +34,7 @@ from .components.router.plugin_ui import (
 )
 from .components.services.plugin_ui_service import PluginUIService
 from .components.handlers import WebuiStartupPanelHandler, LogBroadcastHandler, ChatBroadcastHandler
+from .market_config import WebUIConfig
 
 logger = get_logger("webui_plugin")
 
@@ -50,9 +52,9 @@ class WebuiPlugin(BasePlugin):
 
     plugin_name: str = "neo-mofox-webui"
     plugin_description: str = "Neo-MoFox WebUI 后端插件"
-    plugin_version: str = "1.0.0"
+    plugin_version: str = "1.0.19"
 
-    configs: list[type] = []
+    configs: list[type] = [WebUIConfig]
     dependent_components: list[str] = []
 
     def get_components(self) -> list[type]:
@@ -87,6 +89,8 @@ class WebuiPlugin(BasePlugin):
             PluginUIRouter,
             PluginUIAssetRouter,
         ]
+        if isinstance(self.config, WebUIConfig) and self.config.market.enabled:
+            components.insert(10, PluginMarketRouter)
         return components
 
     async def on_plugin_loaded(self) -> None:
@@ -96,6 +100,10 @@ class WebuiPlugin(BasePlugin):
         logger.info("认证路径: /api/auth")
         logger.info("插件管理路径: /api/plugin")
         logger.info("插件 UI 扩展路径: /webui/api/plugin-ui")
+        if isinstance(self.config, WebUIConfig) and self.config.market.enabled:
+            logger.info("插件市场路径: /webui/plugin-market/")
+        else:
+            logger.info("插件市场已关闭，页面和 API Router 未注册")
 
     async def on_plugin_unloaded(self) -> None:
         """插件卸载钩子。"""

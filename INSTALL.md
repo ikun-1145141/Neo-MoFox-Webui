@@ -8,6 +8,7 @@
 
 - [⭐ 快速部署（推荐）](#⭐-快速部署推荐)
 - [完整开发环境部署](#完整开发环境部署)
+- [配置插件市场](#配置插件市场)
   - [环境要求](#环境要求)
   - [安装 Node.js 和 npm](#安装-nodejs-和-npm)
   - [获取项目](#获取项目)
@@ -40,8 +41,8 @@
 # 进入 Neo-MoFox 的插件目录
 cd /path/to/Neo-MoFox/plugins
 
-# 克隆 webui-static 分支（包含预构建的前端静态文件）
-git clone -b webui-static https://github.com/ikun-1145141/Neo-MoFox-Webui webui
+# 克隆包含预构建前端的 webui-static 分支
+git clone -b webui-static https://github.com/qwertazsxd/Neo-MoFox-Webui webui
 ```
 
 **Windows 用户：**
@@ -51,7 +52,7 @@ git clone -b webui-static https://github.com/ikun-1145141/Neo-MoFox-Webui webui
 cd C:\path\to\Neo-MoFox\plugins
 
 # 克隆 webui-static 分支
-git clone -b webui-static https://github.com/ikun-1145141/Neo-MoFox-Webui webui
+git clone -b webui-static https://github.com/qwertazsxd/Neo-MoFox-Webui webui
 ```
 
 #### 2. 验证插件文件结构
@@ -113,6 +114,8 @@ http://localhost:8005
 ```
 
 使用您在 `core.toml` 中配置的 `api_keys` 登录。
+
+插件市场已经包含在 `neo-mofox-webui` 中，不要再安装独立的 `plugin_market_webui`。市场默认可浏览、默认禁止安装，详细配置见下方“配置插件市场”。
 
 ### 更新插件
 
@@ -307,7 +310,7 @@ npm --version
 
 ```bash
 # 克隆项目到本地
-git clone https://github.com/ikun-1145141/Neo-MoFox-Webui
+git clone https://github.com/qwertazsxd/Neo-MoFox-Webui
 cd Neo-MoFox-Webui
 ```
 
@@ -435,6 +438,41 @@ api_keys = ["your-secure-api-key-replace-this"]
 ### 保存配置
 
 保存 `core.toml` 文件后，配置即生效。
+
+---
+
+## 配置插件市场
+
+首次加载 WebUI 插件后会生成：
+
+```text
+config/plugins/neo-mofox-webui/config.toml
+```
+
+推荐从以下安全默认值开始：
+
+```toml
+[market]
+enabled = true
+index_url = "https://39.96.71.162/api/v1/plugins"
+request_timeout_seconds = 20
+max_package_size_mb = 50
+index_cache_seconds = 30
+page_size = 50
+
+[install]
+enabled = false
+allow_overwrite = false
+auto_load_after_install = false
+max_installs_per_10_minutes = 5
+```
+
+- 关闭 `market.enabled` 后，重启 Neo-MoFox。市场侧栏、页面和全部市场 API 都会失效。
+- 开启 `install.enabled` 后，重启 Neo-MoFox。服务器会生成 `config/plugins/neo-mofox-webui/install.token`。
+- 安装时需要输入该独立授权码。WebUI 登录 API Key 不能替代它。
+- 不建议在公网直接暴露 WebUI。远程使用时应配置 HTTPS、反向代理和额外访问控制。
+
+完整的接口、校验和状态行为见 [插件市场文档](docs/plugin-market.md)。
 
 ---
 
@@ -623,10 +661,10 @@ http://localhost:9178
 如果遇到问题，请：
 
 1. 查看本文档的「常见问题」章节
-2. 查看项目的 [GitHub Issues](https://github.com/your-org/Neo-MoFox-Webui/issues)
+2. 查看项目的 [GitHub Issues](https://github.com/qwertazsxd/Neo-MoFox-Webui/issues)
 3. 加入社区讨论群获取支持
 
 ---
 
-**安装文档版本：** v1.0.0  
-**最后更新：** 2026年5月4日
+**安装文档版本：** v1.0.19
+**最后更新：** 2026年7月27日

@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { loadWebuiFeatures } from '../utils/features'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -32,6 +33,12 @@ const router = createRouter({
       name: 'plugins',
       component: () => import('../views/PluginsView.vue'),
       meta: { requiresAuth: true, title: '插件管理', icon: 'material-symbols:extension-outline-rounded' },
+    },
+    {
+      path: '/plugin-market',
+      name: 'plugin-market',
+      component: () => import('../views/PluginMarketView.vue'),
+      meta: { requiresAuth: true, title: '插件市场', icon: 'material-symbols:storefront-outline-rounded' },
     },
     {
       path: '/plugins/:name',
@@ -106,13 +113,19 @@ const router = createRouter({
 })
 
 // 路由守卫：未登录重定向到 /login
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const token = sessionStorage.getItem('neo_token')
   if (to.meta.requiresAuth && !token) {
     return { name: 'login' }
   }
   if (to.name === 'login' && token) {
     return { name: 'home' }
+  }
+  if (to.name === 'plugin-market') {
+    const features = await loadWebuiFeatures()
+    if (!features.plugin_market_enabled) {
+      return { name: 'plugins', replace: true }
+    }
   }
 })
 

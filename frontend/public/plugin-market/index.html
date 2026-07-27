@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>插件市场</title>
+    <link rel="stylesheet" href="/webui/frontend/material-symbols/index.css" />
+    <link rel="stylesheet" href="./assets/style.css" />
+  </head>
+  <body>
+    <main class="market-shell">
+      <header class="page-header">
+        <div class="page-title-block">
+          <div class="title-row">
+            <span class="material-symbols-rounded title-icon" aria-hidden="true">storefront</span>
+            <h1>插件市场</h1>
+          </div>
+          <p id="market-summary">正在连接插件市场...</p>
+        </div>
+        <button id="refresh-button" class="icon-button" type="button" title="刷新市场" aria-label="刷新市场">
+          <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
+        </button>
+      </header>
+
+      <section class="toolbar" aria-label="市场筛选">
+        <label class="search-field" for="search-input">
+          <span class="material-symbols-rounded" aria-hidden="true">search</span>
+          <input id="search-input" type="search" autocomplete="off" placeholder="搜索名称、简介、标签或作者" />
+          <button id="clear-search" class="clear-button" type="button" title="清除搜索" aria-label="清除搜索" hidden>
+            <span class="material-symbols-rounded" aria-hidden="true">close</span>
+          </button>
+        </label>
+        <label class="select-field">
+          <span class="field-label">分类</span>
+          <select id="category-select">
+            <option value="">全部分类</option>
+          </select>
+        </label>
+        <label class="select-field">
+          <span class="field-label">排序</span>
+          <select id="sort-select">
+            <option value="name">名称</option>
+            <option value="downloads">下载量</option>
+            <option value="rating">评分</option>
+          </select>
+        </label>
+      </section>
+
+      <div id="status-panel" class="status-panel" role="status">
+        <span class="material-symbols-rounded status-icon" aria-hidden="true">progress_activity</span>
+        <div>
+          <strong id="status-title">正在读取市场</strong>
+          <p id="status-message">请稍候</p>
+        </div>
+      </div>
+
+      <section id="results-section" class="results-section" hidden>
+        <div class="results-header">
+          <strong id="results-count">0 个插件</strong>
+          <span id="active-filter"></span>
+        </div>
+        <div id="plugin-grid" class="plugin-grid"></div>
+        <div id="empty-state" class="empty-state" hidden>
+          <span class="material-symbols-rounded" aria-hidden="true">search_off</span>
+          <strong>没有匹配的插件</strong>
+          <p>请调整搜索词或分类。</p>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="install-dialog" class="install-dialog">
+      <form method="dialog">
+        <div class="dialog-icon" aria-hidden="true">
+          <span class="material-symbols-rounded">download</span>
+        </div>
+        <div class="dialog-copy">
+          <h2>安装插件</h2>
+          <p id="dialog-message"></p>
+          <div id="dialog-plugin-meta" class="dialog-plugin-meta"></div>
+          <label id="install-token-field" class="install-token-field">
+            <span>安装授权码</span>
+            <input
+              id="install-token"
+              type="password"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="输入服务器生成的独立安装授权码"
+            />
+          </label>
+        </div>
+        <div class="dialog-actions">
+          <button class="button secondary" value="cancel">取消</button>
+          <button id="confirm-install" class="button primary" value="default" type="button">
+            <span class="material-symbols-rounded" aria-hidden="true">download</span>
+            安装最新版
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast-region" class="toast-region" aria-live="polite"></div>
+    <script type="module" src="./assets/app.js"></script>
+  </body>
+</html>

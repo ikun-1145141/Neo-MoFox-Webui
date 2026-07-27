@@ -181,7 +181,7 @@ jobs:
         run: |
           echo "## 📦 WebUI 插件发布摘要" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **仓库地址**：https://github.com/ikun-1145141/Neo-MoFox-Webui/" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **仓库地址**：https://github.com/qwertazsxd/Neo-MoFox-Webui/" >> "$GITHUB_STEP_SUMMARY"
           echo "- **源插件目录**：\`Plugin\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **发布插件目录**：\`/tmp/webui-plugin-release\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **旧版本**：\`${{ steps.bump.outputs.old_version }}\`" >> "$GITHUB_STEP_SUMMARY"

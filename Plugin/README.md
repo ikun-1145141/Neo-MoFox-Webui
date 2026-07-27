@@ -1,6 +1,8 @@
 # Neo-MoFox-Webui 后端插件
 
-这是 Neo-MoFox-Webui 的后端插件，提供完整的 WebUI 管理界面和 HTTP API 接口。
+这是 Neo-MoFox-Webui 的后端插件，提供完整的 WebUI 管理界面、插件市场和 HTTP API 接口。插件市场的页面、市场索引服务、安全安装器和 API 路由均已集成在本插件中，不需要额外安装 `plugin_market_webui`。
+
+插件市场支持完整关闭。关闭时不会注册市场页面或 API Router，前端入口也会隐藏。安装能力使用独立开关和独立安装授权码；WebUI 登录凭据不能直接用于安装插件。
 
 ## 🚀 快速安装
 
@@ -55,6 +57,15 @@ ln -s /path/to/Neo-MoFox-Webui/Plugin plugins/webui
 
 - **前端界面**: `http://localhost:8000/webui/frontend/`
 - **API 接口**: `http://localhost:8000/api/`
+- **插件市场**: `http://localhost:8000/webui/plugin-market/`
+
+市场安装默认关闭。启用后，独立安装授权码保存在：
+
+```text
+config/plugins/neo-mofox-webui/install.token
+```
+
+该文件按 `0600` 权限创建，不会通过 WebUI 配置 API 返回。市场总开关和安装开关修改后需要重启 Neo-MoFox。
 
 ## 🤖 自动部署
 
@@ -72,11 +83,15 @@ ln -s /path/to/Neo-MoFox-Webui/Plugin plugins/webui
 Plugin/
 ├── manifest.json          # 插件元数据
 ├── plugin.py             # 插件入口
+├── market_config.py      # 插件市场连接与安装策略
 ├── components/           # 组件层
 │   └── router/
-│       └── webui_router.py  # Router 组件
+│       ├── webui_router.py
+│       └── plugin_market_router.py
 ├── managers/             # 管理器层
 │   └── config_manager.py    # 配置管理器
+├── static/
+│   └── plugin-market/    # 集成的市场页面资源
 ├── storage/              # 存储层
 │   ├── base.py              # 存储基类
 │   └── settings.py          # 设置存储

@@ -20,6 +20,7 @@ const messages = {
           log: '日志',
           settings: '设置',
           pluginCenter: '插件中心',
+          pluginMarket: '插件市场',
         },
       actions: {
         restart: '重启',
@@ -62,6 +63,7 @@ const messages = {
       plugins: '插件管理',
       'plugin-detail': '插件详情',
       'plugin-ui': '插件中心',
+      'plugin-market': '插件市场',
       'llm-metrics': 'LLM 统计',
       'request-inspector': '请求体检视器',
       log: '日志查看',
@@ -934,6 +936,7 @@ const messages = {
         log: 'Logs',
         settings: 'Settings',
         pluginCenter: 'Plugin Center',
+        pluginMarket: 'Plugin Market',
       },
       actions: {
         restart: 'Restart',
@@ -976,6 +979,7 @@ const messages = {
       plugins: 'Plugin Management',
       'plugin-detail': 'Plugin Detail',
       'plugin-ui': 'Plugin Center',
+      'plugin-market': 'Plugin Market',
       'llm-metrics': 'LLM Metrics',
       'request-inspector': 'Request Inspector',
       log: 'Log Viewer',
