@@ -26,6 +26,8 @@ class LogBroadcastHandler(BaseEventHandler):
 
     name: str = "webui_log_broadcast"
     description: str = "捕获实时日志并广播给 WebSocket 客户端"
+    handler_name: str = name
+    handler_description: str = description
     weight: int = -10  # 低优先级，不影响其他处理器
     intercept_message: bool = False
     init_subscribe: list[EventType | str] = [LOG_OUTPUT_EVENT]

@@ -45,6 +45,8 @@ class PluginUIAssetRouter(BaseRouter):
 
     name: str = "plugin-ui-asset"
     description: str = "插件 UI 静态资源服务"
+    router_name: str = name
+    router_description: str = description
     custom_route_path: str = "/webui/static/plugin-ui"
     cors_origins: list[str] = ["*"]
 

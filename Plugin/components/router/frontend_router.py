@@ -43,6 +43,8 @@ class FrontendRouter(BaseRouter):
 
     name = "Frontend"
     description = "挂载UI前端"
+    router_name = name
+    router_description = description
 
     # 自定义路由路径
     custom_route_path = "/webui/frontend"

@@ -45,6 +45,8 @@ class PluginUIService(BaseService):
 
     name: str = "plugin_ui"
     description: str = "Neo-MoFox WebUI 插件页面注册服务"
+    service_name: str = name
+    service_description: str = description
     version: str = "1.0.0"
 
     dependencies: list[str] = []

@@ -34,6 +34,8 @@ class PluginConfigRouter(BaseRouter):
 
     name: str = "config-plugin"
     description: str = "插件配置 API"
+    router_name: str = name
+    router_description: str = description
     custom_route_path: str = "/webui/api/config-plugin"
     cors_origins: list[str] = ["*"]
 
