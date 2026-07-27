@@ -17,6 +17,11 @@ class SPAStaticFiles(StaticFiles):
         # 标准化：去掉前导斜杠，保证判断一致
         normalized = (path or "").lstrip("/")
 
+        # 构建产物包含 plugin-market/ 静态目录，但这个地址属于 Vue 路由。
+        # 独立市场资源由 /webui/plugin-market/ 提供，前端地址必须经过 SPA 守卫。
+        if normalized.rstrip("/") == "plugin-market":
+            return await super().get_response("index.html", scope)
+
         try:
             return await super().get_response(normalized, scope)
         except Exception as exc:
