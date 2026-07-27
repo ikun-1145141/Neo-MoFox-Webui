@@ -52,7 +52,7 @@ class WebuiPlugin(BasePlugin):
 
     plugin_name: str = "neo-mofox-webui"
     plugin_description: str = "Neo-MoFox WebUI 后端插件"
-    plugin_version: str = "1.0.19"
+    plugin_version: str = "1.0.20"
 
     configs: list[type] = [WebUIConfig]
     dependent_components: list[str] = []

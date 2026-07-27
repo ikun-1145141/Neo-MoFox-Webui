@@ -26,6 +26,8 @@ class WebuiStartupPanelHandler(BaseEventHandler):
 
     name: str = "webui_startup_panel"
     description: str = "所有插件启动完毕后打印 WebUI 内外部访问地址"
+    handler_name: str = name
+    handler_description: str = description
     weight: int = 0
     intercept_message: bool = False
     init_subscribe: list[EventType | str] = [EventType.ON_START]

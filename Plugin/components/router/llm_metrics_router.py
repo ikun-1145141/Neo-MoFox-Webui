@@ -27,6 +27,8 @@ class LLMMetricsRouter(BaseRouter):
 
     name: str = "llm-metrics"
     description: str = "WebUI 大模型统计接口"
+    router_name: str = name
+    router_description: str = description
     custom_route_path: str = "/webui/api/llm-metrics"
     cors_origins: list[str] = ["*"]
 

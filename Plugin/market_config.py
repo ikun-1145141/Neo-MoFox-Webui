@@ -12,6 +12,8 @@ class WebUIConfig(BaseConfig):
 
     name: ClassVar[str] = "config"
     description: ClassVar[str] = "Neo-MoFox WebUI 配置"
+    config_name: ClassVar[str] = name
+    config_description: ClassVar[str] = description
 
     @config_section("market")
     class MarketSection(SectionBase):
