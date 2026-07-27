@@ -1,0 +1,1 @@
+import{h as e,u as t}from"./i18n-DoP8V3zU.js";var n=e;function r(e){return t.post(`${n}/auth/login`,e)}function i(){return t.post(`${n}/auth/logout`)}export{i as n,r as t};
