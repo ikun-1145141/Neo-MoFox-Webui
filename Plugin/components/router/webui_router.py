@@ -57,8 +57,6 @@ class WebuiSettingsRouter(BaseRouter):
 
     name: str = "webui"
     description: str = "WebUI API 接口"
-    router_name: str = name
-    router_description: str = description
     custom_route_path: str = "/webui/api/webui"
     cors_origins: list[str] = ["*"]  # 开发环境允许所有来源，生产环境应该限制
 

@@ -25,8 +25,6 @@ class McpConfigRouter(BaseRouter):
 
     name: str = "config-mcp"
     description: str = "MCP 配置 API"
-    router_name: str = name
-    router_description: str = description
     custom_route_path: str = "/webui/api/config-mcp"
     cors_origins: list[str] = ["*"]
 

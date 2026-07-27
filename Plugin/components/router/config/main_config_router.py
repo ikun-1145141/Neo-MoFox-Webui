@@ -40,8 +40,6 @@ class MainConfigRouter(BaseRouter):
 
     name: str = "config"
     description: str = "配置管理 API"
-    router_name: str = name
-    router_description: str = description
     custom_route_path: str = "/webui/api/config"
     cors_origins: list[str] = ["*"]
 

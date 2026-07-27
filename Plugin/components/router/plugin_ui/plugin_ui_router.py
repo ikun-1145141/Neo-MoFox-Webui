@@ -34,8 +34,6 @@ class PluginUIRouter(BaseRouter):
 
     name: str = "plugin-ui"
     description: str = "插件 UI 页面发现与 Schema 接口"
-    router_name: str = name
-    router_description: str = description
     custom_route_path: str = "/webui/api/plugin-ui"
     cors_origins: list[str] = ["*"]
 

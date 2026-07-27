@@ -25,8 +25,6 @@ const elements = {
   dialog: document.querySelector("#install-dialog"),
   dialogMessage: document.querySelector("#dialog-message"),
   dialogMeta: document.querySelector("#dialog-plugin-meta"),
-  installToken: document.querySelector("#install-token"),
-  installTokenField: document.querySelector("#install-token-field"),
   confirmInstall: document.querySelector("#confirm-install"),
   toastRegion: document.querySelector("#toast-region"),
 };
@@ -306,10 +304,7 @@ function openInstallDialog(plugin) {
   state.selectedPlugin = plugin;
   elements.dialogMessage.textContent = `确认安装“${plugin.display_name || plugin.plugin_id}”的最新版本吗？`;
   elements.dialogMeta.textContent = `${plugin.plugin_id} @ ${plugin.latest_version}`;
-  elements.installToken.value = "";
-  elements.installTokenField.hidden = !state.installEnabled;
   elements.dialog.showModal();
-  elements.installToken.focus();
 }
 
 function openPluginConfig(pluginId) {
@@ -324,12 +319,6 @@ function openPluginConfig(pluginId) {
 async function installSelectedPlugin() {
   const plugin = state.selectedPlugin;
   if (!plugin || state.installing.has(plugin.plugin_id)) return;
-  const installToken = elements.installToken.value.trim();
-  if (!installToken) {
-    showToast("请输入安装授权码", "error");
-    elements.installToken.focus();
-    return;
-  }
   state.installing.add(plugin.plugin_id);
   setInstallBusy(plugin.plugin_id, true);
   elements.confirmInstall.disabled = true;
@@ -339,7 +328,6 @@ async function installSelectedPlugin() {
   try {
     const result = await request("/install", {
       method: "POST",
-      headers: {"X-Plugin-Install-Token": installToken},
       body: JSON.stringify({plugin_id: plugin.plugin_id, version: plugin.latest_version}),
     });
     elements.dialog.close();
@@ -354,7 +342,6 @@ async function installSelectedPlugin() {
     elements.confirmInstall.disabled = false;
     elements.confirmInstall.classList.remove("loading");
     elements.confirmInstall.querySelector(".material-symbols-rounded").textContent = "download";
-    elements.installToken.value = "";
     if (installedResult) {
       markInstalled(
         plugin.plugin_id,
@@ -420,7 +407,6 @@ elements.sort.addEventListener("change", renderPlugins);
 elements.refresh.addEventListener("click", () => loadPlugins(true));
 elements.confirmInstall.addEventListener("click", installSelectedPlugin);
 elements.dialog.addEventListener("close", () => {
-  elements.installToken.value = "";
   if (!state.installing.size) state.selectedPlugin = null;
 });
 

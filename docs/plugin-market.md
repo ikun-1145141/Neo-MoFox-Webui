@@ -59,21 +59,14 @@ max_installs_per_10_minutes = 5
 
 `install.enabled = false` 时仍可浏览市场，但不会注册 `POST /webui/plugin-market/api/install`，页面中的安装按钮显示为禁用状态。
 
-## 安装授权
+## 安装鉴权
 
 市场安装需要同时满足：
 
 1. WebUI `X-API-Key` 认证通过。
 2. `install.enabled = true`。
-3. 请求提供正确的 `X-Plugin-Install-Token`。
 
-安装授权码首次启用安装功能时自动生成：
-
-```text
-config/plugins/neo-mofox-webui/install.token
-```
-
-该文件不会通过 WebUI API 返回。不要把 WebUI API Key 当作安装授权码；后端会显式拒绝这种用法。授权失败和安装操作均写入服务端日志，并包含来源 IP、插件 ID、版本和结果。安装接口还包含并发锁、授权失败限流和十分钟安装次数限制。
+安装接口直接使用 WebUI 登录 API Key。安装操作会写入服务端日志，并包含来源 IP、插件 ID、版本和结果。安装接口还包含并发锁和十分钟安装次数限制。
 
 ## 包校验
 

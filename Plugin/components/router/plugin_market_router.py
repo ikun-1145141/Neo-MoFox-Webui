@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-from collections import defaultdict, deque
-import os
+from collections import deque
 from pathlib import Path
-import secrets
 import time
 from typing import TYPE_CHECKING, Any
 
-from fastapi import Header, HTTPException, Query, Request, status
+from fastapi import HTTPException, Query, Request, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -30,7 +28,6 @@ logger = get_logger("webui.plugin_market")
 
 MARKET_API_VERSION = "1.0.17"
 _RATE_WINDOW_SECONDS = 600.0
-_MAX_AUTH_FAILURES_PER_WINDOW = 5
 
 
 class InstallRequest(BaseModel):
@@ -51,8 +48,6 @@ class PluginMarketRouter(BaseRouter):
 
     name = "plugin-market"
     description = "Standalone plugin market HTML page and installation API"
-    router_name = "plugin-market"
-    router_description = "Standalone plugin market HTML page and installation API"
     custom_route_path = "/webui/plugin-market"
     cors_origins = None
 
@@ -73,8 +68,6 @@ class PluginMarketRouter(BaseRouter):
         self._ui_dir = Path(__file__).resolve().parents[2] / "static" / "plugin-market"
         self._install_lock = asyncio.Lock()
         self._install_attempts: deque[float] = deque()
-        self._auth_failures: dict[str, deque[float]] = defaultdict(deque)
-        self._install_token = self._load_or_create_install_token() if config.install.enabled else None
         super().__init__(plugin)
 
     def register_endpoints(self) -> None:
@@ -152,14 +145,8 @@ class PluginMarketRouter(BaseRouter):
         async def install_plugin(
             payload: InstallRequest,
             request: Request,
-            install_token: str | None = Header(
-                default=None,
-                alias="X-Plugin-Install-Token",
-            ),
-            api_key: str | None = Header(default=None, alias="X-API-Key"),
         ) -> dict[str, Any]:
             client_ip = request.client.host if request.client else "unknown"
-            self._authorize_install(client_ip, install_token, api_key)
             self._check_install_rate_limit()
             if self._install_lock.locked():
                 raise HTTPException(
@@ -199,37 +186,6 @@ class PluginMarketRouter(BaseRouter):
                     )
                     return self._error(500, "插件安装失败，请查看服务端日志")
 
-    def _authorize_install(
-        self,
-        client_ip: str,
-        provided_token: str | None,
-        api_key: str | None,
-    ) -> None:
-        now = time.monotonic()
-        failures = self._auth_failures[client_ip]
-        self._trim_timestamps(failures, now)
-        if len(failures) >= _MAX_AUTH_FAILURES_PER_WINDOW:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="安装授权失败次数过多，请稍后再试",
-            )
-
-        token_valid = bool(
-            provided_token
-            and self._install_token
-            and secrets.compare_digest(provided_token, self._install_token)
-        )
-        token_is_api_key = bool(provided_token and api_key and secrets.compare_digest(provided_token, api_key))
-        if not token_valid or token_is_api_key:
-            failures.append(now)
-            logger.warning(f"市场安装授权失败: client={client_ip}")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="安装授权码无效",
-            )
-
-        failures.clear()
-
     def _check_install_rate_limit(self) -> None:
         now = time.monotonic()
         self._trim_timestamps(self._install_attempts, now)
@@ -243,28 +199,6 @@ class PluginMarketRouter(BaseRouter):
     def _trim_timestamps(values: deque[float], now: float) -> None:
         while values and now - values[0] >= _RATE_WINDOW_SECONDS:
             values.popleft()
-
-    @staticmethod
-    def _load_or_create_install_token() -> str:
-        token_path = Path("config/plugins/neo-mofox-webui/install.token")
-        token_path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            fd = os.open(token_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        except FileExistsError:
-            token = token_path.read_text(encoding="utf-8").strip()
-            if len(token) < 32:
-                raise RuntimeError(f"安装授权码文件无效: {token_path}")
-            try:
-                token_path.chmod(0o600)
-            except OSError:
-                pass
-            return token
-
-        token = secrets.token_urlsafe(32)
-        with os.fdopen(fd, "w", encoding="utf-8") as file:
-            file.write(token + "\n")
-        logger.warning(f"已生成独立市场安装授权码文件: {token_path}")
-        return token
 
     def _ui_file(self, filename: str, media_type: str) -> FileResponse:
         path = self._ui_dir / filename

@@ -544,37 +544,6 @@ h1 {
   font-size: 0.8rem;
 }
 
-.install-token-field {
-  display: grid;
-  gap: 6px;
-  margin-top: 14px;
-  color: var(--text-muted);
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.install-token-field[hidden] {
-  display: none !important;
-}
-
-.install-token-field input {
-  width: 100%;
-  min-height: 42px;
-  box-sizing: border-box;
-  border: 1px solid var(--outline);
-  border-radius: 8px;
-  padding: 8px 10px;
-  color: var(--text);
-  background: var(--surface-raised);
-  font: inherit;
-}
-
-.install-token-field input:focus {
-  border-color: var(--primary);
-  outline: 2px solid color-mix(in srgb, var(--primary) 22%, transparent);
-  outline-offset: 1px;
-}
-
 .dialog-actions {
   grid-column: 1 / -1;
   display: flex;

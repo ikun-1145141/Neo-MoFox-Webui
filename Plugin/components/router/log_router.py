@@ -122,8 +122,6 @@ class LogRouter(BaseRouter):
 
     name: str = "log"
     description: str = "日志查看 API（WebSocket + HTTP）"
-    router_name: str = name
-    router_description: str = description
     custom_route_path: str = "/webui/api/log"
     cors_origins: list[str] = ["*"]
 

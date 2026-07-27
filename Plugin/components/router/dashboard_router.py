@@ -27,8 +27,6 @@ class DashboardRouter(BaseRouter):
 
     name: str = "dashboard"
     description: str = "WebUI 仪表盘接口"
-    router_name: str = name
-    router_description: str = description
     custom_route_path: str = "/webui/api/dashboard"
     cors_origins: list[str] = ["*"]
 

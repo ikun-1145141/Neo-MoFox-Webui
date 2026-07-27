@@ -12,8 +12,6 @@ class WebUIConfig(BaseConfig):
 
     name: ClassVar[str] = "config"
     description: ClassVar[str] = "Neo-MoFox WebUI 配置"
-    config_name: ClassVar[str] = name
-    config_description: ClassVar[str] = description
 
     @config_section("market")
     class MarketSection(SectionBase):
@@ -63,7 +61,7 @@ class WebUIConfig(BaseConfig):
             label="允许市场安装插件",
             tag="security",
             input_type="switch",
-            hint="开启后仍需使用服务器生成的独立安装授权码",
+            hint="安装接口使用 WebUI 登录 API Key 鉴权，并受频率限制和包校验保护",
         )
         # 是否允许覆盖已存在的 .mfp
         allow_overwrite: bool = Field(

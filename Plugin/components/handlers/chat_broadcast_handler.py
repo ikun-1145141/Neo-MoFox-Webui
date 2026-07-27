@@ -25,8 +25,6 @@ class ChatBroadcastHandler(BaseEventHandler):
 
     name: str = "webui_chat_broadcast"
     description: str = "捕获聊天消息并广播给 WebSocket 客户端"
-    handler_name: str = name
-    handler_description: str = description
     weight: int = -10
     intercept_message: bool = False
     init_subscribe: list[EventType | str] = [

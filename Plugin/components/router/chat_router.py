@@ -32,8 +32,6 @@ class ChatRouter(BaseRouter):
 
     name: str = "chat"
     description: str = "聊天消息 API（HTTP 列表 + WebSocket 会话）"
-    router_name: str = name
-    router_description: str = description
     custom_route_path: str = "/webui/api/chat"
     cors_origins: list[str] = ["*"]
 

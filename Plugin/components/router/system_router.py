@@ -27,8 +27,6 @@ class SystemRouter(BaseRouter):
 
     name: str = "system"
     description: str = "Bot 系统控制接口"
-    router_name: str = name
-    router_description: str = description
     custom_route_path: str = "/webui/api/system"
     cors_origins: list[str] = ["*"]
 

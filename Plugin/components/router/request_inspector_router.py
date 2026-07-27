@@ -27,8 +27,6 @@ class RequestInspectorRouter(BaseRouter):
 
     name: str = "request-inspector"
     description: str = "WebUI LLM 请求体检视器接口"
-    router_name: str = name
-    router_description: str = description
     custom_route_path: str = "/webui/api/request-inspector"
     cors_origins: list[str] = ["*"]
 

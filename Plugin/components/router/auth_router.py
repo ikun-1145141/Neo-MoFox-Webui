@@ -39,8 +39,6 @@ class AuthRouter(BaseRouter):
 
     name: str = "auth"
     description: str = "WebUI 认证 API"
-    router_name: str = name
-    router_description: str = description
     custom_route_path: str = "/webui/api/auth"
     cors_origins: list[str] = ["*"]
 
