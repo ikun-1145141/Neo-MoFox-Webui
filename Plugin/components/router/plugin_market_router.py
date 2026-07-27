@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 logger = get_logger("webui.plugin_market")
 
-MARKET_API_VERSION = "1.0.21"
+MARKET_API_VERSION = "1.0.17"
 _RATE_WINDOW_SECONDS = 600.0
 _MAX_AUTH_FAILURES_PER_WINDOW = 5
 

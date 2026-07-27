@@ -1,6 +1,6 @@
 # 集成插件市场
 
-Neo-MoFox-WebUI 1.0.21 将插件市场直接集成到 `neo-mofox-webui`。页面、市场索引、安装服务和 API 都属于同一个插件，不需要再安装 `plugin_market_webui`。
+Neo-MoFox-WebUI 1.0.17 将插件市场直接集成到 `neo-mofox-webui`。页面、市场索引、安装服务和 API 都属于同一个插件，不需要再安装 `plugin_market_webui`。
 
 ## 运行链路
 
@@ -100,7 +100,7 @@ config/plugins/neo-mofox-webui/install.token
 
 ## 热重载
 
-1.0.21 保留 1.0.16 已有的热重载能力：
+1.0.17 保留 1.0.16 已有的热重载能力：
 
 - Bot 配置热重载。
 - Model 配置热重载。

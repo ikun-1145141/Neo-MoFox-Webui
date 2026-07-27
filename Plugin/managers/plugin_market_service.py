@@ -555,7 +555,7 @@ class PluginMarketService:
         self._validate_remote_url(url)
         request = urllib.request.Request(
             url,
-            headers={"User-Agent": "Neo-MoFox-WebUI-Plugin-Market/1.0.19"},
+            headers={"User-Agent": "Neo-MoFox-WebUI-Plugin-Market/1.0.17"},
         )
         timeout = max(1, self._config.market.request_timeout_seconds)
         try:
