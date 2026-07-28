@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from src.app.plugin_system.api.log_api import get_logger  # type: ignore
 
@@ -43,13 +43,18 @@ class PluginUIManager:
         self._lock = asyncio.Lock()
 
     async def register(
-        self, reg: PageRegistration, plugin_root: Path
+        self,
+        reg: PageRegistration,
+        plugin_root: Path,
+        i18n_bundle: dict[str, dict[str, Any]] | None = None,
     ) -> RegisteredPage:
         """注册或更新一个插件页面。
 
         Args:
             reg: 页面注册元数据（已通过校验）
             plugin_root: 插件根目录绝对路径
+            i18n_bundle: 已解析的 i18n bundle（``{"zh-CN": {...}, "en-US": {...}}``），
+                由 service 层在注册时校验并加载；为 None 表示该页面未注册自定义翻译。
 
         Returns:
             加工后的 RegisteredPage 实例
@@ -76,6 +81,8 @@ class PluginUIManager:
             assets=reg.assets,
             mobile_xml=reg.mobile_xml,
             mobile_assets=reg.mobile_assets,
+            i18n_path=reg.i18n_path,
+            i18n=i18n_bundle,
             route_path=route_path,
             desktop_assets_urls=desktop_assets_urls,
             mobile_assets_urls=mobile_assets_urls,
@@ -236,6 +243,7 @@ class PluginUIManager:
                 assets_urls=page.desktop_assets_urls
                 if page.mode == PageMode.HTML
                 else None,
+                i18n=page.i18n,
             )
         elif variant == "mobile":
             if not page.has_mobile:
@@ -250,6 +258,7 @@ class PluginUIManager:
                 assets_urls=page.mobile_assets_urls
                 if page.mode == PageMode.HTML
                 else None,
+                i18n=page.i18n,
             )
         return None
 

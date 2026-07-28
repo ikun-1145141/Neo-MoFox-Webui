@@ -15,7 +15,6 @@ from src.app.plugin_system.api.log_api import get_logger
 from src.core.utils.security import VerifiedDep
 
 from ...managers.config_manager import get_config_manager
-from ...market_config import WebUIConfig
 from ...storage.settings import WebuiSettings
 from ...utils.response import BaseResponse
 
@@ -70,31 +69,9 @@ class WebuiSettingsRouter(BaseRouter):
         """
         super().__init__(plugin)
         self.config_manager = get_config_manager()
-        self.webui_config = plugin.config if isinstance(plugin.config, WebUIConfig) else None
 
     def register_endpoints(self) -> None:
         """注册 API 端点。"""
-
-        @self.app.get(
-            "/features",
-            response_model=BaseResponse[dict[str, bool]],
-            dependencies=[VerifiedDep],
-        )
-        async def get_features() -> BaseResponse[dict[str, bool]]:
-            """返回由后端配置决定的 WebUI 功能状态。"""
-            market_enabled = bool(self.webui_config and self.webui_config.market.enabled)
-            install_enabled = bool(
-                market_enabled
-                and self.webui_config
-                and self.webui_config.install.enabled
-            )
-            return BaseResponse.ok(
-                data={
-                    "plugin_market_enabled": market_enabled,
-                    "plugin_market_install_enabled": install_enabled,
-                },
-                message="获取 WebUI 功能状态成功",
-            )
 
         @self.app.get("/settings", response_model=BaseResponse[WebuiSettings])
         async def get_settings() -> BaseResponse[WebuiSettings]:

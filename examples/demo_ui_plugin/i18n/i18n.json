@@ -1,0 +1,132 @@
+{
+  "zh-CN": {
+    "title": "XML UI 演示",
+    "welcome": "欢迎使用插件 UI 系统",
+    "welcomeBody": "这个页面展示了 XML 声明式 UI 的各种组件和 API 交互能力。",
+    "currentGreeting": "当前问候语: {greeting}",
+    "counter": {
+      "title": "计数器",
+      "decrement": "-1",
+      "increment": "+1",
+      "reset": "重置"
+    },
+    "form": {
+      "title": "添加条目",
+      "nameLabel": "名称",
+      "namePlaceholder": "输入条目名称...",
+      "add": "添加",
+      "addSuccess": "添加成功",
+      "clear": "清空"
+    },
+    "dataList": {
+      "title": "数据列表",
+      "count": "共 {count} 条数据"
+    },
+    "gallery": {
+      "title": "组件画廊",
+      "tags": "标签",
+      "tagDefault": "默认",
+      "tagPrimary": "主要",
+      "tagSuccess": "成功",
+      "tagError": "错误",
+      "badges": "徽章",
+      "switch": "开关",
+      "switchLabel": "启用功能",
+      "slider": "滑块",
+      "sliderLabel": "音量"
+    },
+    "conditional": {
+      "title": "条件渲染",
+      "hint": "计数器 > 5 时显示下方内容：",
+      "exceeded": "🎉 计数器已超过 5！当前值: {value}",
+      "continueHint": "（继续点击 +1 直到超过 5）"
+    },
+    "dynamicChart": {
+      "title": "动态图表（raw-response）",
+      "body": "通过 raw-response API 获取图表数据，直接渲染为折线图。",
+      "caption": "该 API 端点不遵循 BaseResponse 协议，使用 raw-response=\"true\" 直接接收裸 JSON。",
+      "refresh": "刷新数据",
+      "refreshed": "数据已刷新"
+    },
+    "staticChart": {
+      "title": "静态图表组件",
+      "body": "基于 ECharts 的图表组件，支持多种图表类型（静态数据演示）。",
+      "line": "折线图",
+      "bar": "柱状图",
+      "pie": "饼图",
+      "radar": "雷达图"
+    },
+    "layout": {
+      "title": "布局辅助",
+      "dividerHint": "分割线：",
+      "aboveDivider": "上方有水平分割线",
+      "left": "左",
+      "right": "右"
+    }
+  },
+  "en-US": {
+    "title": "XML UI Demo",
+    "welcome": "Welcome to the Plugin UI System",
+    "welcomeBody": "This page demonstrates various components and API interactions of the XML declarative UI.",
+    "currentGreeting": "Current greeting: {greeting}",
+    "counter": {
+      "title": "Counter",
+      "decrement": "-1",
+      "increment": "+1",
+      "reset": "Reset"
+    },
+    "form": {
+      "title": "Add Item",
+      "nameLabel": "Name",
+      "namePlaceholder": "Enter item name...",
+      "add": "Add",
+      "addSuccess": "Added successfully",
+      "clear": "Clear"
+    },
+    "dataList": {
+      "title": "Data List",
+      "count": "{count} item(s) in total"
+    },
+    "gallery": {
+      "title": "Component Gallery",
+      "tags": "Tags",
+      "tagDefault": "Default",
+      "tagPrimary": "Primary",
+      "tagSuccess": "Success",
+      "tagError": "Error",
+      "badges": "Badges",
+      "switch": "Switch",
+      "switchLabel": "Enable feature",
+      "slider": "Slider",
+      "sliderLabel": "Volume"
+    },
+    "conditional": {
+      "title": "Conditional Rendering",
+      "hint": "When the counter > 5, the content below is shown:",
+      "exceeded": "🎉 Counter exceeded 5! Current value: {value}",
+      "continueHint": "(Keep clicking +1 until it exceeds 5)"
+    },
+    "dynamicChart": {
+      "title": "Dynamic Chart (raw-response)",
+      "body": "Fetch chart data via a raw-response API and render it directly as a line chart.",
+      "caption": "This API endpoint does not follow the BaseResponse protocol; raw-response=\"true\" receives raw JSON directly.",
+      "refresh": "Refresh data",
+      "refreshed": "Data refreshed"
+    },
+    "staticChart": {
+      "title": "Static Chart Components",
+      "body": "ECharts-based chart components supporting multiple chart types (static data demo).",
+      "line": "Line Chart",
+      "bar": "Bar Chart",
+      "pie": "Pie Chart",
+      "radar": "Radar Chart"
+    },
+    "layout": {
+      "title": "Layout Helpers",
+      "dividerHint": "Divider:",
+      "aboveDivider": "Horizontal divider above",
+      "left": "Left",
+      "right": "Right"
+    }
+  }
+}

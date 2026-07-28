@@ -7,7 +7,7 @@
  */
 import { ref, computed, watch, onUnmounted, defineComponent, type VNode } from 'vue'
 import { useRouter } from 'vue-router'
-import type { PluginUIVarStore } from '../../stores/plugin-ui-vars'
+import type { PluginUIVarStore } from '../../utils/plugin-ui/plugin-ui-vars'
 import { parseXml, processDefinitions, renderElementToVNodes, type XmlRenderContext } from '../../utils/plugin-ui/xml/xml-renderer'
 import { ApiTemplateEngine } from '../../utils/plugin-ui/api-template-engine'
 import type { PipeContext } from '../../utils/plugin-ui/xml/pipe-executor'

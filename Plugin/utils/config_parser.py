@@ -244,7 +244,7 @@ class ConfigParser:
         extra = model_field.json_schema_extra or {}
         literal_choices = ConfigParser._get_literal_choices(model_field.annotation)
         choices = extra.get("choices") or literal_choices
-        
+
         # 智能推断 input_type
         input_type = extra.get("input_type")
         if not input_type:
@@ -258,6 +258,30 @@ class ConfigParser:
                 input_type = "dict"
             else:
                 input_type = "text"
+
+        # Pydantic v2 将 ge/le/gt/lt/min_length/max_length/pattern
+        # 存放在 FieldInfo.metadata 中（annotated_types 或内部包装类实例），
+        # 而非 FieldInfo 的属性上，需遍历 metadata 提取。
+        # 使用 getattr 兼容 annotated_types.{Ge,Le,Gt,Lt,MinLen,MaxLen}
+        # 以及 Pydantic 内部的 _PydanticGeneralMetadata(pattern=...)。
+        ge = le = gt = lt = None
+        min_length = max_length = None
+        pattern: str | None = None
+        for m in model_field.metadata:
+            if (v := getattr(m, "ge", None)) is not None:
+                ge = float(v)
+            elif (v := getattr(m, "gt", None)) is not None:
+                gt = float(v)
+            elif (v := getattr(m, "le", None)) is not None:
+                le = float(v)
+            elif (v := getattr(m, "lt", None)) is not None:
+                lt = float(v)
+            elif (v := getattr(m, "min_length", None)) is not None:
+                min_length = int(v)
+            elif (v := getattr(m, "max_length", None)) is not None:
+                max_length = int(v)
+            elif (v := getattr(m, "pattern", None)) is not None:
+                pattern = str(v)
 
         # 构建 FieldSchema
         return FieldSchema(
@@ -273,13 +297,13 @@ class ConfigParser:
             hidden=extra.get("hidden", False),
             disabled=extra.get("disabled", False),
             # 验证约束
-            ge=getattr(model_field, "ge", None),
-            le=getattr(model_field, "le", None),
-            gt=getattr(model_field, "gt", None),
-            lt=getattr(model_field, "lt", None),
-            min_length=getattr(model_field, "min_length", None),
-            max_length=getattr(model_field, "max_length", None),
-            pattern=getattr(model_field, "pattern", None),
+            ge=ge,
+            le=le,
+            gt=gt,
+            lt=lt,
+            min_length=min_length,
+            max_length=max_length,
+            pattern=pattern,
             # 控件特定
             choices=choices,
             rows=extra.get("rows"),

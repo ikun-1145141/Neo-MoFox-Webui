@@ -71,4 +71,12 @@ export interface PageSchemaResponse {
   xml: string | null
   /** 资源 URL 集合（HTML 模式） */
   assets_urls: Record<string, string[]> | null
+  /**
+   * 该页面的 i18n bundle（结构 { 'zh-CN': {...}, 'en-US': {...} }）。
+   * 前端拿到后会调用 registerPluginI18n 注册到响应式 store，
+   * 使 t('<plugin_name>.<key>') 与 XML {t('key')} / HTML sys.i18n.t('key')
+   * 都能命中（自动加 plugin_name 前缀）。
+   * 为 null 表示该页面未注册自定义翻译。
+   */
+  i18n: Record<string, Record<string, unknown>> | null
 }

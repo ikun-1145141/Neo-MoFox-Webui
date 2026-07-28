@@ -17,7 +17,6 @@ import { setIsRestarting, startHealthCheck } from '../../api/base'
 import { useDialogStore } from '../../utils/dialog'
 import { useToastStore } from '../../utils/toast'
 import { useI18n } from '../../utils/i18n'
-import { loadWebuiFeatures, resetWebuiFeatures, webuiFeatures } from '../../utils/features'
 
 const showSystemMenu = ref(false)
 
@@ -37,7 +36,6 @@ function onBottomNavScroll() {
 }
 
 onMounted(() => {
-  void loadWebuiFeatures()
   nextTick(() => {
     if (railNavRef.value && savedRailNavScrollTop > 0) {
       railNavRef.value.scrollTop = savedRailNavScrollTop
@@ -67,7 +65,7 @@ const dialogStore = useDialogStore()
 const toastStore = useToastStore()
 const { t } = useI18n()
 
-const allNavItems = [
+const navItems = [
   { labelKey: 'app.nav.home', icon: 'material-symbols:home-outline-rounded', name: 'home', path: '/' },
   { labelKey: 'app.nav.config', icon: 'material-symbols:tune-rounded', name: 'config', path: '/config' },
   { labelKey: 'app.nav.chat', icon: 'material-symbols:chat-outline-rounded', name: 'chat', path: '/chat' },
@@ -80,10 +78,6 @@ const allNavItems = [
   { labelKey: 'app.nav.log', icon: 'material-symbols:terminal-rounded', name: 'logs', path: '/logs' },
   { labelKey: 'app.nav.settings', icon: 'material-symbols:setting-outline-rounded', name: 'settings-theme', path: '/settings' },
 ]
-
-const navItems = computed(() => allNavItems.filter(
-  item => item.name !== 'plugin-market' || webuiFeatures.value.plugin_market_enabled,
-))
 
 const pageTitle = computed(() => {
   const routeName = typeof route.name === 'string' ? route.name : ''
@@ -98,7 +92,7 @@ const isActive = (path: string) => {
   if (!route.path.startsWith(path + '/')) return false
   
   // 如果是子路径，检查是否有其他更具体的导航项匹配当前路由
-  const hasMoreSpecificMatch = navItems.value.some(item =>
+  const hasMoreSpecificMatch = navItems.some(item => 
     item.path !== path && 
     item.path.startsWith(path) && 
     (route.path === item.path || route.path.startsWith(item.path + '/'))
@@ -115,7 +109,6 @@ async function handleLogout() {
     // 后端不可用时也允许前端本地退出，避免未捕获异常影响页面。
   } finally {
     sessionStorage.removeItem('neo_token')
-    resetWebuiFeatures()
     router.push({ name: 'login' })
   }
 }

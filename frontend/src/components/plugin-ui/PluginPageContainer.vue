@@ -6,7 +6,7 @@
  */
 import { computed } from 'vue'
 import type { PageSchemaResponse, PageDetail } from '../../api/types/plugin-ui'
-import type { PluginUIVarStore } from '../../stores/plugin-ui-vars'
+import type { PluginUIVarStore } from '../../utils/plugin-ui/plugin-ui-vars'
 import XmlRenderer from './XmlRenderer.vue'
 import HtmlSandbox from './HtmlSandbox.vue'
 

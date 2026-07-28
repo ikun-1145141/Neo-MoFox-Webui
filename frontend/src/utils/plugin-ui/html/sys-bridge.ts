@@ -8,7 +8,7 @@
  */
 
 import type { Router } from 'vue-router'
-import type { PluginUIVarStore } from '../../../stores/plugin-ui-vars'
+import type { PluginUIVarStore } from '../plugin-ui-vars'
 import type { ApiTemplateEngine } from '../api-template-engine'
 import { useToastStore } from '../../../utils/toast'
 import { useDialogStore } from '../../../utils/dialog'
@@ -132,7 +132,7 @@ export interface SysBridgeOptions {
  * 调用方负责把返回的 sys 暴露给沙箱脚本（通常是 window.__plugin_sys_<pageId>）。
  */
 export function createSysBridge(opts: SysBridgeOptions): SysBridge {
-  const { store, apiEngine, pageId, router } = opts
+  const { store, apiEngine, pageId, router, pluginName } = opts
   const bus = new PageBus()
   const toastStore = useToastStore()
   const dialogStore = useDialogStore()
@@ -329,8 +329,13 @@ export function createSysBridge(opts: SysBridgeOptions): SysBridge {
   }
 
   // === sys.i18n ===
+  // 自动给 key 加上 pluginName 前缀，使 HTML 插件脚本里 sys.i18n.t('greeting')
+  // 命中本插件通过 register_ui_page(i18n_path=...) 注册的翻译 key
+  // （前端 store 中实际存为 '<pluginName>.greeting'）。
+  // 未注册的 key 走全局 t() fallback（最终返回 key 字面量）。
   const sysI18n = {
-    t: (key: string, params?: Record<string, string>) => t(key, params),
+    t: (key: string, params?: Record<string, string>) =>
+      t(`${pluginName}.${key}`, params),
   }
 
   // === sys.api ===

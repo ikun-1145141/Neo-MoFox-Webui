@@ -1,221 +1,154 @@
-"""Plugin market page and authenticated API integrated into WebUI."""
+"""插件市场 REST API 路由。"""
 
 from __future__ import annotations
 
-import asyncio
-from collections import deque
-from pathlib import Path
-import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from fastapi import HTTPException, Query, Request, status
-from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from fastapi import HTTPException, Query
 
 from src.app.plugin_system.api.log_api import get_logger
-from src.app.plugin_system.api.config_api import get_config
-from src.core.components.base.router import BaseRouter
+from src.app.plugin_system.base import BaseRouter
 from src.core.utils.security import VerifiedDep
 
-from ...market_config import WebUIConfig
-from ...managers.plugin_manager import get_plugin_management_manager
-from ...managers.plugin_market_service import MarketError, PluginMarketService
+from ...managers.plugin_market_manager import (
+    PluginMarketError,
+    get_plugin_market_manager,
+)
+from ...plugin_market_config import WebUIConfig
+from ...utils.plugin_market_types import (
+    InstallPlan,
+    InstallPlanRequest,
+    MarketCapabilities,
+    MarketOperation,
+    MarketPluginDetail,
+    MarketPluginList,
+    StartInstallRequest,
+)
+from ...utils.response import BaseResponse
 
 if TYPE_CHECKING:
-    from src.core.components.base.plugin import BasePlugin
+    from src.app.plugin_system.base import BasePlugin
 
-logger = get_logger("webui.plugin_market")
-
-MARKET_API_VERSION = "1.0.17"
-_RATE_WINDOW_SECONDS = 600.0
-
-
-class InstallRequest(BaseModel):
-    """Install the selected plugin version, or the latest version when omitted."""
-
-    plugin_id: str = Field(min_length=1, max_length=128)
-    version: str | None = Field(default=None, max_length=64)
-
-
-class ResolveRequest(BaseModel):
-    """Resolve a plugin to its latest installable version."""
-
-    plugin_id: str = Field(min_length=1, max_length=128)
+logger = get_logger("plugin_market_router")
 
 
 class PluginMarketRouter(BaseRouter):
-    """Serve the standalone market UI and its installation API."""
+    """向新版 WebUI 暴露插件市场能力。"""
 
     name = "plugin-market"
-    description = "Standalone plugin market HTML page and installation API"
-    custom_route_path = "/webui/plugin-market"
-    cors_origins = None
-
-    _ASSETS = {
-        "app.js": "application/javascript; charset=utf-8",
-        "style.css": "text/css; charset=utf-8",
-    }
+    description = "插件市场查询、安装与卸载接口"
+    custom_route_path = "/webui/api/plugin-market"
+    cors_origins: list[str] = ["*"]
+    dependencies: list[str] = []
 
     def __init__(self, plugin: "BasePlugin") -> None:
-        config = plugin.config
-        if not isinstance(config, WebUIConfig):
-            raise RuntimeError("WebUI plugin market configuration is unavailable")
-        if not config.market.enabled:
-            raise RuntimeError("WebUI plugin market is disabled")
-        self._config = config
-        self._market = PluginMarketService(config)
-        self._plugin_manager = get_plugin_management_manager()
-        self._ui_dir = Path(__file__).resolve().parents[2] / "static" / "plugin-market"
-        self._install_lock = asyncio.Lock()
-        self._install_attempts: deque[float] = deque()
+        if not isinstance(plugin.config, WebUIConfig):
+            raise RuntimeError("WebUI 插件市场配置未加载")
+        self._manager = get_plugin_market_manager(plugin.config)
         super().__init__(plugin)
 
     def register_endpoints(self) -> None:
-        @self.app.get("/", include_in_schema=False)
-        @self.app.get("/index.html", include_in_schema=False)
-        async def market_page() -> FileResponse:
-            return self._ui_file("index.html", "text/html; charset=utf-8")
+        """注册认证后的市场端点。"""
 
-        @self.app.get("/assets/{asset_name}", include_in_schema=False)
-        async def market_asset(asset_name: str) -> FileResponse:
-            media_type = self._ASSETS.get(asset_name)
-            if media_type is None:
-                return self._ui_file("missing", "text/plain")
-            return self._ui_file(asset_name, media_type)
-
-        @self.app.get("/api/health")
-        async def health() -> dict[str, Any]:
-            return self._ok(
-                {
-                    "status": "ok",
-                    "mode": "integrated",
-                    "version": MARKET_API_VERSION,
-                    "install_enabled": self._config.install.enabled,
-                }
-            )
-
-        @self.app.get("/api/plugins", dependencies=[VerifiedDep])
-        async def list_plugins(
-            query: str = Query(default="", max_length=128),
-            refresh: bool = Query(default=False),
-        ) -> dict[str, Any]:
-            try:
-                if refresh:
-                    self._market.clear_index_cache()
-                plugins = await asyncio.to_thread(self._market.get_index, query)
-                local_plugins = {
-                    item.plugin_name: item
-                    for item in await self._plugin_manager.list_plugins()
-                }
-                for item in plugins:
-                    local = local_plugins.get(item["plugin_id"])
-                    item["installed"] = local is not None
-                    item["is_loaded"] = bool(local and local.is_loaded)
-                    item["has_config"] = bool(local and local.is_loaded and local.has_config)
-                return self._ok(
-                    {
-                        "plugins": plugins,
-                        "total": len(plugins),
-                        "query": query,
-                        "install_enabled": self._config.install.enabled,
-                    }
-                )
-            except MarketError as error:
-                return self._error(400, str(error))
-
-        @self.app.get("/api/plugins/{plugin_id}", dependencies=[VerifiedDep])
-        async def resolve_plugin(plugin_id: str) -> dict[str, Any]:
-            try:
-                return self._ok(self._market.resolve(plugin_id))
-            except MarketError as error:
-                return self._error(400, str(error))
-
-        @self.app.post("/api/resolve", dependencies=[VerifiedDep])
-        async def resolve_plugin_post(request: ResolveRequest) -> dict[str, Any]:
-            try:
-                return self._ok(self._market.resolve(request.plugin_id))
-            except MarketError as error:
-                return self._error(400, str(error))
-
-        if self._config.install.enabled:
-            self._register_install_endpoint()
-
-    def _register_install_endpoint(self) -> None:
-        @self.app.post("/api/install", dependencies=[VerifiedDep])
-        async def install_plugin(
-            payload: InstallRequest,
-            request: Request,
-        ) -> dict[str, Any]:
-            client_ip = request.client.host if request.client else "unknown"
-            self._check_install_rate_limit()
-            if self._install_lock.locked():
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="已有插件安装任务正在执行",
-                )
-            self._install_attempts.append(time.monotonic())
-
-            async with self._install_lock:
-                try:
-                    local_plugin_names = {
-                        item.plugin_name
-                        for item in await self._plugin_manager.list_plugins()
-                    }
-                    if payload.plugin_id in local_plugin_names:
-                        raise MarketError(
-                            f"插件 {payload.plugin_id} 已安装，请使用插件配置或插件管理页面"
-                        )
-                    result = await self._market.install(payload.plugin_id, payload.version)
-                    installed_version = result.get("version") or payload.version or "latest"
-                    result["has_config"] = get_config(payload.plugin_id) is not None
-                    logger.warning(
-                        "市场安装完成: "
-                        f"client={client_ip}, plugin={payload.plugin_id}, version={installed_version}, "
-                        f"loaded={result.get('loaded', False)}"
-                    )
-                    return self._ok(result, "插件安装完成")
-                except MarketError as error:
-                    logger.warning(
-                        f"市场安装被拒绝: client={client_ip}, plugin={payload.plugin_id}, error={error}"
-                    )
-                    return self._error(400, str(error))
-                except Exception as error:
-                    logger.error(
-                        f"市场安装失败: client={client_ip}, plugin={payload.plugin_id}, error={error}",
-                        exc_info=True,
-                    )
-                    return self._error(500, "插件安装失败，请查看服务端日志")
-
-    def _check_install_rate_limit(self) -> None:
-        now = time.monotonic()
-        self._trim_timestamps(self._install_attempts, now)
-        if len(self._install_attempts) >= self._config.install.max_installs_per_10_minutes:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="市场安装操作过于频繁，请稍后再试",
-            )
-
-    @staticmethod
-    def _trim_timestamps(values: deque[float], now: float) -> None:
-        while values and now - values[0] >= _RATE_WINDOW_SECONDS:
-            values.popleft()
-
-    def _ui_file(self, filename: str, media_type: str) -> FileResponse:
-        path = self._ui_dir / filename
-        if filename not in {"index.html", *self._ASSETS} or not path.is_file():
-            from fastapi import HTTPException
-
-            raise HTTPException(status_code=404, detail="UI asset not found")
-        return FileResponse(
-            path,
-            media_type=media_type,
-            headers={"Cache-Control": "no-cache"},
+        @self.app.get(
+            "/capabilities",
+            response_model=BaseResponse[MarketCapabilities],
+            dependencies=[VerifiedDep],
         )
+        async def get_capabilities() -> BaseResponse[MarketCapabilities]:
+            return BaseResponse.ok(self._manager.capabilities())
 
-    @staticmethod
-    def _ok(data: Any, message: str = "success") -> dict[str, Any]:
-        return {"code": 200, "data": data, "message": message}
+        @self.app.get(
+            "/plugins",
+            response_model=BaseResponse[MarketPluginList],
+            dependencies=[VerifiedDep],
+        )
+        async def list_plugins(
+            refresh: bool = Query(default=False),
+        ) -> BaseResponse[MarketPluginList]:
+            try:
+                return BaseResponse.ok(await self._manager.list_plugins(refresh=refresh))
+            except PluginMarketError as error:
+                raise HTTPException(status_code=502, detail=str(error)) from error
+            except Exception as error:
+                logger.error(f"读取插件市场失败: {error}", exc_info=True)
+                raise HTTPException(status_code=500, detail="读取插件市场失败") from error
 
-    @staticmethod
-    def _error(code: int, message: str) -> dict[str, Any]:
-        return {"code": code, "data": None, "message": message}
+        @self.app.get(
+            "/plugins/{plugin_id}",
+            response_model=BaseResponse[MarketPluginDetail],
+            dependencies=[VerifiedDep],
+        )
+        async def get_plugin(plugin_id: str) -> BaseResponse[MarketPluginDetail]:
+            try:
+                return BaseResponse.ok(await self._manager.get_plugin_detail(plugin_id))
+            except PluginMarketError as error:
+                raise HTTPException(status_code=400, detail=str(error)) from error
+            except Exception as error:
+                logger.error(f"读取市场插件详情失败: {error}", exc_info=True)
+                raise HTTPException(status_code=500, detail="读取市场插件详情失败") from error
+
+        @self.app.post(
+            "/plugins/{plugin_id}/install-plan",
+            response_model=BaseResponse[InstallPlan],
+            dependencies=[VerifiedDep],
+        )
+        async def create_install_plan(
+            plugin_id: str,
+            request: InstallPlanRequest,
+        ) -> BaseResponse[InstallPlan]:
+            try:
+                return BaseResponse.ok(
+                    await self._manager.create_install_plan(plugin_id, request.version)
+                )
+            except PluginMarketError as error:
+                raise HTTPException(status_code=400, detail=str(error)) from error
+
+        @self.app.post(
+            "/plugins/{plugin_id}/install",
+            response_model=BaseResponse[MarketOperation],
+            dependencies=[VerifiedDep],
+            status_code=202,
+        )
+        async def install_plugin(
+            plugin_id: str,
+            request: StartInstallRequest,
+        ) -> BaseResponse[MarketOperation]:
+            try:
+                return BaseResponse.ok(
+                    await self._manager.start_install(plugin_id, request.version),
+                    message="安装任务已创建",
+                )
+            except PluginMarketError as error:
+                message = str(error)
+                status_code = 429 if "频繁" in message else 409
+                raise HTTPException(status_code=status_code, detail=message) from error
+
+        @self.app.post(
+            "/plugins/{plugin_id}/uninstall",
+            response_model=BaseResponse[MarketOperation],
+            dependencies=[VerifiedDep],
+            status_code=202,
+        )
+        async def uninstall_plugin(plugin_id: str) -> BaseResponse[MarketOperation]:
+            try:
+                return BaseResponse.ok(
+                    await self._manager.start_uninstall(plugin_id),
+                    message="卸载任务已创建",
+                )
+            except PluginMarketError as error:
+                raise HTTPException(status_code=409, detail=str(error)) from error
+
+        @self.app.get(
+            "/operations/{operation_id}",
+            response_model=BaseResponse[MarketOperation],
+            dependencies=[VerifiedDep],
+        )
+        async def get_operation(operation_id: str) -> BaseResponse[MarketOperation]:
+            try:
+                return BaseResponse.ok(self._manager.get_operation(operation_id))
+            except PluginMarketError as error:
+                raise HTTPException(status_code=404, detail=str(error)) from error
+
+
+__all__ = ["PluginMarketRouter"]

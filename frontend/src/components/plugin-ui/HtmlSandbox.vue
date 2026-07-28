@@ -8,7 +8,7 @@
 import { ref, onMounted, onUnmounted, watch, shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
 import type { PageDetail, PageSchemaResponse } from '../../api/types/plugin-ui'
-import type { PluginUIVarStore } from '../../stores/plugin-ui-vars'
+import type { PluginUIVarStore } from '../../utils/plugin-ui/plugin-ui-vars'
 import { ApiTemplateEngine } from '../../utils/plugin-ui/api-template-engine'
 import {
   createHtmlSandbox,

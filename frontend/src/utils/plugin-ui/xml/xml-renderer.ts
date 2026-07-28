@@ -12,7 +12,7 @@
  */
 
 import { h, type VNode, type Component } from 'vue'
-import type { PluginUIVarStore } from '../../../stores/plugin-ui-vars'
+import type { PluginUIVarStore } from '../plugin-ui-vars'
 import type { ApiTemplateEngine } from '../api-template-engine'
 import { parseApiTemplateFromElement } from '../api-template-engine'
 import { resolvePlaceholderSync, hasPlaceholders } from '../placeholder-parser'

@@ -6,6 +6,9 @@
 # 单文件大小上限（字节）
 MAX_ASSET_SIZE_BYTES: int = 5 * 1024 * 1024  # 5 MB
 
+# i18n JSON 文件大小上限（字节）
+MAX_I18N_FILE_SIZE_BYTES: int = 256 * 1024  # 256 KB
+
 # 允许的资源扩展名
 ALLOWED_ASSET_EXTENSIONS: frozenset[str] = frozenset([
     ".html", ".css", ".js",
@@ -82,12 +85,13 @@ XML_FORBIDDEN_TAGS: frozenset[str] = frozenset([
 ])
 
 # 占位符表达式中允许的内置 helper 函数
+# 必须与前端 expression-evaluator.ts 的 BUILTIN_FUNCTIONS 集合保持一致
 EXPRESSION_ALLOWED_HELPERS: frozenset[str] = frozenset([
     "empty", "len", "keys", "values",
-    # 文档定义的格式化函数
-    "format_date", "format_number", "format_bytes",
-    "format_duration", "format_percent",
-    "uppercase", "lowercase", "capitalize", "truncate",
+    # 类型转换函数
+    "str", "int", "float", "bool",
+    # i18n 翻译函数（仅 XML 轨，由前端注入 pluginName 前缀）
+    "t",
 ])
 
 # 占位符表达式中禁止的关键字

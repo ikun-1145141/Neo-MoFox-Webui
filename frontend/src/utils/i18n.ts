@@ -62,8 +62,9 @@ const messages = {
       'config-plugins': '插件配置',
       plugins: '插件管理',
       'plugin-detail': '插件详情',
-      'plugin-ui': '插件中心',
       'plugin-market': '插件市场',
+      'plugin-market-detail': '市场插件详情',
+      'plugin-ui': '插件中心',
       'llm-metrics': 'LLM 统计',
       'request-inspector': '请求体检视器',
       log: '日志查看',
@@ -329,6 +330,93 @@ const messages = {
       },
       devBackendOffline: '[DEV] 后端未启动',
       devBackendOfflineUnsaved: '[DEV] 后端未启动，更改不会持久化',
+    },
+    pluginMarket: {
+      title: '插件市场',
+      subtitle: '浏览社区插件，检查兼容性并管理安装状态',
+      searchPlaceholder: '搜索名称、简介、标签或作者',
+      clearSearch: '清除搜索',
+      refresh: '刷新市场',
+      retry: '重试',
+      resultCount: '{count} 个插件',
+      totalCount: '市场共收录 {count} 个',
+      filters: {
+        category: '分类',
+        state: '本地状态',
+        sort: '排序',
+        allCategories: '全部分类',
+        allStates: '全部状态',
+        installed: '已安装',
+        updates: '可更新',
+        notInstalled: '未安装',
+      },
+      sort: {
+        updated: '最近更新',
+        downloads: '下载量',
+        rating: '评分',
+        name: '名称',
+      },
+      card: {
+        installed: '已安装',
+        updateAvailable: '可更新',
+        notInstalled: '未安装',
+        noSummary: '暂无插件简介',
+        downloads: '下载量',
+        rating: '评分',
+        details: '查看详情',
+      },
+      empty: {
+        title: '没有匹配的插件',
+        description: '请调整搜索词、分类或本地状态筛选。',
+      },
+      error: {
+        title: '无法读取插件市场',
+        fallback: '插件市场请求失败，请稍后重试',
+      },
+      detail: {
+        back: '返回插件市场',
+        loading: '正在读取插件详情...',
+        errorTitle: '无法读取插件详情',
+        prerelease: '预发布',
+        yanked: '已撤回',
+        incompatible: '不兼容',
+        unknown: '未知',
+        about: '插件介绍',
+        dependencies: '插件依赖',
+        noDependencies: '该插件没有声明市场插件依赖。',
+        satisfied: '已满足',
+        missing: '未满足',
+        versionHistory: '版本历史',
+        installation: '安装与本地状态',
+        localState: '当前本地状态',
+        installedVersion: '已安装 v{version}',
+        selectVersion: '选择版本',
+        hostRange: '宿主范围：{min} 至 {max}',
+        apiVersion: '插件 API：{version}',
+        packageSize: '安装包：{size}',
+        install: '安装',
+        update: '更新',
+        uninstall: '卸载',
+        configure: '配置插件',
+        processing: '正在处理',
+        installDisabled: '服务端已关闭市场安装功能。',
+        repository: '代码仓库',
+        homepage: '项目主页',
+        blockedTitle: '当前版本无法安装',
+        installConfirmTitle: '确认安装插件',
+        updateConfirmTitle: '确认更新插件',
+        uninstallConfirmTitle: '确认卸载插件',
+        uninstallConfirmMessage: '确定卸载“{name}”吗？运行中的插件会先停止，然后删除插件包。',
+        cancel: '取消',
+        planSource: '来源：{source}',
+        planSize: '安装包大小：{size}',
+        planDependencies: '依赖项：{count} 个',
+        planWarnings: '注意事项：',
+        planRestart: '安装或更新完成后需要重启 Neo-MoFox 才会加载新版本。',
+        operationRestartRequired: '插件包已写入，请重启 Neo-MoFox 后生效',
+        operationSucceeded: '操作已完成',
+        operationFailed: '操作失败',
+      },
     },
     plugins: {
       title: '插件管理',
@@ -978,8 +1066,9 @@ const messages = {
       'config-plugins': 'Plugin Config',
       plugins: 'Plugin Management',
       'plugin-detail': 'Plugin Detail',
-      'plugin-ui': 'Plugin Center',
       'plugin-market': 'Plugin Market',
+      'plugin-market-detail': 'Market Plugin Detail',
+      'plugin-ui': 'Plugin Center',
       'llm-metrics': 'LLM Metrics',
       'request-inspector': 'Request Inspector',
       log: 'Log Viewer',
@@ -1245,6 +1334,93 @@ const messages = {
       },
       devBackendOffline: '[DEV] Backend is not running',
       devBackendOfflineUnsaved: '[DEV] Backend is not running. Changes will not persist.',
+    },
+    pluginMarket: {
+      title: 'Plugin Market',
+      subtitle: 'Browse community plugins, review compatibility, and manage installation state',
+      searchPlaceholder: 'Search names, summaries, tags, or authors',
+      clearSearch: 'Clear search',
+      refresh: 'Refresh market',
+      retry: 'Retry',
+      resultCount: '{count} plugins',
+      totalCount: '{count} plugins in the market',
+      filters: {
+        category: 'Category',
+        state: 'Local state',
+        sort: 'Sort',
+        allCategories: 'All categories',
+        allStates: 'All states',
+        installed: 'Installed',
+        updates: 'Updates available',
+        notInstalled: 'Not installed',
+      },
+      sort: {
+        updated: 'Recently updated',
+        downloads: 'Downloads',
+        rating: 'Rating',
+        name: 'Name',
+      },
+      card: {
+        installed: 'Installed',
+        updateAvailable: 'Update available',
+        notInstalled: 'Not installed',
+        noSummary: 'No plugin summary',
+        downloads: 'Downloads',
+        rating: 'Rating',
+        details: 'View details',
+      },
+      empty: {
+        title: 'No matching plugins',
+        description: 'Adjust the search, category, or local state filter.',
+      },
+      error: {
+        title: 'Unable to load the plugin market',
+        fallback: 'The plugin market request failed. Try again later.',
+      },
+      detail: {
+        back: 'Back to Plugin Market',
+        loading: 'Loading plugin details...',
+        errorTitle: 'Unable to load plugin details',
+        prerelease: 'Prerelease',
+        yanked: 'Yanked',
+        incompatible: 'Incompatible',
+        unknown: 'Unknown',
+        about: 'About',
+        dependencies: 'Plugin dependencies',
+        noDependencies: 'This plugin declares no market plugin dependencies.',
+        satisfied: 'Satisfied',
+        missing: 'Missing',
+        versionHistory: 'Version history',
+        installation: 'Installation and local state',
+        localState: 'Current local state',
+        installedVersion: 'Installed v{version}',
+        selectVersion: 'Select version',
+        hostRange: 'Host range: {min} to {max}',
+        apiVersion: 'Plugin API: {version}',
+        packageSize: 'Package: {size}',
+        install: 'Install',
+        update: 'Update',
+        uninstall: 'Uninstall',
+        configure: 'Configure plugin',
+        processing: 'Processing',
+        installDisabled: 'Market installation is disabled on the server.',
+        repository: 'Repository',
+        homepage: 'Homepage',
+        blockedTitle: 'This version cannot be installed',
+        installConfirmTitle: 'Confirm plugin installation',
+        updateConfirmTitle: 'Confirm plugin update',
+        uninstallConfirmTitle: 'Confirm plugin uninstall',
+        uninstallConfirmMessage: 'Uninstall “{name}”? A running plugin will be stopped before its package is removed.',
+        cancel: 'Cancel',
+        planSource: 'Source: {source}',
+        planSize: 'Package size: {size}',
+        planDependencies: 'Dependencies: {count}',
+        planWarnings: 'Warnings:',
+        planRestart: 'Restart Neo-MoFox after installation or update to load the new version.',
+        operationRestartRequired: 'Plugin package stored. Restart Neo-MoFox to apply it.',
+        operationSucceeded: 'Operation completed',
+        operationFailed: 'Operation failed',
+      },
     },
     plugins: {
       title: 'Plugin Management',
@@ -1848,7 +2024,102 @@ function isLocale(value: unknown): value is Locale {
   return value === 'zh-CN' || value === 'en-US'
 }
 
+// === 插件自定义 i18n bundle 存储 ===
+//
+// 设计要点：
+// - bundle 以 `${pluginName}::${pageId}` 为 key 存储，便于页面级精确注册/卸载。
+// - pluginMessages 是响应式 ref，每次注册/卸载都重建引用以触发 Vue 重新计算
+//   所有依赖 t() 的 computed。
+// - 每个 bundle 的内容会被包一层 { [pluginName]: bundle[locale] } 后深合并，
+//   使插件 key 自动落入 `<pluginName>.<key>` 命名空间，
+//   与内置 messages 平级查找，无冲突风险。
+// - resolveMessage 查询顺序：pluginMessages[locale] → messages[locale] →
+//   pluginMessages[DEFAULT_LOCALE] → messages[DEFAULT_LOCALE] → key 字面量。
+type PluginI18nBundle = Record<Locale, Record<string, unknown>> & { __pluginName: string }
+
+const pluginBundles = new Map<string, PluginI18nBundle>()
+const pluginMessages = ref<Record<Locale, Record<string, unknown>>>({
+  'zh-CN': {},
+  'en-US': {},
+})
+
+/**
+ * 把 bundle 的每个 locale 内容包一层 { [pluginName]: ... } 后深合并到目标对象。
+ *
+ * @param target - 目标对象（会被原地修改）
+ * @param pluginName - 插件名称（作为命名空间前缀）
+ * @param bundle - 单个页面的 i18n bundle
+ */
+function mergeBundleInto(
+  target: Record<string, unknown>,
+  pluginName: string,
+  localeBundle: Record<string, unknown> | null | undefined,
+): void {
+  if (!localeBundle || typeof localeBundle !== 'object') return
+  target[pluginName] = deepMerge(
+    target[pluginName] as Record<string, unknown> | undefined,
+    localeBundle,
+  )
+}
+
+/**
+ * 深合并两个对象（后者覆盖前者同名 key，对象递归合并，数组和非对象直接覆盖）。
+ */
+function deepMerge(
+  a: Record<string, unknown> | undefined,
+  b: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!a) return structuredClone(b)
+  const result: Record<string, unknown> = { ...a }
+  for (const key of Object.keys(b)) {
+    const av = result[key]
+    const bv = b[key]
+    if (
+      av && typeof av === 'object' && !Array.isArray(av) &&
+      bv && typeof bv === 'object' && !Array.isArray(bv)
+    ) {
+      result[key] = deepMerge(av as Record<string, unknown>, bv as Record<string, unknown>)
+    } else {
+      result[key] = bv
+    }
+  }
+  return result
+}
+
+/**
+ * 重建 pluginMessages（每次注册/卸载后调用）。
+ *
+ * 遍历当前所有 pluginBundles，把每个 bundle 在每个 locale 下
+ * 包一层 { [pluginName]: ... } 后深合并。
+ */
+function rebuildPluginMessages(): void {
+  const next: Record<Locale, Record<string, unknown>> = {
+    'zh-CN': {},
+    'en-US': {},
+  }
+  for (const bundle of pluginBundles.values()) {
+    // bundle 来自后端，结构为 { 'zh-CN': {...}, 'en-US': {...} }；
+    // 但插件可能只声明一个 locale，缺失的 locale 走 fallback（resolveMessage 处理）
+    const pluginName = bundle.__pluginName as string
+    if (!pluginName) continue
+    for (const loc of ['zh-CN', 'en-US'] as Locale[]) {
+      mergeBundleInto(next[loc], pluginName, bundle[loc] as Record<string, unknown> | undefined)
+    }
+  }
+  pluginMessages.value = next
+}
+
 function resolveMessage(localeValue: Locale, key: string): string | undefined {
+  // 先查插件注册的 messages
+  const fromPlugin = key.split('.').reduce<unknown>((current, segment) => {
+    if (current && typeof current === 'object' && segment in current) {
+      return (current as Record<string, unknown>)[segment]
+    }
+    return undefined
+  }, pluginMessages.value[localeValue]) as string | undefined
+  if (fromPlugin !== undefined) return fromPlugin
+
+  // 再查内置静态 messages
   return key.split('.').reduce<unknown>((current, segment) => {
     if (current && typeof current === 'object' && segment in current) {
       return (current as Record<string, unknown>)[segment]
@@ -1865,14 +2136,14 @@ export function setLocale(nextLocale: Locale) {
 
 export function t(key: string, params?: Record<string, string>): string {
   let message = resolveMessage(locale.value, key) ?? resolveMessage(DEFAULT_LOCALE, key) ?? key
-  
+
   // 替换参数
   if (params) {
     Object.entries(params).forEach(([paramKey, paramValue]) => {
       message = message.replace(new RegExp(`\\{${paramKey}\\}`, 'g'), paramValue)
     })
   }
-  
+
   return message
 }
 
@@ -1881,6 +2152,54 @@ export function useI18n() {
     locale: readonly(locale),
     setLocale,
     t,
+  }
+}
+
+// === 插件 i18n 注册 API ===
+//
+// 供 PluginUIView 在加载页面 schema 时调用。
+// bundle 来自后端 PageSchemaResponse.i18n（已是 { 'zh-CN': {...}, 'en-US': {...} } 结构）。
+// 内部会在 bundle 上挂一个 __pluginName 标记，rebuildPluginMessages 时据此分命名空间。
+
+/**
+ * 注册一个插件页面的 i18n bundle。
+ *
+ * 同一 (pluginName, pageId) 重复注册视为更新（覆盖旧 bundle）。
+ * 调用后 pluginMessages 会立即重建，所有依赖 t() 的 computed 自动失效。
+ *
+ * @param pluginName - 插件名称（作为 key 的命名空间前缀）
+ * @param pageId - 页面标识
+ * @param bundle - i18n bundle，结构 { 'zh-CN': {...}, 'en-US': {...} }
+ */
+export function registerPluginI18n(
+  pluginName: string,
+  pageId: string,
+  bundle: Record<string, Record<string, unknown>>,
+): void {
+  if (!pluginName || !pageId || !bundle) return
+  const key = `${pluginName}::${pageId}`
+  // 把 bundle 标准化为 { zh-CN, en-US, __pluginName } 三字段
+  const normalized = {
+    'zh-CN': (bundle['zh-CN'] as Record<string, unknown> | undefined) ?? {},
+    'en-US': (bundle['en-US'] as Record<string, unknown> | undefined) ?? {},
+    __pluginName: pluginName,
+  } as Record<Locale, Record<string, unknown>> & { __pluginName: string }
+  pluginBundles.set(key, normalized)
+  rebuildPluginMessages()
+}
+
+/**
+ * 卸载一个插件页面的 i18n bundle。
+ *
+ * 幂等：未注册时静默返回。
+ *
+ * @param pluginName - 插件名称
+ * @param pageId - 页面标识
+ */
+export function unregisterPluginI18n(pluginName: string, pageId: string): void {
+  const key = `${pluginName}::${pageId}`
+  if (pluginBundles.delete(key)) {
+    rebuildPluginMessages()
   }
 }
 

@@ -28,6 +28,9 @@ type TokenType =
   | 'RightParen'
   | 'LeftBracket'
   | 'RightBracket'
+  | 'LeftBrace'
+  | 'RightBrace'
+  | 'Colon'
   | 'Not'
   | 'And'
   | 'Or'
@@ -142,6 +145,9 @@ function tokenize(input: string): Token[] {
       case ')': tokens.push({ type: 'RightParen', value: ')' }); pos++; continue
       case '[': tokens.push({ type: 'LeftBracket', value: '[' }); pos++; continue
       case ']': tokens.push({ type: 'RightBracket', value: ']' }); pos++; continue
+      case '{': tokens.push({ type: 'LeftBrace', value: '{' }); pos++; continue
+      case '}': tokens.push({ type: 'RightBrace', value: '}' }); pos++; continue
+      case ':': tokens.push({ type: 'Colon', value: ':' }); pos++; continue
       case '!': tokens.push({ type: 'Not', value: '!' }); pos++; continue
       case '>': tokens.push({ type: 'Gt', value: '>' }); pos++; continue
       case '<': tokens.push({ type: 'Lt', value: '<' }); pos++; continue
@@ -175,6 +181,7 @@ export type ASTNode =
   | UnaryExpression
   | BinaryExpression
   | CallExpression
+  | ObjectLiteral
 
 interface NumberLiteral { type: 'NumberLiteral'; value: number }
 interface StringLiteral { type: 'StringLiteral'; value: string }
@@ -186,6 +193,11 @@ interface IndexExpression { type: 'IndexExpression'; object: ASTNode; index: AST
 interface UnaryExpression { type: 'UnaryExpression'; operator: '!' | '-'; operand: ASTNode }
 interface BinaryExpression { type: 'BinaryExpression'; operator: string; left: ASTNode; right: ASTNode }
 interface CallExpression { type: 'CallExpression'; callee: string; args: ASTNode[] }
+/** 对象字面量节点（如 {'name': expr, 'age': expr}） */
+interface ObjectLiteral {
+  type: 'ObjectLiteral'
+  properties: { key: string; value: ASTNode }[]
+}
 
 // === 递归下降解析器 ===
 
@@ -402,16 +414,47 @@ class Parser {
         return expr
       }
 
+      case 'LeftBrace': {
+        // 对象字面量：{'key': value, 'key2': value2}
+        // 键必须是字符串字面量（与 JSON 一致，避免 identifier-as-key 的歧义）
+        this.advance()
+        const properties: { key: string; value: ASTNode }[] = []
+        if (!this.check('RightBrace')) {
+          properties.push(this.parseObjectPair())
+          while (this.check('Comma')) {
+            this.advance()
+            // 允许尾随逗号
+            if (this.check('RightBrace')) break
+            properties.push(this.parseObjectPair())
+          }
+        }
+        this.expect('RightBrace')
+        return { type: 'ObjectLiteral', properties }
+      }
+
       default:
         throw new ExpressionError(`意外的 Token: ${token.type}（值: ${token.value}）`)
     }
+  }
+
+  /** 解析对象字面量的单个键值对：'key' : expr */
+  private parseObjectPair(): { key: string; value: ASTNode } {
+    const keyToken = this.expect('String')
+    this.expect('Colon')
+    const value = this.parseOr()
+    return { key: keyToken.value as string, value }
   }
 }
 
 // === 内置函数白名单 ===
 
 /** 允许在表达式中调用的内置函数集合 */
-const BUILTIN_FUNCTIONS = new Set(['empty', 'len', 'keys', 'values', 'str', 'int', 'float', 'bool'])
+const BUILTIN_FUNCTIONS = new Set([
+  'empty', 'len', 'keys', 'values', 'str', 'int', 'float', 'bool',
+  // i18n 翻译函数：t('key') 或 t('key', {name: value})
+  // 求值时自动用 resolver.pluginName 给 key 加前缀，再转给 resolver.tFn
+  't',
+])
 
 // === 表达式求值错误 ===
 
@@ -430,9 +473,18 @@ export class ExpressionError extends Error {
 /**
  * 变量解析器接口。
  * 提供从变量池中按路径获取值的能力。
+ *
+ * 扩展字段（pluginName / tFn）用于在占位符表达式中支持 ``t('key')`` 内置函数：
+ * 求值时会把 key 拼成 ``<pluginName>.<key>`` 后调用 tFn，
+ * 使插件作者在 XML 里写 ``{t('welcome')}`` 自动命中本插件注册的翻译。
+ * 这两个字段是可选的——非插件 UI 上下文（如纯表达式工具调用）可不提供。
  */
 export interface VariableResolver {
   get(path: string): any
+  /** 当前插件名（用于 t() 自动加前缀）；未提供时 t() 退化为返回 key 字面量 */
+  readonly pluginName?: string
+  /** 翻译函数；未提供时 t() 退化为返回 key 字面量 */
+  readonly tFn?: (key: string, params?: Record<string, string>) => string
 }
 
 // === AST 求值器 ===
@@ -489,7 +541,15 @@ function evaluateNode(node: ASTNode, resolver: VariableResolver): any {
 
     case 'CallExpression': {
       const args = node.args.map(arg => evaluateNode(arg, resolver))
-      return evaluateBuiltin(node.callee, args)
+      return evaluateBuiltin(node.callee, args, resolver)
+    }
+
+    case 'ObjectLiteral': {
+      const result: Record<string, any> = {}
+      for (const prop of node.properties) {
+        result[prop.key] = evaluateNode(prop.value, resolver)
+      }
+      return result
     }
   }
 }
@@ -527,9 +587,10 @@ function evaluateBinary(op: string, left: any, right: any): any {
  *
  * @param name - 函数名
  * @param args - 参数列表
+ * @param resolver - 变量解析器（用于 t() 的 pluginName/tFn 注入）
  * @returns 调用结果
  */
-function evaluateBuiltin(name: string, args: any[]): any {
+function evaluateBuiltin(name: string, args: any[], resolver: VariableResolver): any {
   switch (name) {
     case 'empty': {
       const val = args[0]
@@ -580,6 +641,21 @@ function evaluateBuiltin(name: string, args: any[]): any {
 
     case 'bool': {
       return Boolean(args[0])
+    }
+
+    case 't': {
+      // t('key') 或 t('key', {name: value, ...})
+      // 自动给 key 加上 resolver.pluginName 前缀，再调用 resolver.tFn
+      // 缺少 pluginName 或 tFn 时退化为返回 key 字面量（不破坏渲染）
+      const key = args[0] == null ? '' : String(args[0])
+      const params =
+        args[1] && typeof args[1] === 'object' && !Array.isArray(args[1])
+          ? args[1] as Record<string, string>
+          : undefined
+      if (!resolver.pluginName || typeof resolver.tFn !== 'function') {
+        return key
+      }
+      return resolver.tFn(key, params)
     }
 
     default:

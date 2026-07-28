@@ -30,6 +30,8 @@ class DemoUIPlugin(BasePlugin):
         service = get_service("neo-mofox-webui:service:plugin_ui")
 
         # 注册 XML 页面（纯关键字参数，无需导入 WebUI 内部类型）
+        # i18n_path 指向本插件自带的 i18n JSON bundle；前端拿到后会自动注册，
+        # XML 中的 {t('welcome')} / {t('form.add')} 等会命中本插件命名空间下的 key。
         await service.register_ui_page(
             plugin_name="demo_ui_plugin",
             page_id="dashboard",
@@ -39,6 +41,7 @@ class DemoUIPlugin(BasePlugin):
             order=10,
             mode="xml",
             xml=_DASHBOARD_XML,
+            i18n_path="i18n/i18n.json",
         )
 
 
@@ -67,50 +70,50 @@ _DASHBOARD_XML = """\
   <layout>
     <vbox gap="1.5rem">
       <!-- 标题区域 -->
-      <card title="XML UI 演示" variant="elevated" padding="1.5rem">
+      <card title="{t('title')}" variant="elevated" padding="1.5rem">
         <vbox gap="0.75rem">
-          <sys-text variant="title">欢迎使用插件 UI 系统</sys-text>
-          <sys-text variant="body">这个页面展示了 XML 声明式 UI 的各种组件和 API 交互能力。</sys-text>
-          <sys-text variant="caption">当前问候语: {greeting}</sys-text>
+          <sys-text variant="title">{t('welcome')}</sys-text>
+          <sys-text variant="body">{t('welcomeBody')}</sys-text>
+          <sys-text variant="caption">{t('currentGreeting', {'greeting': greeting})}</sys-text>
         </vbox>
       </card>
 
       <!-- 计数器演示 -->
-      <card title="计数器" variant="outlined">
+      <card title="{t('counter.title')}" variant="outlined">
         <hbox gap="1rem" align="center">
           <sys-button variant="outlined" on-click="set: counter={counter - 1}">
-            -1
+            {t('counter.decrement')}
           </sys-button>
           <sys-text variant="subtitle" bold="true">{counter}</sys-text>
           <sys-button variant="filled" on-click="set: counter={counter + 1}">
-            +1
+            {t('counter.increment')}
           </sys-button>
           <sys-button variant="tonal" on-click="set: counter=0">
-            重置
+            {t('counter.reset')}
           </sys-button>
         </hbox>
       </card>
 
       <!-- 表单 + API 交互 -->
-      <card title="添加条目" variant="outlined">
+      <card title="{t('form.title')}" variant="outlined">
         <vbox gap="0.75rem">
-          <sys-input label="名称" placeholder="输入条目名称..." bind:value="username" />
+          <sys-input label="{t('form.nameLabel')}" placeholder="{t('form.namePlaceholder')}" bind:value="username" />
           <hbox gap="0.5rem">
-            <sys-button variant="filled" icon="add" on-click="api: addItem | notify: '添加成功', 'success'" disabled="{!username}">
-              添加
+            <sys-button variant="filled" icon="add" on-click="api: addItem | notify: {t('form.addSuccess')}, 'success'" disabled="{!username}">
+              {t('form.add')}
             </sys-button>
             <sys-button variant="text" on-click="set: username=''">
-              清空
+              {t('form.clear')}
             </sys-button>
           </hbox>
         </vbox>
       </card>
 
       <!-- 数据展示 -->
-      <card title="数据列表" variant="elevated">
+      <card title="{t('dataList.title')}" variant="elevated">
         <vbox gap="0.75rem">
           <hbox gap="0.5rem" align="center">
-            <sys-text variant="body">共 {len(items)} 条数据</sys-text>
+            <sys-text variant="body">{t('dataList.count', {'count': str(len(items))})}</sys-text>
             <spacer />
             <sys-icon-button icon="refresh" on-click="api: getItems" />
           </hbox>
@@ -119,56 +122,56 @@ _DASHBOARD_XML = """\
       </card>
 
       <!-- 各种组件展示 -->
-      <card title="组件画廊" variant="outlined">
+      <card title="{t('gallery.title')}" variant="outlined">
         <grid columns="2" gap="1rem">
           <vbox gap="0.5rem">
-            <sys-text variant="subtitle">标签</sys-text>
+            <sys-text variant="subtitle">{t('gallery.tags')}</sys-text>
             <hbox gap="0.25rem" wrap="true">
-              <sys-tag variant="default">默认</sys-tag>
-              <sys-tag variant="primary">主要</sys-tag>
-              <sys-tag variant="success">成功</sys-tag>
-              <sys-tag variant="error">错误</sys-tag>
+              <sys-tag variant="default">{t('gallery.tagDefault')}</sys-tag>
+              <sys-tag variant="primary">{t('gallery.tagPrimary')}</sys-tag>
+              <sys-tag variant="success">{t('gallery.tagSuccess')}</sys-tag>
+              <sys-tag variant="error">{t('gallery.tagError')}</sys-tag>
             </hbox>
           </vbox>
           <vbox gap="0.5rem">
-            <sys-text variant="subtitle">徽章</sys-text>
+            <sys-text variant="subtitle">{t('gallery.badges')}</sys-text>
             <hbox gap="0.5rem">
               <sys-badge value="3" />
               <sys-badge value="99+" />
             </hbox>
           </vbox>
           <vbox gap="0.5rem">
-            <sys-text variant="subtitle">开关</sys-text>
-            <sys-switch label="启用功能" bind:value="featureEnabled" />
+            <sys-text variant="subtitle">{t('gallery.switch')}</sys-text>
+            <sys-switch label="{t('gallery.switchLabel')}" bind:value="featureEnabled" />
           </vbox>
           <vbox gap="0.5rem">
-            <sys-text variant="subtitle">滑块</sys-text>
-            <sys-slider label="音量" bind:value="volume" min="0" max="100" />
+            <sys-text variant="subtitle">{t('gallery.slider')}</sys-text>
+            <sys-slider label="{t('gallery.sliderLabel')}" bind:value="volume" min="0" max="100" />
           </vbox>
         </grid>
       </card>
 
       <!-- 条件渲染演示 -->
-      <card title="条件渲染" variant="outlined">
+      <card title="{t('conditional.title')}" variant="outlined">
         <vbox gap="0.5rem">
-          <sys-text variant="body">计数器 &gt; 5 时显示下方内容：</sys-text>
+          <sys-text variant="body">{t('conditional.hint')}</sys-text>
           <sys-text variant="body" hidden="{counter &lt;= 5}">
-            🎉 计数器已超过 5！当前值: {counter}
+            {t('conditional.exceeded', {'value': str(counter)})}
           </sys-text>
           <sys-text variant="caption" hidden="{counter &gt; 5}">
-            （继续点击 +1 直到超过 5）
+            {t('conditional.continueHint')}
           </sys-text>
         </vbox>
       </card>
 
       <!-- 动态图表（raw-response API 演示） -->
-      <card title="动态图表（raw-response）" variant="elevated">
+      <card title="{t('dynamicChart.title')}" variant="elevated">
         <vbox gap="0.75rem">
-          <sys-text variant="body">通过 raw-response API 获取图表数据，直接渲染为折线图。</sys-text>
-          <sys-text variant="caption">该 API 端点不遵循 BaseResponse 协议，使用 raw-response="true" 直接接收裸 JSON。</sys-text>
+          <sys-text variant="body">{t('dynamicChart.body')}</sys-text>
+          <sys-text variant="caption">{t('dynamicChart.caption')}</sys-text>
           <hbox gap="0.5rem" align="center">
-            <sys-button variant="tonal" icon="refresh" on-click="api: getChartData | notify: '数据已刷新', 'success'">
-              刷新数据
+            <sys-button variant="tonal" icon="refresh" on-click="api: getChartData | notify: {t('dynamicChart.refreshed')}, 'success'">
+              {t('dynamicChart.refresh')}
             </sys-button>
           </hbox>
           <sys-chart type="line" height="300px" data="{chartData}" />
@@ -176,44 +179,44 @@ _DASHBOARD_XML = """\
       </card>
 
       <!-- 图表演示 -->
-      <card title="静态图表组件" variant="elevated">
+      <card title="{t('staticChart.title')}" variant="elevated">
         <vbox gap="1.5rem">
-          <sys-text variant="body">基于 ECharts 的图表组件，支持多种图表类型（静态数据演示）。</sys-text>
+          <sys-text variant="body">{t('staticChart.body')}</sys-text>
 
           <!-- 折线图 -->
-          <sys-text variant="subtitle">折线图</sys-text>
+          <sys-text variant="subtitle">{t('staticChart.line')}</sys-text>
           <sys-chart type="line" height="280px" data="{lineChartData}" />
 
           <divider />
 
           <!-- 柱状图 -->
-          <sys-text variant="subtitle">柱状图</sys-text>
+          <sys-text variant="subtitle">{t('staticChart.bar')}</sys-text>
           <sys-chart type="bar" height="260px" data="{barChartData}" />
 
           <divider />
 
           <!-- 饼图 -->
-          <sys-text variant="subtitle">饼图</sys-text>
+          <sys-text variant="subtitle">{t('staticChart.pie')}</sys-text>
           <sys-chart type="pie" height="300px" data="{pieChartData}" />
 
           <divider />
 
           <!-- 雷达图 -->
-          <sys-text variant="subtitle">雷达图</sys-text>
+          <sys-text variant="subtitle">{t('staticChart.radar')}</sys-text>
           <sys-chart type="radar" height="320px" data="{radarChartData}" />
         </vbox>
       </card>
 
       <!-- 分割线和间距演示 -->
-      <card title="布局辅助" variant="outlined">
+      <card title="{t('layout.title')}" variant="outlined">
         <vbox gap="0.5rem">
-          <sys-text variant="body">分割线：</sys-text>
+          <sys-text variant="body">{t('layout.dividerHint')}</sys-text>
           <divider />
-          <sys-text variant="body">上方有水平分割线</sys-text>
+          <sys-text variant="body">{t('layout.aboveDivider')}</sys-text>
           <hbox gap="0.5rem" align="center">
-            <sys-text variant="body">左</sys-text>
+            <sys-text variant="body">{t('layout.left')}</sys-text>
             <divider direction="vertical" />
-            <sys-text variant="body">右</sys-text>
+            <sys-text variant="body">{t('layout.right')}</sys-text>
           </hbox>
         </vbox>
       </card>
