@@ -1,4 +1,4 @@
-"""Neo-MoFox WebUI 插件市场配置。"""
+"""Neo-MoFox WebUI 插件市场的连接、安全和写操作配置。"""
 
 from __future__ import annotations
 
@@ -13,14 +13,18 @@ from src.app.plugin_system.base import (
 
 
 class WebUIConfig(BaseConfig):
-    """WebUI 插件配置。"""
+    """WebUI 插件配置中的插件市场子域。
+
+    ``plugin_market`` 控制只读市场连接与下载安全边界，
+    ``plugin_market_operations`` 独立控制安装、卸载等本地写操作。
+    """
 
     config_name: ClassVar[str] = "config"
     config_description: ClassVar[str] = "Neo-MoFox WebUI 配置"
 
     @config_section("plugin_market")
     class PluginMarketSection(SectionBase):
-        """插件市场连接设置。"""
+        """插件市场浏览、网络访问和安装包限制。"""
 
         enabled: bool = Field(
             default=True,
@@ -74,7 +78,7 @@ class WebUIConfig(BaseConfig):
         )
         trust_env: bool = Field(
             default=False,
-            description="市场请求是否使用系统代理环境变量",
+            description="市场请求是否使用系统代理环境变量；默认关闭以避免隐式代理改变安全边界",
             label="使用系统代理",
             tag="network",
             input_type="switch",
@@ -108,9 +112,13 @@ class WebUIConfig(BaseConfig):
             input_type="number",
         )
 
-    plugin_market: PluginMarketSection = Field(default_factory=PluginMarketSection)
+    plugin_market: PluginMarketSection = Field(
+        default_factory=PluginMarketSection,
+        description="插件市场浏览、网络和下载校验配置",
+    )
     plugin_market_operations: PluginMarketOperationsSection = Field(
-        default_factory=PluginMarketOperationsSection
+        default_factory=PluginMarketOperationsSection,
+        description="插件市场安装与卸载操作配置",
     )
 
 

@@ -12,8 +12,9 @@ const { t } = useI18n()
 const imageFailed = ref(false)
 
 const detailRoute = computed(() => ({
-  name: 'plugin-market-detail',
-  params: { pluginId: props.plugin.plugin_id },
+  name: 'plugin-market',
+  query: { plugin: props.plugin.plugin_id },
+  state: { fromPluginMarketList: true },
 }))
 
 const initial = computed(() => {

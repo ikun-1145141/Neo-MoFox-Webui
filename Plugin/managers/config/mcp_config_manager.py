@@ -7,8 +7,8 @@ import shutil
 import time
 from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+
+import aiohttp
 
 from src.app.plugin_system.api.log_api import get_logger
 from src.core.config.mcp_config import init_mcp_config
@@ -133,24 +133,25 @@ class McpConfigManager:
         if not url:
             return McpTestResult(success=False, message="配置错误", detail="缺少 URL")
 
-        return await asyncio.to_thread(self._request_http, str(url), timeout)
+        return await self._request_http(str(url), timeout)
 
-    def _request_http(self, url: str, timeout: int) -> McpTestResult:
-        request = Request(url, method="GET", headers={"Accept": "application/json, text/event-stream, */*"})
+    async def _request_http(self, url: str, timeout: int) -> McpTestResult:
+        timeout_config = aiohttp.ClientTimeout(total=float(timeout))
         try:
-            with urlopen(request, timeout=timeout) as response:
-                status = response.status
-                body = response.read(500).decode("utf-8", errors="replace")
+            async with aiohttp.ClientSession(timeout=timeout_config, trust_env=True) as session:
+                async with session.get(
+                    url,
+                    headers={"Accept": "application/json, text/event-stream, */*"},
+                ) as response:
+                    status = response.status
+                    body = (await response.content.read(500)).decode("utf-8", errors="replace")
                 if 200 <= status < 300:
                     return McpTestResult(success=True, message="连接成功", detail=f"HTTP {status}\n{body}".strip())
                 return McpTestResult(success=False, message=f"HTTP {status}", detail=body)
-        except HTTPError as e:
-            body = e.read(500).decode("utf-8", errors="replace")
-            return McpTestResult(success=False, message=f"HTTP {e.code}", detail=body or e.reason)
-        except URLError as e:
-            return McpTestResult(success=False, message="连接失败", detail=str(e.reason))
-        except TimeoutError:
+        except asyncio.TimeoutError:
             return McpTestResult(success=False, message="连接超时", detail=f"超过 {timeout} 秒未响应")
+        except aiohttp.ClientError as error:
+            return McpTestResult(success=False, message="连接失败", detail=str(error))
 
 
 _mcp_config_manager: McpConfigManager | None = None

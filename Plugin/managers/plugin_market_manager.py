@@ -12,19 +12,20 @@ import socket
 import sys
 import tempfile
 import time
-import urllib.error
-import urllib.parse
-import urllib.request
 import zipfile
 from collections import deque
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
-from typing import Any, Callable
+from typing import Any
 from uuid import uuid4
 
+import aiohttp
 from packaging.version import InvalidVersion, Version
+from yarl import URL
 
 from src.app.plugin_system.api.config_api import get_config
 from src.app.plugin_system.api.log_api import get_logger
@@ -68,6 +69,8 @@ _DEPENDENCY_PATTERN = re.compile(
 )
 _RATE_WINDOW_SECONDS = 600.0
 _JSON_LIMIT_BYTES = 8 * 1024 * 1024
+_MAX_REDIRECTS = 10
+_REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 
 
 class PluginMarketError(RuntimeError):
@@ -85,20 +88,35 @@ class LocalPluginRecord:
 
 
 class PluginMarketManager:
-    """聚合市场索引、本地状态和插件包写操作。"""
+    """聚合市场数据、本地插件状态和受控写操作。
+
+    Manager 负责上游分页查询与缓存、本地插件发现、兼容性和依赖判断，
+    并在 HTTPS、响应大小、哈希、ZIP 结构和目标路径校验后执行安装或卸载。
+    Router 只调用这里的公开方法，不直接承载市场业务逻辑。
+    """
 
     def __init__(self, config: WebUIConfig) -> None:
+        """初始化使用指定 WebUI 配置的市场 Manager。
+
+        Args:
+            config: 包含插件市场连接和写操作开关的 WebUI 配置。
+        """
         self._config = config
         self._cache: list[MarketPlugin] | None = None
         self._cache_at = 0.0
         self._cache_lock = asyncio.Lock()
         self._operation_lock = asyncio.Lock()
+        # 任务状态会由请求协程和后台任务跨异步上下文访问，使用同步锁保护短临界区。
         self._operation_state_lock = Lock()
         self._operations: dict[str, MarketOperation] = {}
         self._install_attempts: deque[float] = deque()
 
     def capabilities(self) -> MarketCapabilities:
-        """返回当前配置允许的市场能力。"""
+        """返回当前配置允许前端使用的市场能力。
+
+        Returns:
+            市场浏览、安装、卸载和进度传输能力开关。
+        """
         return MarketCapabilities(
             market_enabled=self._config.plugin_market.enabled,
             install_enabled=self._config.plugin_market_operations.install_enabled,
@@ -107,7 +125,17 @@ class PluginMarketManager:
         )
 
     async def list_plugins(self, *, refresh: bool = False) -> MarketPluginList:
-        """读取全部市场插件并合并本地安装状态。"""
+        """读取全部市场插件并合并本地安装状态。
+
+        Args:
+            refresh: 是否跳过短期列表缓存并重新读取上游市场。
+
+        Returns:
+            带本地安装、加载、配置和更新状态的插件列表。
+
+        Raises:
+            PluginMarketError: 上游市场数据无法安全读取。
+        """
         market_plugins = await self._get_market_plugins(refresh=refresh)
         local_records = await self._load_local_plugins()
         dependents = self._build_dependents(local_records)
@@ -131,18 +159,22 @@ class PluginMarketManager:
         )
 
     async def get_plugin_detail(self, plugin_id: str) -> MarketPluginDetail:
-        """读取插件详情、版本、依赖和本地状态。"""
+        """读取插件详情、版本、依赖和本地状态。
+
+        Args:
+            plugin_id: 市场插件唯一标识。
+
+        Returns:
+            包含兼容性、依赖满足情况和推荐版本的插件详情。
+
+        Raises:
+            PluginMarketError: 插件标识无效、市场记录不存在或响应无效。
+        """
         self._validate_plugin_id(plugin_id)
         plugin_payload, versions_payload, dependencies_payload = await asyncio.gather(
-            asyncio.to_thread(self._get_json, f"/api/v1/plugins/{self._quote(plugin_id)}"),
-            asyncio.to_thread(
-                self._get_json,
-                f"/api/v1/plugins/{self._quote(plugin_id)}/versions",
-            ),
-            asyncio.to_thread(
-                self._get_json,
-                f"/api/v1/plugins/{self._quote(plugin_id)}/dependencies",
-            ),
+            self._get_json(f"/api/v1/plugins/{plugin_id}"),
+            self._get_json(f"/api/v1/plugins/{plugin_id}/versions"),
+            self._get_json(f"/api/v1/plugins/{plugin_id}/dependencies"),
         )
         plugin = MarketPlugin.model_validate(plugin_payload)
         versions = UpstreamVersionList.model_validate(versions_payload).items
@@ -181,7 +213,18 @@ class PluginMarketManager:
         plugin_id: str,
         version: str | None,
     ) -> InstallPlan:
-        """生成安装或更新前必须展示的真实计划。"""
+        """生成安装或更新前必须展示的真实计划。
+
+        Args:
+            plugin_id: 待安装或更新的插件唯一标识。
+            version: 指定版本；为 ``None`` 时选择推荐版本。
+
+        Returns:
+            包含动作、依赖、阻塞原因和风险提示的安装计划。
+
+        Raises:
+            PluginMarketError: 插件或指定版本不存在，或上游响应无效。
+        """
         detail = await self.get_plugin_detail(plugin_id)
         selected = await self._select_version(detail, version)
         action = "update" if detail.plugin.local_state.installed else "install"
@@ -226,7 +269,18 @@ class PluginMarketManager:
         plugin_id: str,
         version: str | None,
     ) -> MarketOperation:
-        """创建受任务管理器追踪的安装或更新任务。"""
+        """创建受任务管理器追踪的安装或更新任务。
+
+        Args:
+            plugin_id: 待安装或更新的插件唯一标识。
+            version: 指定版本；为 ``None`` 时选择推荐版本。
+
+        Returns:
+            可由前端轮询的排队中操作状态。
+
+        Raises:
+            PluginMarketError: 安装关闭、计划被阻止、频率受限或存在活动任务。
+        """
         if not self._config.plugin_market_operations.install_enabled:
             raise PluginMarketError("WebUI 插件市场安装功能已关闭")
         self._check_rate_limit()
@@ -246,7 +300,17 @@ class PluginMarketManager:
         return operation
 
     async def start_uninstall(self, plugin_id: str) -> MarketOperation:
-        """创建受任务管理器追踪的卸载任务。"""
+        """创建受任务管理器追踪的卸载任务。
+
+        Args:
+            plugin_id: 待卸载的插件唯一标识。
+
+        Returns:
+            可由前端轮询的排队中操作状态。
+
+        Raises:
+            PluginMarketError: 卸载关闭、插件不可安全管理或存在活动任务。
+        """
         if not self._config.plugin_market_operations.uninstall_enabled:
             raise PluginMarketError("WebUI 插件市场卸载功能已关闭")
         self._validate_plugin_id(plugin_id)
@@ -270,7 +334,17 @@ class PluginMarketManager:
         return operation
 
     def get_operation(self, operation_id: str) -> MarketOperation:
-        """读取可轮询的操作状态。"""
+        """读取可轮询的操作状态快照。
+
+        Args:
+            operation_id: 创建写操作时返回的唯一标识。
+
+        Returns:
+            与内部状态隔离的操作深拷贝。
+
+        Raises:
+            PluginMarketError: 操作记录不存在或已被清理。
+        """
         with self._operation_state_lock:
             operation = self._operations.get(operation_id)
             if operation is None:
@@ -278,6 +352,7 @@ class PluginMarketManager:
             return operation.model_copy(deep=True)
 
     async def _run_install(self, operation_id: str, plan: InstallPlan) -> None:
+        """串行执行下载、校验和原子写入，并持续更新操作状态。"""
         async with self._operation_lock:
             try:
                 self._update_operation(
@@ -287,12 +362,11 @@ class PluginMarketManager:
                     progress=5,
                     message="正在下载插件包",
                 )
-                destination = await asyncio.to_thread(
-                self._download_and_store,
-                operation_id,
-                plan.plugin.plugin_id,
-                plan.version,
-                plan.plugin.local_state.plugin_path,
+                destination = await self._download_and_store(
+                    operation_id,
+                    plan.plugin.plugin_id,
+                    plan.version,
+                    plan.plugin.local_state.plugin_path,
                 )
                 self._cache = None
                 self._update_operation(
@@ -320,6 +394,7 @@ class PluginMarketManager:
         operation_id: str,
         record: LocalPluginRecord,
     ) -> None:
+        """串行停止运行态并删除通过白名单校验的插件包。"""
         async with self._operation_lock:
             plugin_id = record.manifest.name
             try:
@@ -358,6 +433,7 @@ class PluginMarketManager:
                 self._fail_operation(operation_id, error)
 
     async def _get_market_plugins(self, *, refresh: bool) -> list[MarketPlugin]:
+        """按配置的有效期读取或刷新完整市场列表缓存。"""
         cache_seconds = max(0, self._config.plugin_market.cache_seconds)
         if (
             not refresh
@@ -372,19 +448,20 @@ class PluginMarketManager:
                 and time.monotonic() - self._cache_at < cache_seconds
             ):
                 return list(self._cache)
-            plugins = await asyncio.to_thread(self._fetch_all_plugins)
+            plugins = await self._fetch_all_plugins()
             self._cache = plugins
             self._cache_at = time.monotonic()
             return list(plugins)
 
-    def _fetch_all_plugins(self) -> list[MarketPlugin]:
+    async def _fetch_all_plugins(self) -> list[MarketPlugin]:
+        """分页读取上游市场，并按插件标识去重。"""
         page_size = self._config.plugin_market.page_size
         offset = 0
         total: int | None = None
         plugins: list[MarketPlugin] = []
         seen: set[str] = set()
         while total is None or offset < total:
-            payload = self._get_json(
+            payload = await self._get_json(
                 "/api/v1/plugins",
                 query={"limit": str(page_size), "offset": str(offset)},
             )
@@ -410,6 +487,7 @@ class PluginMarketManager:
         detail: MarketPluginDetail,
         requested_version: str | None,
     ) -> MarketVersion:
+        """选择显式版本、详情推荐版本或上游推荐安装版本。"""
         if requested_version:
             selected = next(
                 (item for item in detail.versions if item.version == requested_version),
@@ -421,14 +499,14 @@ class PluginMarketManager:
         if detail.recommended_version is not None:
             return detail.recommended_version
 
-        payload = await asyncio.to_thread(
-            self._get_json,
-            f"/api/v1/plugins/{self._quote(detail.plugin.plugin_id)}/install",
+        payload = await self._get_json(
+            f"/api/v1/plugins/{detail.plugin.plugin_id}/install",
         )
         install_info = UpstreamInstallInfo.model_validate(payload)
         return self._with_compatibility(install_info.version)
 
     async def _load_local_plugins(self) -> dict[str, LocalPluginRecord]:
+        """通过主程序加载器发现本地插件并补全当前运行态记录。"""
         root = self._plugins_root()
         loader = PluginLoader()
         records: dict[str, LocalPluginRecord] = {}
@@ -466,6 +544,7 @@ class PluginMarketManager:
         records: dict[str, LocalPluginRecord],
         dependents: dict[str, list[str]],
     ) -> MarketLocalState:
+        """根据本地清单、加载状态和依赖方生成市场展示状态。"""
         record = records.get(plugin_id)
         if record is None:
             return MarketLocalState()
@@ -489,6 +568,7 @@ class PluginMarketManager:
         record: LocalPluginRecord,
         dependents: list[str],
     ) -> tuple[bool, str | None]:
+        """判断本地插件是否满足市场覆盖和卸载白名单。"""
         if plugin_id == "neo-mofox-webui":
             return False, "WebUI 插件不能从其自身市场中卸载或覆盖"
         root = self._plugins_root()
@@ -506,6 +586,7 @@ class PluginMarketManager:
         self,
         records: dict[str, LocalPluginRecord],
     ) -> dict[str, list[str]]:
+        """从本地清单反向构建插件依赖方索引。"""
         result: dict[str, list[str]] = {}
         for plugin_id, record in records.items():
             for dependency in record.manifest.dependencies.get("plugins", []):
@@ -519,6 +600,7 @@ class PluginMarketManager:
         dependencies: list[MarketDependency],
         records: dict[str, LocalPluginRecord],
     ) -> list[MarketDependency]:
+        """将本机安装版本和约束满足情况合并到市场依赖。"""
         result: list[MarketDependency] = []
         for dependency in dependencies:
             record = records.get(dependency.plugin_id)
@@ -539,6 +621,7 @@ class PluginMarketManager:
         return result
 
     def _with_compatibility(self, version: MarketVersion) -> MarketVersion:
+        """根据宿主版本和当前平台计算插件版本兼容性。"""
         reasons: list[str] = []
         unknown: list[str] = []
         try:
@@ -578,13 +661,27 @@ class PluginMarketManager:
             )
         return version.model_copy(update={"compatibility": compatibility})
 
-    def _download_and_store(
+    async def _download_and_store(
         self,
         operation_id: str,
         plugin_id: str,
         version: MarketVersion,
         existing_plugin_path: str | None,
     ) -> Path:
+        """下载并验证插件包，然后原子写入插件目录。
+
+        Args:
+            operation_id: 用于报告下载和校验进度的操作标识。
+            plugin_id: 期望写入的插件唯一标识。
+            version: 包含下载地址、大小和哈希的市场版本记录。
+            existing_plugin_path: 更新时允许被替换的现有插件包路径。
+
+        Returns:
+            原子写入后的插件包绝对路径。
+
+        Raises:
+            PluginMarketError: 下载、哈希、包结构、清单或目标路径校验失败。
+        """
         self._validate_plugin_id(plugin_id)
         package_url = version.asset_download_url.lower().split("?", 1)[0]
         if not package_url.endswith((".mfp", ".zip")):
@@ -592,7 +689,7 @@ class PluginMarketManager:
         root = self._plugins_root()
         root.mkdir(parents=True, exist_ok=True)
         max_bytes = self._config.plugin_market.max_package_size_mb * 1024 * 1024
-        temporary = self._download_file(
+        temporary = await self._download_file(
             version.asset_download_url,
             root,
             max_bytes,
@@ -610,7 +707,7 @@ class PluginMarketManager:
                 progress=65,
                 message="正在校验插件结构与清单",
             )
-            manifest = self._validate_package(temporary, max_bytes)
+            manifest = await asyncio.to_thread(self._validate_package, temporary, max_bytes)
             if str(manifest.get("name") or "") != plugin_id:
                 raise PluginMarketError("安装包插件 ID 与市场记录不一致")
             if str(manifest.get("version") or "") != version.version:
@@ -640,7 +737,7 @@ class PluginMarketManager:
         finally:
             temporary.unlink(missing_ok=True)
 
-    def _download_file(
+    async def _download_file(
         self,
         url: str,
         target_dir: Path,
@@ -649,44 +746,70 @@ class PluginMarketManager:
         expected_sha256: str,
         progress_callback: Callable[[int], None],
     ) -> Path:
+        """受大小限制地下载原始字节，同时校验长度和 SHA-256。
+
+        Args:
+            url: 经过逐跳安全校验的插件包 HTTPS 地址。
+            target_dir: 临时文件所在目录。
+            max_bytes: 允许读取的最大字节数。
+            expected_size: 市场声明的精确大小，可为 ``None``。
+            expected_sha256: 市场声明的 SHA-256 十六进制摘要。
+            progress_callback: 接收下载百分比的同步回调。
+
+        Returns:
+            校验成功的临时文件路径。
+
+        Raises:
+            PluginMarketError: 地址、体积、长度或哈希校验失败。
+        """
         if len(expected_sha256) != 64 or any(
             char not in "0123456789abcdef" for char in expected_sha256.lower()
         ):
             raise PluginMarketError("市场提供的 SHA-256 无效")
-        response = self._open_url(url, max_bytes)
-        temporary_handle = tempfile.NamedTemporaryFile(
-            prefix=".plugin-market-",
-            suffix=".download",
-            dir=target_dir,
-            delete=False,
-        )
-        temporary = Path(temporary_handle.name)
-        digest = hashlib.sha256()
-        total = 0
-        try:
-            with response, temporary_handle:
-                length = response.headers.get("Content-Length")
-                if length and int(length) > max_bytes:
-                    raise PluginMarketError("插件包超过配置的大小限制")
-                while chunk := response.read(64 * 1024):
-                    total += len(chunk)
-                    if total > max_bytes:
-                        raise PluginMarketError("插件包超过配置的大小限制")
-                    digest.update(chunk)
-                    temporary_handle.write(chunk)
-                    denominator = expected_size or (int(length) if length else max_bytes)
-                    progress_callback(min(100, int(total * 100 / max(denominator, 1))))
-            if expected_size is not None and total != expected_size:
-                raise PluginMarketError("插件包大小与市场记录不一致")
-            if digest.hexdigest() != expected_sha256.lower():
-                raise PluginMarketError("插件包 SHA-256 校验失败")
-            return temporary
-        except Exception:
-            temporary.unlink(missing_ok=True)
-            raise
+        async with self._open_url(url, max_bytes) as response:
+            temporary_handle = tempfile.NamedTemporaryFile(
+                prefix=".plugin-market-",
+                suffix=".download",
+                dir=target_dir,
+                delete=False,
+            )
+            temporary = Path(temporary_handle.name)
+            digest = hashlib.sha256()
+            total = 0
+            try:
+                with temporary_handle:
+                    length = response.content_length
+                    async for chunk in response.content.iter_chunked(64 * 1024):
+                        total += len(chunk)
+                        if total > max_bytes:
+                            raise PluginMarketError("插件包超过配置的大小限制")
+                        digest.update(chunk)
+                        temporary_handle.write(chunk)
+                        denominator = expected_size or length or max_bytes
+                        progress_callback(min(100, int(total * 100 / max(denominator, 1))))
+                if expected_size is not None and total != expected_size:
+                    raise PluginMarketError("插件包大小与市场记录不一致")
+                if digest.hexdigest() != expected_sha256.lower():
+                    raise PluginMarketError("插件包 SHA-256 校验失败")
+                return temporary
+            except Exception:
+                temporary.unlink(missing_ok=True)
+                raise
 
     @staticmethod
     def _validate_package(path: Path, max_uncompressed_bytes: int) -> dict[str, Any]:
+        """验证 ZIP 安全边界、唯一清单和入口文件后返回清单对象。
+
+        Args:
+            path: 已通过下载哈希校验的插件包路径。
+            max_uncompressed_bytes: 允许的 ZIP 条目累计解压大小。
+
+        Returns:
+            从唯一根级或一级 ``manifest.json`` 读取的清单对象。
+
+        Raises:
+            PluginMarketError: 压缩包路径、符号链接、体积、清单或入口校验失败。
+        """
         try:
             with zipfile.ZipFile(path) as archive:
                 entries = archive.infolist()
@@ -696,6 +819,7 @@ class PluginMarketManager:
                 manifest_paths: list[str] = []
                 normalized_names: set[str] = set()
                 for entry in entries:
+                    # 只检查包结构，不解压文件；路径、符号链接和累计体积均在写入前拒绝。
                     normalized = entry.filename.replace("\\", "/").rstrip("/")
                     entry_path = Path(normalized)
                     if entry_path.is_absolute() or ".." in entry_path.parts:
@@ -726,63 +850,151 @@ class PluginMarketManager:
         except (zipfile.BadZipFile, UnicodeDecodeError, json.JSONDecodeError) as error:
             raise PluginMarketError(f"插件包格式无效: {error}") from error
 
-    def _get_json(
+    async def _get_json(
         self,
         path: str,
         query: dict[str, str] | None = None,
     ) -> Any:
+        """从市场 API 读取受大小限制的 UTF-8 JSON。
+
+        Args:
+            path: 相对于市场基础地址的 API 路径。
+            query: 可选查询参数。
+
+        Returns:
+            解析后的 JSON 值，由调用方使用 Pydantic 模型校验。
+
+        Raises:
+            PluginMarketError: 网络、安全、大小、编码或 JSON 解析失败。
+        """
         base = self._config.plugin_market.base_url.rstrip("/")
         url = f"{base}/{path.lstrip('/')}"
-        if query:
-            url = f"{url}?{urllib.parse.urlencode(query)}"
-        response = self._open_url(url, _JSON_LIMIT_BYTES)
         try:
-            with response:
-                data = response.read(_JSON_LIMIT_BYTES + 1)
-            if len(data) > _JSON_LIMIT_BYTES:
-                raise PluginMarketError("市场响应超过允许大小")
+            async with self._open_url(url, _JSON_LIMIT_BYTES, query=query) as response:
+                data = await self._read_limited(
+                    response,
+                    _JSON_LIMIT_BYTES,
+                    "市场响应超过允许大小",
+                )
             return json.loads(data.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as error:
             raise PluginMarketError(f"市场返回的 JSON 无效: {error}") from error
 
-    def _open_url(self, url: str, max_bytes: int) -> Any:
-        self._validate_remote_url(url)
-        handlers: list[Any] = [_SafeRedirectHandler(self._validate_remote_url)]
-        if not self._config.plugin_market.trust_env:
-            handlers.insert(0, urllib.request.ProxyHandler({}))
-        request = urllib.request.Request(
-            url,
-            headers={"User-Agent": "Neo-MoFox-WebUI-Plugin-Market/1.0.18"},
+    @asynccontextmanager
+    async def _open_url(
+        self,
+        url: str,
+        max_bytes: int,
+        *,
+        query: dict[str, str] | None = None,
+    ) -> AsyncIterator[aiohttp.ClientResponse]:
+        """打开经过逐跳公网 HTTPS 校验且响应体受限的请求。
+
+        Args:
+            url: 初始请求地址。
+            max_bytes: ``Content-Length`` 和后续读取允许的最大字节数。
+            query: 仅附加到初始请求地址的查询参数。
+
+        Yields:
+            状态码成功且通过响应头大小检查的 aiohttp 响应。
+
+        Raises:
+            PluginMarketError: URL、DNS、重定向、状态码、大小或网络请求无效。
+        """
+        timeout = aiohttp.ClientTimeout(
+            total=float(self._config.plugin_market.request_timeout_seconds)
         )
         try:
-            response = urllib.request.build_opener(*handlers).open(
-                request,
-                timeout=self._config.plugin_market.request_timeout_seconds,
-            )
-            self._validate_remote_url(response.geturl())
-            length = response.headers.get("Content-Length")
-            if length and int(length) > max_bytes:
-                response.close()
-                raise PluginMarketError("远程响应超过允许大小")
-            return response
-        except urllib.error.HTTPError as error:
-            if error.code == 404:
-                raise PluginMarketError("市场中未找到请求的插件或版本") from error
-            raise PluginMarketError(f"市场请求失败（HTTP {error.code}）") from error
-        except urllib.error.URLError as error:
-            raise PluginMarketError(f"无法访问插件市场: {error.reason}") from error
+            current_url = URL(url)
+            if query is not None:
+                current_url = current_url.with_query(query)
+        except ValueError as error:
+            raise PluginMarketError("市场地址格式无效") from error
+        try:
+            # 禁止透明解压，确保大小限制和下载哈希基于服务器返回的原始字节。
+            async with aiohttp.ClientSession(
+                timeout=timeout,
+                trust_env=self._config.plugin_market.trust_env,
+                auto_decompress=False,
+                headers={
+                    "Accept-Encoding": "identity",
+                    "User-Agent": "Neo-MoFox-WebUI-Plugin-Market/1.0.18-dev",
+                },
+            ) as session:
+                for redirect_count in range(_MAX_REDIRECTS + 1):
+                    # 每次重定向后重新解析 DNS，避免跳转到本机、局域网或保留网络。
+                    await asyncio.to_thread(self._validate_remote_url, str(current_url))
+                    response = await session.get(current_url, allow_redirects=False)
+                    if response.status in _REDIRECT_STATUSES:
+                        location = response.headers.get("Location")
+                        response.release()
+                        if not location:
+                            raise PluginMarketError(
+                                f"市场请求失败（HTTP {response.status}，缺少重定向地址）"
+                            )
+                        if redirect_count >= _MAX_REDIRECTS:
+                            raise PluginMarketError("市场请求重定向次数过多")
+                        try:
+                            current_url = response.url.join(URL(location))
+                        except ValueError as error:
+                            raise PluginMarketError("市场返回了无效的重定向地址") from error
+                        continue
+                    if response.status == 404:
+                        response.release()
+                        raise PluginMarketError("市场中未找到请求的插件或版本")
+                    if not 200 <= response.status < 300:
+                        status = response.status
+                        response.release()
+                        raise PluginMarketError(f"市场请求失败（HTTP {status}）")
+                    length = response.content_length
+                    if length is not None and length > max_bytes:
+                        response.release()
+                        raise PluginMarketError("远程响应超过允许大小")
+                    try:
+                        yield response
+                    finally:
+                        response.release()
+                    return
+        except PluginMarketError:
+            raise
+        except asyncio.TimeoutError as error:
+            raise PluginMarketError("无法访问插件市场: 请求超时") from error
+        except aiohttp.ClientError as error:
+            raise PluginMarketError(f"无法访问插件市场: {error}") from error
+
+    @staticmethod
+    async def _read_limited(
+        response: aiohttp.ClientResponse,
+        max_bytes: int,
+        error_message: str,
+    ) -> bytes:
+        """分块读取响应，并在超过限制时立即终止。"""
+        chunks: list[bytes] = []
+        total = 0
+        async for chunk in response.content.iter_chunked(64 * 1024):
+            total += len(chunk)
+            if total > max_bytes:
+                raise PluginMarketError(error_message)
+            chunks.append(chunk)
+        return b"".join(chunks)
 
     @staticmethod
     def _validate_remote_url(url: str) -> None:
-        parsed = urllib.parse.urlsplit(url)
-        if parsed.scheme.lower() != "https" or not parsed.hostname:
+        """要求 URL 使用 HTTPS，且所有 DNS 结果均为公网地址。"""
+        try:
+            parsed = URL(url)
+            hostname = parsed.host
+            port = parsed.port or 443
+        except ValueError as error:
+            raise PluginMarketError("市场地址格式无效") from error
+        if parsed.scheme.lower() != "https" or not hostname:
             raise PluginMarketError("市场只允许访问 HTTPS 公网地址")
         try:
             addresses = {
                 item[4][0]
                 for item in socket.getaddrinfo(
-                    parsed.hostname,
-                    parsed.port or 443,
+                    hostname,
+                    port,
                     type=socket.SOCK_STREAM,
                 )
             }
@@ -804,6 +1016,7 @@ class PluginMarketManager:
         stage: str,
         message: str,
     ) -> MarketOperation:
+        """创建操作状态，并限制内存中保留的已完成记录数量。"""
         now = self._now()
         operation = MarketOperation(
             operation_id=str(uuid4()),
@@ -829,12 +1042,14 @@ class PluginMarketManager:
         return operation.model_copy(deep=True)
 
     def _update_operation(self, operation_id: str, **updates: Any) -> None:
+        """原子更新操作状态并刷新更新时间。"""
         with self._operation_state_lock:
             current = self._operations[operation_id]
             updates["updated_at"] = self._now()
             self._operations[operation_id] = current.model_copy(update=updates)
 
     def _fail_operation(self, operation_id: str, error: Exception) -> None:
+        """将后台任务异常转换为前端可轮询的失败状态。"""
         self._update_operation(
             operation_id,
             status="failed",
@@ -844,6 +1059,7 @@ class PluginMarketManager:
         )
 
     def _ensure_no_active_operation(self, plugin_id: str) -> None:
+        """拒绝为同一插件并发创建多个写操作。"""
         with self._operation_state_lock:
             if any(
                 item.plugin_id == plugin_id and item.status in {"queued", "running"}
@@ -852,6 +1068,7 @@ class PluginMarketManager:
                 raise PluginMarketError(f"插件 {plugin_id} 已有操作正在执行")
 
     def _check_rate_limit(self) -> None:
+        """按照滑动时间窗口限制当前进程创建安装任务的频率。"""
         now = time.monotonic()
         while self._install_attempts and now - self._install_attempts[0] >= _RATE_WINDOW_SECONDS:
             self._install_attempts.popleft()
@@ -862,9 +1079,11 @@ class PluginMarketManager:
             raise PluginMarketError("安装操作过于频繁，请稍后再试")
 
     def _plugins_root(self) -> Path:
+        """返回主程序配置的插件目录规范化绝对路径。"""
         return Path(get_core_config().bot.plugins_dir).resolve()
 
     def _delete_archive(self, path: Path) -> None:
+        """仅删除插件目录根级且扩展名受支持的普通压缩包。"""
         root = self._plugins_root()
         resolved = path.resolve()
         if resolved.parent != root or resolved.suffix.lower() not in {".mfp", ".zip"}:
@@ -875,6 +1094,7 @@ class PluginMarketManager:
 
     @staticmethod
     def _split_dependency(value: str) -> tuple[str, str | None]:
+        """将清单依赖拆分为插件标识和可选版本约束。"""
         raw = str(value or "").strip()
         name, separator, remainder = raw.partition(":")
         if separator and remainder.lstrip().startswith(("===", "==", "!=", "~=", ">=", "<=", ">", "<")):
@@ -886,6 +1106,7 @@ class PluginMarketManager:
 
     @staticmethod
     def _version_satisfies(version: str, constraint: str | None) -> bool:
+        """判断版本是否满足 PEP 440 约束；无效输入按不满足处理。"""
         if not constraint:
             return True
         from packaging.specifiers import InvalidSpecifier, SpecifierSet
@@ -897,6 +1118,7 @@ class PluginMarketManager:
 
     @staticmethod
     def _is_newer(candidate: str | None, installed: str) -> bool:
+        """判断候选市场版本是否高于本机版本。"""
         if not candidate:
             return False
         try:
@@ -906,6 +1128,7 @@ class PluginMarketManager:
 
     @staticmethod
     def _platform_names() -> set[str]:
+        """返回当前平台及市场常用别名。"""
         names = {sys.platform.lower()}
         if sys.platform.startswith("win"):
             names.update({"windows", "win", "win32"})
@@ -917,43 +1140,28 @@ class PluginMarketManager:
 
     @staticmethod
     def _validate_plugin_id(plugin_id: str) -> None:
+        """拒绝不符合市场路径安全字符集的插件标识。"""
         if not _PLUGIN_ID_PATTERN.fullmatch(plugin_id):
             raise PluginMarketError(f"插件 ID 格式无效: {plugin_id}")
 
     @staticmethod
-    def _quote(value: str) -> str:
-        return urllib.parse.quote(value, safe="")
-
-    @staticmethod
     def _now() -> str:
+        """返回秒级 UTC ISO 8601 时间。"""
         return datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-
-class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
-    """在跟随每一次重定向前重新校验目标。"""
-
-    def __init__(self, validator: Callable[[str], None]) -> None:
-        super().__init__()
-        self._validator = validator
-
-    def redirect_request(
-        self,
-        req: urllib.request.Request,
-        fp: Any,
-        code: int,
-        msg: str,
-        headers: Any,
-        newurl: str,
-    ) -> urllib.request.Request | None:
-        self._validator(newurl)
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 _plugin_market_manager: PluginMarketManager | None = None
 
 
 def get_plugin_market_manager(config: WebUIConfig) -> PluginMarketManager:
-    """获取使用当前 WebUI 配置的市场 Manager 单例。"""
+    """获取使用当前 WebUI 配置对象的市场 Manager 单例。
+
+    Args:
+        config: 当前 WebUI 插件配置对象。
+
+    Returns:
+        与配置对象绑定的进程内 Manager；配置对象变化时重新创建。
+    """
     global _plugin_market_manager
     if _plugin_market_manager is None or _plugin_market_manager._config is not config:
         _plugin_market_manager = PluginMarketManager(config)

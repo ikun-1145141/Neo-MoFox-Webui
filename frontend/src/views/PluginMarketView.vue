@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import AppShell from '../components/common/AppShell.vue'
 import Icon from '../components/common/Icon.vue'
 import MdSelect from '../components/common/MdSelect.vue'
 import PageHeader from '../components/common/PageHeader.vue'
 import PluginMarketCard from '../components/plugin-market/PluginMarketCard.vue'
+import PluginMarketDetail from '../components/plugin-market/PluginMarketDetail.vue'
 import { getMarketPlugins } from '../api/modules/plugin-market'
 import type { MarketPlugin } from '../api/types/plugin-market'
 import { useI18n } from '../utils/i18n'
@@ -14,6 +16,8 @@ type MarketStateFilter = 'all' | 'installed' | 'updates' | 'not-installed'
 type MarketSort = 'updated' | 'downloads' | 'rating' | 'name'
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 const plugins = ref<MarketPlugin[]>([])
 const isLoading = ref(true)
 const isRefreshing = ref(false)
@@ -22,6 +26,11 @@ const searchQuery = ref('')
 const category = ref('')
 const stateFilter = ref<MarketStateFilter>('all')
 const sortBy = ref<MarketSort>('updated')
+
+const selectedPluginId = computed(() => {
+  const value = route.query.plugin
+  return typeof value === 'string' ? value : ''
+})
 
 const categoryOptions = computed<SelectOption[]>(() => [
   { label: t('pluginMarket.filters.allCategories'), value: '' },
@@ -92,6 +101,34 @@ function clearSearch(): void {
   searchQuery.value = ''
 }
 
+async function closeDetail(): Promise<void> {
+  if (window.history.state?.fromPluginMarketList === true) {
+    router.back()
+    return
+  }
+  const query = { ...route.query }
+  delete query.plugin
+  await router.replace({ name: 'plugin-market', query })
+}
+
+async function openConfig(pluginId: string): Promise<void> {
+  await router.push({
+    name: 'config-plugins',
+    query: { plugin: pluginId },
+  })
+}
+
+async function openManage(pluginId: string): Promise<void> {
+  await router.push({
+    name: 'plugin-detail',
+    params: { name: pluginId },
+  })
+}
+
+async function handlePluginChanged(): Promise<void> {
+  await loadPlugins(true)
+}
+
 function errorText(error: unknown): string {
   if (error instanceof Error) return error.message
   if (typeof error === 'object' && error !== null && 'message' in error) {
@@ -107,7 +144,17 @@ onMounted(() => {
 
 <template>
   <AppShell no-padding>
-    <section class="market-page">
+    <PluginMarketDetail
+      v-if="selectedPluginId"
+      :key="selectedPluginId"
+      :plugin-id="selectedPluginId"
+      @close="closeDetail"
+      @changed="handlePluginChanged"
+      @configure="openConfig"
+      @manage="openManage"
+    />
+
+    <section v-show="!selectedPluginId" class="market-page">
       <div class="market-header">
         <div class="header-row">
           <PageHeader

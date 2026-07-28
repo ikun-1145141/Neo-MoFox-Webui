@@ -46,12 +46,6 @@ const router = createRouter({
       meta: { requiresAuth: true, title: '插件市场', icon: 'material-symbols:storefront-outline-rounded' },
     },
     {
-      path: '/plugin-market/:pluginId',
-      name: 'plugin-market-detail',
-      component: () => import('../views/PluginMarketDetailView.vue'),
-      meta: { requiresAuth: true, title: '市场插件详情', icon: 'material-symbols:storefront-outline-rounded' },
-    },
-    {
       path: '/chat',
       name: 'chat',
       component: () => import('../views/ChatView.vue'),

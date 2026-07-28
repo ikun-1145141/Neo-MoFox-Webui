@@ -1,32 +1,38 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import AppShell from '../components/common/AppShell.vue'
-import Icon from '../components/common/Icon.vue'
-import MdSelect from '../components/common/MdSelect.vue'
+import Icon from '../common/Icon.vue'
+import MdSelect from '../common/MdSelect.vue'
 import {
   getMarketCapabilities,
   getMarketInstallPlan,
   getMarketOperation,
   getMarketPluginDetail,
   startMarketInstall,
-  startMarketUninstall,
-} from '../api/modules/plugin-market'
+} from '../../api/modules/plugin-market'
 import type {
   InstallPlan,
   MarketCapabilities,
   MarketOperation,
   MarketPluginDetail,
   MarketVersion,
-} from '../api/types/plugin-market'
-import { useDialogStore } from '../utils/dialog'
-import { useI18n } from '../utils/i18n'
-import { useToastStore } from '../utils/toast'
+} from '../../api/types/plugin-market'
+import { useDialogStore } from '../../utils/dialog'
+import { useI18n } from '../../utils/i18n'
+import { useToastStore } from '../../utils/toast'
 
 type SelectOption = { label: string; value: string }
 
-const route = useRoute()
-const router = useRouter()
+const props = defineProps<{
+  pluginId: string
+}>()
+
+const emit = defineEmits<{
+  close: []
+  changed: [pluginId: string]
+  configure: [pluginId: string]
+  manage: [pluginId: string]
+}>()
+
 const dialogStore = useDialogStore()
 const toastStore = useToastStore()
 const { t } = useI18n()
@@ -41,7 +47,6 @@ const errorMessage = ref('')
 const imageFailed = ref(false)
 let pollTimer: number | null = null
 
-const pluginId = computed(() => String(route.params.pluginId ?? ''))
 const plugin = computed(() => detail.value?.plugin ?? null)
 
 const selectedVersionInfo = computed<MarketVersion | null>(() => {
@@ -92,13 +97,13 @@ const pluginInitial = computed(() => {
 })
 
 async function loadDetail(): Promise<void> {
-  if (!pluginId.value) return
+  if (!props.pluginId) return
   isLoading.value = true
   errorMessage.value = ''
   imageFailed.value = false
   try {
     const [nextDetail, nextCapabilities] = await Promise.all([
-      getMarketPluginDetail(pluginId.value),
+      getMarketPluginDetail(props.pluginId),
       getMarketCapabilities(),
     ])
     detail.value = nextDetail
@@ -144,23 +149,6 @@ async function beginInstall(): Promise<void> {
   }
 }
 
-async function beginUninstall(): Promise<void> {
-  if (!plugin.value || !capabilities.value?.uninstall_enabled || isOperationActive.value) return
-  const confirmed = await dialogStore.confirm(
-    t('pluginMarket.detail.uninstallConfirmMessage', { name: plugin.value.display_name }),
-    t('pluginMarket.detail.uninstallConfirmTitle'),
-    t('pluginMarket.detail.uninstall'),
-    t('pluginMarket.detail.cancel'),
-  )
-  if (!confirmed) return
-  try {
-    operation.value = await startMarketUninstall(plugin.value.plugin_id)
-    schedulePoll()
-  } catch (error: unknown) {
-    toastStore.show(errorText(error), 'error', 6000)
-  }
-}
-
 function schedulePoll(): void {
   stopPolling()
   pollTimer = window.setTimeout(() => {
@@ -182,6 +170,7 @@ async function pollOperation(): Promise<void> {
         : t('pluginMarket.detail.operationSucceeded')
       toastStore.show(message, 'success', 6000)
       await loadDetail()
+      emit('changed', props.pluginId)
     } else {
       toastStore.show(
         operation.value.error_message || t('pluginMarket.detail.operationFailed'),
@@ -206,10 +195,12 @@ function stopPolling(): void {
 
 function openConfig(): void {
   if (!plugin.value) return
-  void router.push({
-    name: 'config-plugins',
-    query: { plugin: plugin.value.plugin_id },
-  })
+  emit('configure', plugin.value.plugin_id)
+}
+
+function openManage(): void {
+  if (!plugin.value) return
+  emit('manage', plugin.value.plugin_id)
 }
 
 function planMessage(plan: InstallPlan): string {
@@ -257,10 +248,9 @@ onBeforeUnmount(stopPolling)
 </script>
 
 <template>
-  <AppShell no-padding>
-    <section class="detail-page">
+  <section class="detail-page">
       <header class="detail-toolbar">
-        <button class="back-button" type="button" @click="router.push({ name: 'plugin-market' })">
+        <button class="back-button" type="button" @click="emit('close')">
           <Icon icon="material-symbols:arrow-back-rounded" width="20" height="20" />
           {{ t('pluginMarket.detail.back') }}
         </button>
@@ -462,21 +452,17 @@ onBeforeUnmount(stopPolling)
 
               <button
                 v-if="plugin.local_state.installed"
-                class="danger-button full-width"
+                class="secondary-button full-width"
                 type="button"
-                :disabled="!capabilities?.uninstall_enabled || !plugin.local_state.can_uninstall || isOperationActive"
-                :title="plugin.local_state.uninstall_reason || undefined"
-                @click="beginUninstall"
+                :disabled="isOperationActive"
+                @click="openManage"
               >
-                <Icon icon="material-symbols:delete-outline-rounded" width="20" height="20" />
-                {{ t('pluginMarket.detail.uninstall') }}
+                <Icon icon="material-symbols:extension-outline-rounded" width="20" height="20" />
+                {{ t('pluginMarket.detail.manage') }}
               </button>
 
               <p v-if="!capabilities?.install_enabled" class="action-hint">
                 {{ t('pluginMarket.detail.installDisabled') }}
-              </p>
-              <p v-else-if="plugin.local_state.uninstall_reason" class="action-hint">
-                {{ plugin.local_state.uninstall_reason }}
               </p>
 
               <div class="source-links">
@@ -503,8 +489,7 @@ onBeforeUnmount(stopPolling)
           </div>
         </template>
       </div>
-    </section>
-  </AppShell>
+  </section>
 </template>
 
 <style scoped>
@@ -531,8 +516,7 @@ onBeforeUnmount(stopPolling)
 .back-button,
 .icon-button,
 .primary-button,
-.secondary-button,
-.danger-button {
+.secondary-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -898,8 +882,7 @@ button:disabled {
 }
 
 .primary-button,
-.secondary-button,
-.danger-button {
+.secondary-button {
   padding: 0 14px;
   border: 1px solid transparent;
 }
@@ -912,11 +895,6 @@ button:disabled {
 .secondary-button {
   color: var(--md-sys-color-on-secondary-container);
   background: var(--md-sys-color-secondary-container);
-}
-
-.danger-button {
-  color: var(--md-sys-color-on-error-container);
-  background: var(--md-sys-color-error-container);
 }
 
 .full-width {
