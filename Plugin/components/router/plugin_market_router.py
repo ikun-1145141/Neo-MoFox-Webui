@@ -22,6 +22,7 @@ from ...utils.plugin_market_types import (
     MarketOperation,
     MarketPluginDetail,
     MarketPluginList,
+    MarketPluginReadme,
     StartInstallRequest,
 )
 from ...utils.response import BaseResponse
@@ -131,6 +132,33 @@ class PluginMarketRouter(BaseRouter):
             except Exception as error:
                 logger.error(f"读取市场插件详情失败: {error}", exc_info=True)
                 raise HTTPException(status_code=500, detail="读取市场插件详情失败") from error
+
+        @self.app.get(
+            "/plugins/{plugin_id}/readme",
+            response_model=BaseResponse[MarketPluginReadme],
+            dependencies=[VerifiedDep],
+            summary="读取市场插件文档",
+            description="读取市场服务为指定插件渲染的 README 文档。",
+        )
+        async def get_plugin_readme(plugin_id: str) -> BaseResponse[MarketPluginReadme]:
+            """读取指定市场插件的渲染后 README。
+
+            Args:
+                plugin_id: 市场中的插件唯一标识。
+
+            Returns:
+                README 是否存在及其渲染后 HTML。
+
+            Raises:
+                HTTPException: 插件标识无效、市场不可用或文档响应无效。
+            """
+            try:
+                return BaseResponse.ok(await self._manager.get_plugin_readme(plugin_id))
+            except PluginMarketError as error:
+                raise HTTPException(status_code=400, detail=str(error)) from error
+            except Exception as error:
+                logger.error(f"读取市场插件文档失败: {error}", exc_info=True)
+                raise HTTPException(status_code=500, detail="读取市场插件文档失败") from error
 
         @self.app.post(
             "/plugins/{plugin_id}/install-plan",

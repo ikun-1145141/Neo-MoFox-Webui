@@ -26,6 +26,7 @@ export interface MarketPlugin {
   summary: string
   description: string
   icon_url: string | null
+  has_readme: boolean
   homepage: string | null
   repository_url: string | null
   license: string | null
@@ -93,6 +94,12 @@ export interface MarketPluginDetail {
   versions: MarketVersion[]
   dependencies: MarketDependency[]
   recommended_version: MarketVersion | null
+}
+
+export interface MarketPluginReadme {
+  plugin_id: string
+  exists: boolean
+  html: string | null
 }
 
 export interface MarketCapabilities {

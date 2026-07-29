@@ -48,6 +48,7 @@ class MarketPlugin(BaseModel):
     summary: str = Field(default="", description="插件短摘要")
     description: str = Field(default="", description="插件完整介绍")
     icon_url: str | None = Field(default=None, description="插件图标地址")
+    has_readme: bool = Field(default=False, description="市场是否提供渲染后的插件 README")
     homepage: str | None = Field(default=None, description="插件主页地址")
     repository_url: str | None = Field(default=None, description="插件源代码仓库地址")
     license: str | None = Field(default=None, description="插件许可证标识")
@@ -142,6 +143,16 @@ class MarketPluginDetail(BaseModel):
         default=None,
         description="当前宿主可优先安装的稳定版本",
     )
+
+
+class MarketPluginReadme(BaseModel):
+    """市场为插件详情页渲染的 README 文档。"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    plugin_id: str = Field(description="文档所属插件唯一标识")
+    exists: bool = Field(description="市场是否保存了该插件的 README")
+    html: str | None = Field(default=None, description="由市场渲染的 README HTML")
 
 
 class MarketCapabilities(BaseModel):
@@ -252,6 +263,7 @@ __all__ = [
     "MarketPlugin",
     "MarketPluginDetail",
     "MarketPluginList",
+    "MarketPluginReadme",
     "MarketVersion",
     "OperationKind",
     "StartInstallRequest",

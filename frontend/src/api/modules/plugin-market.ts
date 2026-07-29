@@ -6,6 +6,7 @@ import type {
   MarketOperation,
   MarketPluginDetail,
   MarketPluginList,
+  MarketPluginReadme,
 } from '../types/plugin-market'
 
 const BASE = `${API_WEBUI_PREFIX}/plugin-market`
@@ -23,6 +24,10 @@ export function getMarketPlugins(refresh = false): Promise<MarketPluginList> {
 
 export function getMarketPluginDetail(pluginId: string): Promise<MarketPluginDetail> {
   return http.get(`${BASE}/plugins/${encodeURIComponent(pluginId)}`, { timeout: 45000 })
+}
+
+export function getMarketPluginReadme(pluginId: string): Promise<MarketPluginReadme> {
+  return http.get(`${BASE}/plugins/${encodeURIComponent(pluginId)}/readme`, { timeout: 45000 })
 }
 
 export function getMarketInstallPlan(

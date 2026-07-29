@@ -53,6 +53,7 @@ from ..utils.plugin_market_types import (
     MarketPlugin,
     MarketPluginDetail,
     MarketPluginList,
+    MarketPluginReadme,
     MarketVersion,
     OperationKind,
     UpstreamDependencyList,
@@ -207,6 +208,22 @@ class PluginMarketManager:
             dependencies=checked_dependencies,
             recommended_version=recommended,
         )
+
+    async def get_plugin_readme(self, plugin_id: str) -> MarketPluginReadme:
+        """读取市场为插件详情页渲染的 README 文档。
+
+        Args:
+            plugin_id: 市场插件唯一标识。
+
+        Returns:
+            README 是否存在及其渲染后 HTML。
+
+        Raises:
+            PluginMarketError: 插件标识无效或市场响应无法安全读取。
+        """
+        self._validate_plugin_id(plugin_id)
+        payload = await self._get_json(f"/api/v1/plugins/{plugin_id}/readme")
+        return MarketPluginReadme.model_validate(payload)
 
     async def create_install_plan(
         self,

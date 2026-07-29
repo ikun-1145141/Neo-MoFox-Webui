@@ -7,6 +7,7 @@ import {
   getMarketInstallPlan,
   getMarketOperation,
   getMarketPluginDetail,
+  getMarketPluginReadme,
   startMarketInstall,
 } from '../../api/modules/plugin-market'
 import type {
@@ -14,6 +15,7 @@ import type {
   MarketCapabilities,
   MarketOperation,
   MarketPluginDetail,
+  MarketPluginReadme,
   MarketVersion,
 } from '../../api/types/plugin-market'
 import { useDialogStore } from '../../utils/dialog'
@@ -21,6 +23,15 @@ import { useI18n } from '../../utils/i18n'
 import { useToastStore } from '../../utils/toast'
 
 type SelectOption = { label: string; value: string }
+type ReadmeTheme = {
+  mode: 'light' | 'dark'
+  background: string
+  foreground: string
+  muted: string
+  primary: string
+  container: string
+  outline: string
+}
 
 const props = defineProps<{
   pluginId: string
@@ -38,16 +49,77 @@ const toastStore = useToastStore()
 const { t } = useI18n()
 
 const detail = ref<MarketPluginDetail | null>(null)
+const readme = ref<MarketPluginReadme | null>(null)
 const capabilities = ref<MarketCapabilities | null>(null)
 const selectedVersion = ref('')
 const operation = ref<MarketOperation | null>(null)
 const isLoading = ref(true)
+const isReadmeLoading = ref(true)
 const isPlanning = ref(false)
 const errorMessage = ref('')
+const readmeErrorMessage = ref('')
 const imageFailed = ref(false)
+const readmeTheme = ref<ReadmeTheme>({
+  mode: 'light',
+  background: '#fef7ff',
+  foreground: '#1d1b20',
+  muted: '#49454f',
+  primary: '#6750a4',
+  container: '#f3edf7',
+  outline: '#cac4d0',
+})
 let pollTimer: number | null = null
+let themeObserver: MutationObserver | null = null
 
 const plugin = computed(() => detail.value?.plugin ?? null)
+
+const readmeDocument = computed(() => {
+  if (!readme.value?.exists || !readme.value.html) return ''
+  const theme = readmeTheme.value
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; font-src https: data:;"
+  >
+  <base target="_blank">
+  <style>
+    :root {
+      color-scheme: ${theme.mode};
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    }
+    body {
+      margin: 0;
+      padding: 1.1rem;
+      color: ${theme.foreground};
+      background: ${theme.background};
+      line-height: 1.7;
+      overflow-wrap: anywhere;
+    }
+    h1, h2, h3, h4 { margin: 1.4em 0 0.6em; line-height: 1.3; }
+    h1:first-child, h2:first-child { margin-top: 0; }
+    p, ul, ol, blockquote, pre, table { margin: 0.8rem 0; }
+    a { color: ${theme.primary}; }
+    img { max-width: 100%; height: auto; border-radius: 8px; }
+    code { padding: 0.12em 0.35em; border-radius: 5px; background: ${theme.container}; }
+    pre { overflow: auto; padding: 0.9rem; border-radius: 8px; background: ${theme.container}; }
+    pre code { padding: 0; background: transparent; }
+    blockquote {
+      margin-left: 0;
+      padding-left: 0.9rem;
+      color: ${theme.muted};
+      border-left: 4px solid ${theme.primary};
+    }
+    table { display: block; width: 100%; overflow-x: auto; border-collapse: collapse; }
+    th, td { padding: 0.55rem 0.7rem; border: 1px solid ${theme.outline}; text-align: left; }
+  </style>
+</head>
+<body>${readme.value.html}</body>
+</html>`
+})
 
 const selectedVersionInfo = computed<MarketVersion | null>(() => {
   return detail.value?.versions.find((item) => item.version === selectedVersion.value) ?? null
@@ -119,6 +191,42 @@ async function loadDetail(): Promise<void> {
     errorMessage.value = errorText(error)
   } finally {
     isLoading.value = false
+  }
+}
+
+async function loadReadme(): Promise<void> {
+  if (!props.pluginId) return
+  isReadmeLoading.value = true
+  readmeErrorMessage.value = ''
+  try {
+    readme.value = await getMarketPluginReadme(props.pluginId)
+  } catch (error: unknown) {
+    readme.value = null
+    readmeErrorMessage.value = errorText(error)
+  } finally {
+    isReadmeLoading.value = false
+  }
+}
+
+async function refreshDetail(): Promise<void> {
+  await Promise.all([loadDetail(), loadReadme()])
+}
+
+function syncReadmeTheme(): void {
+  const root = document.documentElement
+  const styles = getComputedStyle(root)
+  const readColor = (name: string, fallback: string): string => {
+    return styles.getPropertyValue(name).trim() || fallback
+  }
+  const isDark = root.getAttribute('data-theme') === 'dark'
+  readmeTheme.value = {
+    mode: isDark ? 'dark' : 'light',
+    background: readColor('--md-sys-color-surface', isDark ? '#141218' : '#fef7ff'),
+    foreground: readColor('--md-sys-color-on-surface', isDark ? '#e6e0e9' : '#1d1b20'),
+    muted: readColor('--md-sys-color-on-surface-variant', isDark ? '#cac4d0' : '#49454f'),
+    primary: readColor('--md-sys-color-primary', isDark ? '#d0bcff' : '#6750a4'),
+    container: readColor('--md-sys-color-surface-container-high', isDark ? '#2b292f' : '#ece6f0'),
+    outline: readColor('--md-sys-color-outline-variant', isDark ? '#49454f' : '#cac4d0'),
   }
 }
 
@@ -241,10 +349,20 @@ function errorText(error: unknown): string {
 }
 
 onMounted(() => {
-  void loadDetail()
+  syncReadmeTheme()
+  themeObserver = new MutationObserver(syncReadmeTheme)
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme', 'style'],
+  })
+  void refreshDetail()
 })
 
-onBeforeUnmount(stopPolling)
+onBeforeUnmount(() => {
+  stopPolling()
+  themeObserver?.disconnect()
+  themeObserver = null
+})
 </script>
 
 <template>
@@ -260,7 +378,7 @@ onBeforeUnmount(stopPolling)
           :title="t('pluginMarket.refresh')"
           :aria-label="t('pluginMarket.refresh')"
           :disabled="isLoading || isOperationActive"
-          @click="loadDetail"
+          @click="refreshDetail"
         >
           <Icon icon="material-symbols:refresh-rounded" width="21" height="21" />
         </button>
@@ -382,6 +500,34 @@ onBeforeUnmount(stopPolling)
                     </span>
                   </article>
                 </div>
+              </section>
+
+              <section class="section-block documentation-block">
+                <h2>{{ t('pluginMarket.detail.documentation') }}</h2>
+                <div v-if="isReadmeLoading" class="documentation-state" aria-busy="true">
+                  <Icon icon="material-symbols:progress-activity" width="24" height="24" class="spinning" />
+                  <span>{{ t('pluginMarket.detail.documentationLoading') }}</span>
+                </div>
+                <div v-else-if="readmeErrorMessage" class="documentation-state documentation-error">
+                  <Icon icon="material-symbols:error-outline-rounded" width="24" height="24" />
+                  <div>
+                    <strong>{{ t('pluginMarket.detail.documentationError') }}</strong>
+                    <span>{{ readmeErrorMessage }}</span>
+                  </div>
+                  <button class="secondary-button" type="button" @click="loadReadme">
+                    <Icon icon="material-symbols:refresh-rounded" width="18" height="18" />
+                    {{ t('pluginMarket.retry') }}
+                  </button>
+                </div>
+                <iframe
+                  v-else-if="readmeDocument"
+                  class="documentation-frame"
+                  :srcdoc="readmeDocument"
+                  :title="t('pluginMarket.detail.documentationFrameTitle', { name: plugin.display_name })"
+                  sandbox="allow-popups allow-popups-to-escape-sandbox"
+                  referrerpolicy="no-referrer"
+                ></iframe>
+                <p v-else class="muted-text">{{ t('pluginMarket.detail.documentationEmpty') }}</p>
               </section>
             </main>
 
@@ -773,6 +919,44 @@ button:disabled {
   background: var(--md-sys-color-surface-container-high);
 }
 
+.documentation-block {
+  min-width: 0;
+}
+
+.documentation-state {
+  min-height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.documentation-error {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.documentation-error > div {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.documentation-error span {
+  overflow-wrap: anywhere;
+}
+
+.documentation-frame {
+  display: block;
+  width: 100%;
+  height: clamp(480px, 72vh, 820px);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 8px;
+  background: var(--md-sys-color-surface);
+}
+
 .dependency-list,
 .version-list {
   display: grid;
@@ -989,6 +1173,11 @@ button:disabled {
     width: 58px;
     height: 58px;
     font-size: 1.35rem;
+  }
+
+  .documentation-frame {
+    height: 65vh;
+    min-height: 420px;
   }
 
   .title-row {
