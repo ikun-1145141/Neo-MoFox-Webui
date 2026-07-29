@@ -119,6 +119,9 @@ onBeforeUnmount(() => {
   font-size: 0.9375rem;
   font-weight: 400;
   line-height: 1.5;
+  /* 保留 \n 换行，避免多行消息被压成一行 */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   /* Notion 风格的温暖灰 */
   color: var(--md-sys-color-on-surface-variant, #615d59);
 }

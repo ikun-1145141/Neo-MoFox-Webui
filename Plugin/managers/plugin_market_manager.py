@@ -33,6 +33,8 @@ from src.app.plugin_system.api.plugin_api import (
     get_manifest,
     get_plugin_path,
     list_loaded_plugins,
+    load_plugin,
+    reload_plugin,
 )
 from src.core.components.loader import PluginLoader, PluginManifest, load_manifest
 from src.core.config import CORE_VERSION
@@ -345,7 +347,7 @@ class PluginMarketManager:
             return operation.model_copy(deep=True)
 
     async def _run_install(self, operation_id: str, plan: InstallPlan) -> None:
-        """串行执行下载、校验和原子写入，并持续更新操作状态。"""
+        """串行执行下载、校验、原子写入和热加载，并持续更新操作状态。"""
         async with self._operation_lock:
             try:
                 self._update_operation(
@@ -364,23 +366,76 @@ class PluginMarketManager:
                 self._cache = None
                 self._update_operation(
                     operation_id,
+                    stage="loading",
+                    progress=92,
+                    message="正在热加载插件",
+                )
+                loaded, load_message = await self._hot_load_plugin(
+                    plan.plugin.plugin_id,
+                    str(destination),
+                    plan.plugin.local_state.loaded,
+                )
+                if loaded:
+                    message = "插件已安装并加载完成"
+                    restart_required = False
+                else:
+                    message = (
+                        f"插件包已写入，热加载失败：{load_message}，请重启 Neo-MoFox 后生效"
+                    )
+                    restart_required = True
+                self._update_operation(
+                    operation_id,
                     status="succeeded",
                     stage="completed",
                     progress=100,
-                    message="插件包已写入，请重启 Neo-MoFox 后生效",
+                    message=message,
                     result=MarketOperationResult(
                         plugin_id=plan.plugin.plugin_id,
                         version=plan.version.version,
-                        restart_required=True,
+                        restart_required=restart_required,
                     ),
                 )
                 logger.warning(
                     f"市场插件已写入: plugin={plan.plugin.plugin_id}, "
-                    f"version={plan.version.version}, path={destination}"
+                    f"version={plan.version.version}, path={destination}, "
+                    f"hot_loaded={loaded}"
                 )
             except Exception as error:
                 logger.error(f"市场安装失败: {error}", exc_info=True)
                 self._fail_operation(operation_id, error)
+
+    async def _hot_load_plugin(
+        self,
+        plugin_id: str,
+        plugin_path: str,
+        was_loaded: bool,
+    ) -> tuple[bool, str]:
+        """下载写入完成后尝试热加载或重载插件，避免必须重启。
+
+        Args:
+            plugin_id: 插件唯一标识。
+            plugin_path: 已写入的插件包绝对路径。
+            was_loaded: 安装前插件是否处于已加载状态。
+
+        Returns:
+            (是否成功热加载, 失败时的说明)。
+        """
+        try:
+            if was_loaded:
+                success = await reload_plugin(plugin_id)
+                action = "reload"
+            else:
+                success = await load_plugin(plugin_path)
+                action = "load"
+            if not success:
+                return False, f"{action} 操作返回失败"
+            return True, ""
+        except Exception as error:
+            logger.warning(
+                f"热加载插件失败，仍需重启生效: plugin={plugin_id}, error={error}",
+                exc_info=True,
+            )
+            return False, str(error)
 
     async def _get_market_plugins(self, *, refresh: bool) -> list[MarketPlugin]:
         """按配置的有效期读取或刷新完整市场列表缓存。"""
