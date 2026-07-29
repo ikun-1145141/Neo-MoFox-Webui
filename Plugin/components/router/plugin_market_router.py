@@ -41,7 +41,7 @@ class PluginMarketRouter(BaseRouter):
     """
 
     name = "plugin-market"
-    description = "插件市场查询、安装与卸载接口"
+    description = "插件市场查询与安装接口"
     custom_route_path = "/webui/api/plugin-market"
     cors_origins: list[str] = ["*"]
     dependencies: list[str] = []
@@ -68,7 +68,7 @@ class PluginMarketRouter(BaseRouter):
             response_model=BaseResponse[MarketCapabilities],
             dependencies=[VerifiedDep],
             summary="读取插件市场能力",
-            description="返回市场浏览、安装和卸载功能的当前配置开关。",
+            description="返回市场浏览和安装功能的当前配置开关。",
         )
         async def get_capabilities() -> BaseResponse[MarketCapabilities]:
             """返回当前配置允许前端使用的插件市场能力。"""
@@ -224,46 +224,18 @@ class PluginMarketRouter(BaseRouter):
                 status_code = 429 if "频繁" in message else 409
                 raise HTTPException(status_code=status_code, detail=message) from error
 
-        @self.app.post(
-            "/plugins/{plugin_id}/uninstall",
-            response_model=BaseResponse[MarketOperation],
-            dependencies=[VerifiedDep],
-            status_code=202,
-            summary="创建插件卸载任务",
-            description="为允许由市场管理的本地压缩包插件创建异步卸载任务。",
-        )
-        async def uninstall_plugin(plugin_id: str) -> BaseResponse[MarketOperation]:
-            """创建插件卸载任务。
-
-            Args:
-                plugin_id: 待卸载的插件唯一标识。
-
-            Returns:
-                已进入队列的异步操作状态。
-
-            Raises:
-                HTTPException: 插件不能安全卸载或已有操作正在执行。
-            """
-            try:
-                return BaseResponse.ok(
-                    await self._manager.start_uninstall(plugin_id),
-                    message="卸载任务已创建",
-                )
-            except PluginMarketError as error:
-                raise HTTPException(status_code=409, detail=str(error)) from error
-
         @self.app.get(
             "/operations/{operation_id}",
             response_model=BaseResponse[MarketOperation],
             dependencies=[VerifiedDep],
             summary="读取插件市场操作状态",
-            description="返回安装或卸载任务的当前阶段、进度和结果。",
+            description="返回安装任务的当前阶段、进度和结果。",
         )
         async def get_operation(operation_id: str) -> BaseResponse[MarketOperation]:
             """读取可轮询的市场写操作状态。
 
             Args:
-                operation_id: 创建安装或卸载任务时返回的操作标识。
+                operation_id: 创建安装任务时返回的操作标识。
 
             Returns:
                 操作阶段、进度、结果或错误信息。

@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 # 对外 API 使用封闭字面量，避免前后端对状态字符串作不同解释。
 CompatibilityStatus = Literal["compatible", "incompatible", "unknown"]
-OperationKind = Literal["install", "uninstall"]
+OperationKind = Literal["install"]
 OperationStatus = Literal["queued", "running", "succeeded", "failed"]
 
 
@@ -30,7 +30,7 @@ class MarketLocalState(BaseModel):
     plugin_path: str | None = Field(default=None, description="本机插件包或目录的绝对路径")
     has_config: bool = Field(default=False, description="已加载插件是否声明可管理配置")
     update_available: bool = Field(default=False, description="市场最新版本是否高于本机版本")
-    can_uninstall: bool = Field(default=False, description="市场后端能否安全卸载或覆盖该插件")
+    can_uninstall: bool = Field(default=False, description="市场后端能否安全覆盖该插件")
     uninstall_reason: str | None = Field(default=None, description="不能由市场管理时的原因")
     dependent_plugins: list[str] = Field(
         default_factory=list,
@@ -160,7 +160,6 @@ class MarketCapabilities(BaseModel):
 
     market_enabled: bool = Field(description="是否允许浏览插件市场")
     install_enabled: bool = Field(description="是否允许创建安装或更新任务")
-    uninstall_enabled: bool = Field(description="是否允许创建卸载任务")
     supports_streaming_progress: bool = Field(
         default=False,
         description="是否支持推送式进度；当前通过轮询读取",
@@ -203,7 +202,7 @@ class MarketOperationResult(BaseModel):
     """市场写操作结果。"""
 
     plugin_id: str = Field(description="已处理的插件唯一标识")
-    version: str | None = Field(default=None, description="安装或卸载涉及的插件版本")
+    version: str | None = Field(default=None, description="安装涉及的插件版本")
     restart_required: bool = Field(default=True, description="是否需要重启 Neo-MoFox 后生效")
 
 
@@ -212,7 +211,7 @@ class MarketOperation(BaseModel):
 
     operation_id: str = Field(description="可用于轮询的操作唯一标识")
     plugin_id: str = Field(description="操作目标插件唯一标识")
-    kind: OperationKind = Field(description="安装或卸载操作")
+    kind: OperationKind = Field(description="安装操作")
     status: OperationStatus = Field(description="操作生命周期状态")
     stage: str = Field(description="当前业务阶段")
     progress: int = Field(ge=0, le=100, description="当前百分比进度")

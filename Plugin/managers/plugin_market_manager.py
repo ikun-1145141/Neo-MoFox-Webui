@@ -32,9 +32,7 @@ from src.app.plugin_system.api.log_api import get_logger
 from src.app.plugin_system.api.plugin_api import (
     get_manifest,
     get_plugin_path,
-    is_plugin_loaded,
     list_loaded_plugins,
-    unload_plugin,
 )
 from src.core.components.loader import PluginLoader, PluginManifest, load_manifest
 from src.core.config import CORE_VERSION
@@ -92,7 +90,7 @@ class PluginMarketManager:
     """聚合市场数据、本地插件状态和受控写操作。
 
     Manager 负责上游分页查询与缓存、本地插件发现、兼容性和依赖判断，
-    并在 HTTPS、响应大小、哈希、ZIP 结构和目标路径校验后执行安装或卸载。
+    并在 HTTPS、响应大小、哈希、ZIP 结构和目标路径校验后执行安装。
     Router 只调用这里的公开方法，不直接承载市场业务逻辑。
     """
 
@@ -116,12 +114,11 @@ class PluginMarketManager:
         """返回当前配置允许前端使用的市场能力。
 
         Returns:
-            市场浏览、安装、卸载和进度传输能力开关。
+            市场浏览、安装和进度传输能力开关。
         """
         return MarketCapabilities(
             market_enabled=self._config.plugin_market.enabled,
             install_enabled=self._config.plugin_market_operations.install_enabled,
-            uninstall_enabled=self._config.plugin_market_operations.uninstall_enabled,
             supports_streaming_progress=False,
         )
 
@@ -316,40 +313,6 @@ class PluginMarketManager:
         )
         return operation
 
-    async def start_uninstall(self, plugin_id: str) -> MarketOperation:
-        """创建受任务管理器追踪的卸载任务。
-
-        Args:
-            plugin_id: 待卸载的插件唯一标识。
-
-        Returns:
-            可由前端轮询的排队中操作状态。
-
-        Raises:
-            PluginMarketError: 卸载关闭、插件不可安全管理或存在活动任务。
-        """
-        if not self._config.plugin_market_operations.uninstall_enabled:
-            raise PluginMarketError("WebUI 插件市场卸载功能已关闭")
-        self._validate_plugin_id(plugin_id)
-        records = await self._load_local_plugins()
-        record = records.get(plugin_id)
-        if record is None:
-            raise PluginMarketError(f"插件 {plugin_id} 未安装")
-        dependents = self._build_dependents(records).get(plugin_id, [])
-        allowed, reason = self._can_manage_local(plugin_id, record, dependents)
-        if not allowed:
-            raise PluginMarketError(reason or "当前插件不能由市场卸载")
-        self._ensure_no_active_operation(plugin_id)
-
-        operation = self._new_operation(plugin_id, "uninstall", "等待卸载", "任务已进入队列")
-        get_task_manager().create_task(
-            self._run_uninstall(operation.operation_id, record),
-            name=f"plugin-market-uninstall-{plugin_id}",
-            timeout=120.0,
-            metadata={"plugin_id": plugin_id, "operation_id": operation.operation_id},
-        )
-        return operation
-
     def get_operation(self, operation_id: str) -> MarketOperation:
         """读取可轮询的操作状态快照。
 
@@ -404,49 +367,6 @@ class PluginMarketManager:
                 )
             except Exception as error:
                 logger.error(f"市场安装失败: {error}", exc_info=True)
-                self._fail_operation(operation_id, error)
-
-    async def _run_uninstall(
-        self,
-        operation_id: str,
-        record: LocalPluginRecord,
-    ) -> None:
-        """串行停止运行态并删除通过白名单校验的插件包。"""
-        async with self._operation_lock:
-            plugin_id = record.manifest.name
-            try:
-                self._update_operation(
-                    operation_id,
-                    status="running",
-                    stage="unloading",
-                    progress=20,
-                    message="正在停止插件运行态",
-                )
-                if is_plugin_loaded(plugin_id) and not await unload_plugin(plugin_id):
-                    raise PluginMarketError("核心运行时拒绝卸载该插件")
-                self._update_operation(
-                    operation_id,
-                    stage="removing",
-                    progress=70,
-                    message="正在删除插件包",
-                )
-                await asyncio.to_thread(self._delete_archive, record.path)
-                self._cache = None
-                self._update_operation(
-                    operation_id,
-                    status="succeeded",
-                    stage="completed",
-                    progress=100,
-                    message="插件已卸载",
-                    result=MarketOperationResult(
-                        plugin_id=plugin_id,
-                        version=record.manifest.version,
-                        restart_required=False,
-                    ),
-                )
-                logger.warning(f"市场插件已卸载: plugin={plugin_id}, path={record.path}")
-            except Exception as error:
-                logger.error(f"市场卸载失败: {error}", exc_info=True)
                 self._fail_operation(operation_id, error)
 
     async def _get_market_plugins(self, *, refresh: bool) -> list[MarketPlugin]:
@@ -585,9 +505,9 @@ class PluginMarketManager:
         record: LocalPluginRecord,
         dependents: list[str],
     ) -> tuple[bool, str | None]:
-        """判断本地插件是否满足市场覆盖和卸载白名单。"""
+        """判断本地插件是否满足市场覆盖白名单。"""
         if plugin_id == "neo-mofox-webui":
-            return False, "WebUI 插件不能从其自身市场中卸载或覆盖"
+            return False, "WebUI 插件不能从其自身市场中覆盖"
         root = self._plugins_root()
         if record.path.parent != root:
             return False, "插件路径不在配置的插件目录根级"
@@ -1098,16 +1018,6 @@ class PluginMarketManager:
     def _plugins_root(self) -> Path:
         """返回主程序配置的插件目录规范化绝对路径。"""
         return Path(get_core_config().bot.plugins_dir).resolve()
-
-    def _delete_archive(self, path: Path) -> None:
-        """仅删除插件目录根级且扩展名受支持的普通压缩包。"""
-        root = self._plugins_root()
-        resolved = path.resolve()
-        if resolved.parent != root or resolved.suffix.lower() not in {".mfp", ".zip"}:
-            raise PluginMarketError("插件路径未通过删除白名单校验")
-        if not resolved.is_file():
-            raise PluginMarketError("插件包不存在或不是普通文件")
-        resolved.unlink()
 
     @staticmethod
     def _split_dependency(value: str) -> tuple[str, str | None]:

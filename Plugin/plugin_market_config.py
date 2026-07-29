@@ -16,7 +16,7 @@ class WebUIConfig(BaseConfig):
     """WebUI 插件配置中的插件市场子域。
 
     ``plugin_market`` 控制只读市场连接与下载安全边界，
-    ``plugin_market_operations`` 独立控制安装、卸载等本地写操作。
+    ``plugin_market_operations`` 独立控制安装等本地写操作。
     """
 
     config_name: ClassVar[str] = "config"
@@ -95,13 +95,6 @@ class WebUIConfig(BaseConfig):
             tag="security",
             input_type="switch",
         )
-        uninstall_enabled: bool = Field(
-            default=True,
-            description="是否允许卸载位于插件目录根级的压缩包插件",
-            label="允许卸载插件",
-            tag="security",
-            input_type="switch",
-        )
         max_installs_per_10_minutes: int = Field(
             default=5,
             ge=1,
@@ -118,7 +111,7 @@ class WebUIConfig(BaseConfig):
     )
     plugin_market_operations: PluginMarketOperationsSection = Field(
         default_factory=PluginMarketOperationsSection,
-        description="插件市场安装与卸载操作配置",
+        description="插件市场安装操作配置",
     )
 
 

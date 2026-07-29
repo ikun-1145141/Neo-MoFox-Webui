@@ -1,5 +1,5 @@
 export type CompatibilityStatus = 'compatible' | 'incompatible' | 'unknown'
-export type MarketOperationKind = 'install' | 'uninstall'
+export type MarketOperationKind = 'install'
 export type MarketOperationStatus = 'queued' | 'running' | 'succeeded' | 'failed'
 
 export interface CompatibilityInfo {
@@ -105,7 +105,6 @@ export interface MarketPluginReadme {
 export interface MarketCapabilities {
   market_enabled: boolean
   install_enabled: boolean
-  uninstall_enabled: boolean
   supports_streaming_progress: boolean
 }
 

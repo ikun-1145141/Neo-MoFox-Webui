@@ -48,10 +48,6 @@ export function startMarketInstall(
   })
 }
 
-export function startMarketUninstall(pluginId: string): Promise<MarketOperation> {
-  return http.post(`${BASE}/plugins/${encodeURIComponent(pluginId)}/uninstall`, {})
-}
-
 export function getMarketOperation(operationId: string): Promise<MarketOperation> {
   return http.get(`${BASE}/operations/${encodeURIComponent(operationId)}`)
 }
