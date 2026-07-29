@@ -33,7 +33,6 @@ from .components.router.plugin_ui import (
 )
 from .components.services.plugin_ui_service import PluginUIService
 from .components.handlers import WebuiStartupPanelHandler, LogBroadcastHandler, ChatBroadcastHandler
-from .plugin_market_config import WebUIConfig
 
 logger = get_logger("webui_plugin")
 
@@ -53,7 +52,7 @@ class WebuiPlugin(BasePlugin):
     plugin_description: str = "Neo-MoFox WebUI 后端插件"
     plugin_version: str = "1.0.18-dev"
 
-    configs: list[type] = [WebUIConfig]
+    configs: list[type] = []
     dependent_components: list[str] = []
 
     def get_components(self) -> list[type]:
@@ -72,6 +71,7 @@ class WebuiPlugin(BasePlugin):
             WallpaperRouter,
             SystemRouter,
             PluginRouter,
+            PluginMarketRouter,
             FrontendRouter,
             LogRouter,
             WebuiStartupPanelHandler,
@@ -88,8 +88,6 @@ class WebuiPlugin(BasePlugin):
             PluginUIRouter,
             PluginUIAssetRouter,
         ]
-        if isinstance(self.config, WebUIConfig) and self.config.plugin_market.enabled:
-            components.insert(10, PluginMarketRouter)
         return components
 
     async def on_plugin_loaded(self) -> None:
@@ -98,8 +96,7 @@ class WebuiPlugin(BasePlugin):
         logger.info("API 路径: /api/webui")
         logger.info("认证路径: /api/auth")
         logger.info("插件管理路径: /api/plugin")
-        if isinstance(self.config, WebUIConfig) and self.config.plugin_market.enabled:
-            logger.info("插件市场路径: /webui/api/plugin-market")
+        logger.info("插件市场路径: /webui/api/plugin-market")
         logger.info("插件 UI 扩展路径: /webui/api/plugin-ui")
 
     async def on_plugin_unloaded(self) -> None:

@@ -33,6 +33,7 @@ const DEFAULT_SETTINGS: WebuiSettings = {
   ui: { language: 'zh-CN', font_size: 'medium' },
   system: { auto_update: false, check_update_on_startup: true },
   config: { auto_reload_after_save: true },
+  plugin_market: { base_url: 'https://39.96.71.162', install_enabled: true },
 }
 
 const settings = ref<WebuiSettings>(structuredClone(DEFAULT_SETTINGS))
@@ -42,6 +43,7 @@ function getCurrentSnapshot(): string {
     ui: settings.value.ui,
     system: settings.value.system,
     config: settings.value.config,
+    plugin_market: settings.value.plugin_market,
   })
 }
 
@@ -64,15 +66,18 @@ async function persistChanges() {
       ui: settings.value.ui,
       system: settings.value.system,
       config: settings.value.config,
+      plugin_market: settings.value.plugin_market,
     })
     settings.value.ui = updated.ui
     settings.value.system = updated.system
     settings.value.config = updated.config
+    settings.value.plugin_market = updated.plugin_market
     setLocale(updated.ui.language)
     lastSavedSnapshot.value = JSON.stringify({
       ui: updated.ui,
       system: updated.system,
       config: updated.config,
+      plugin_market: updated.plugin_market,
     })
   } catch {
     if (IS_DEV) toast.show(t('settings.general.devBackendOfflineUnsaved'), 'info')
@@ -95,9 +100,12 @@ async function fetchSettings() {
   clearAutoSaveTimer()
   try {
     settings.value = await getSettings()
-    // 兜底：旧版后端响应可能没有 config 字段
+    // 兜底：旧版后端响应可能没有 config / plugin_market 字段
     if (!settings.value.config) {
       settings.value.config = { auto_reload_after_save: true }
+    }
+    if (!settings.value.plugin_market) {
+      settings.value.plugin_market = { base_url: 'https://39.96.71.162', install_enabled: true }
     }
     setLocale(settings.value.ui.language)
   } catch {
@@ -116,9 +124,12 @@ async function handleReset() {
   try {
     const data = await resetSettings()
     settings.value = data
-    // 兜底：重置后端可能未返回 config 字段
+    // 兜底：重置后端可能未返回 config / plugin_market 字段
     if (!settings.value.config) {
       settings.value.config = { auto_reload_after_save: true }
+    }
+    if (!settings.value.plugin_market) {
+      settings.value.plugin_market = { base_url: 'https://39.96.71.162', install_enabled: true }
     }
     setLocale(data.ui.language)
     toast.show(t('settings.general.resetDone'), 'success')
@@ -138,6 +149,8 @@ watch(
     settings.value.system.auto_update,
     settings.value.system.check_update_on_startup,
     settings.value.config.auto_reload_after_save,
+    settings.value.plugin_market.base_url,
+    settings.value.plugin_market.install_enabled,
   ],
   () => {
     setLocale(settings.value.ui.language)
@@ -289,6 +302,44 @@ onMounted(fetchSettings)
         </div>
       </section>
 
+      <section class="setting-section">
+        <div class="section-text">
+          <h3 class="section-heading">{{ t('settings.general.pluginMarketTitle') }}</h3>
+          <p class="section-desc">{{ t('settings.general.pluginMarketDesc') }}</p>
+        </div>
+
+        <div class="field-row">
+          <div class="field-label-wrap">
+            <span class="field-label">{{ t('settings.general.marketBaseUrlLabel') }}</span>
+            <span class="field-hint">{{ t('settings.general.marketBaseUrlHint') }}</span>
+          </div>
+          <input
+            v-model="settings.plugin_market.base_url"
+            type="text"
+            class="text-input"
+            :placeholder="t('settings.general.marketBaseUrlPlaceholder')"
+          />
+        </div>
+
+        <div class="toggle-list">
+          <div class="toggle-row">
+            <div class="toggle-label-wrap">
+              <span class="toggle-label">{{ t('settings.general.installEnabled') }}</span>
+              <span class="toggle-hint">{{ t('settings.general.installEnabledHint') }}</span>
+            </div>
+            <button
+              class="toggle-btn"
+              :class="{ on: settings.plugin_market.install_enabled }"
+              @click="settings.plugin_market.install_enabled = !settings.plugin_market.install_enabled"
+              role="switch"
+              :aria-checked="settings.plugin_market.install_enabled"
+            >
+              <div class="toggle-thumb" />
+            </button>
+          </div>
+        </div>
+      </section>
+
       <div class="actions-row">
         <button class="btn-outlined" @click="fetchSettings" :disabled="saving">
           <Icon icon="material-symbols:refresh-rounded" width="18" height="18" />
@@ -343,6 +394,24 @@ onMounted(fetchSettings)
 .field-label-wrap { display: flex; flex-direction: column; gap: 0.125rem; min-width: 120px; }
 .field-label { font-size: 0.9375rem; font-weight: 500; color: var(--md-sys-color-on-surface); }
 .field-hint { font-size: 0.8125rem; color: var(--md-sys-color-on-surface-variant); }
+.text-input {
+  min-width: 240px;
+  flex: 1 1 320px;
+  height: 2.75rem;
+  padding: 0 0.875rem;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 0.75rem;
+  background: var(--md-sys-color-surface-container-lowest);
+  color: var(--md-sys-color-on-surface);
+  font: inherit;
+  font-size: 0.875rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.text-input:focus {
+  outline: none;
+  border-color: var(--md-sys-color-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--md-sys-color-primary) 18%, transparent);
+}
 .radio-group { display: flex; gap: 0.625rem; flex-wrap: wrap; }
 .radio-card {
   position: relative;

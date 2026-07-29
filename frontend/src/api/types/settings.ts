@@ -20,11 +20,17 @@ export interface ConfigSettings {
   auto_reload_after_save: boolean
 }
 
+export interface PluginMarketSettings {
+  base_url: string
+  install_enabled: boolean
+}
+
 export interface WebuiSettings {
   theme: ThemeSettings
   ui: UISettings
   system: SystemSettings
   config: ConfigSettings
+  plugin_market: PluginMarketSettings
 }
 
 export interface UpdateSettingsRequest {
@@ -33,6 +39,7 @@ export interface UpdateSettingsRequest {
     ui: Partial<UISettings>
     system: Partial<SystemSettings>
     config: Partial<ConfigSettings>
+    plugin_market: Partial<PluginMarketSettings>
   }>
 }
 

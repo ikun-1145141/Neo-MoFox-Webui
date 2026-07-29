@@ -51,6 +51,7 @@ const DEFAULT_SETTINGS: WebuiSettings = {
   ui: { language: 'zh-CN', font_size: 'medium' },
   system: { auto_update: false, check_update_on_startup: true },
   config: { auto_reload_after_save: false },
+  plugin_market: { base_url: 'https://39.96.71.162', install_enabled: true },
 }
 
 const settings = ref<WebuiSettings>(structuredClone(DEFAULT_SETTINGS))

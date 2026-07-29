@@ -39,7 +39,7 @@ from src.core.config import CORE_VERSION
 from src.core.config.core_config import get_core_config
 from src.kernel.concurrency import get_task_manager
 
-from ..plugin_market_config import WebUIConfig
+from ..storage.settings import SettingsStorage
 from ..utils.plugin_market_types import (
     CompatibilityInfo,
     InstallPlan,
@@ -71,6 +71,14 @@ _JSON_LIMIT_BYTES = 8 * 1024 * 1024
 _MAX_REDIRECTS = 10
 _REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 
+# 插件市场技术性边界常量（不暴露到插件配置或 UI 设置）
+_REQUEST_TIMEOUT_SECONDS = 30
+_PAGE_SIZE = 50
+_CACHE_SECONDS = 30
+_MAX_PACKAGE_SIZE_MB = 50
+_TRUST_ENV = False
+_MAX_INSTALLS_PER_10_MINUTES = 5
+
 
 class PluginMarketError(RuntimeError):
     """市场请求或本地操作无法安全完成。"""
@@ -94,13 +102,13 @@ class PluginMarketManager:
     Router 只调用这里的公开方法，不直接承载市场业务逻辑。
     """
 
-    def __init__(self, config: WebUIConfig) -> None:
-        """初始化使用指定 WebUI 配置的市场 Manager。
+    def __init__(self, settings_storage: SettingsStorage) -> None:
+        """初始化使用 WebUI 设置存储的市场 Manager。
 
         Args:
-            config: 包含插件市场连接和写操作开关的 WebUI 配置。
+            settings_storage: WebUI 设置存储实例，用于读取市场地址和安装开关。
         """
-        self._config = config
+        self._settings_storage = settings_storage
         self._cache: list[MarketPlugin] | None = None
         self._cache_at = 0.0
         self._cache_lock = asyncio.Lock()
@@ -110,15 +118,19 @@ class PluginMarketManager:
         self._operations: dict[str, MarketOperation] = {}
         self._install_attempts: deque[float] = deque()
 
-    def capabilities(self) -> MarketCapabilities:
-        """返回当前配置允许前端使用的市场能力。
+    async def _get_market_settings(self):
+        """读取当前 WebUI 设置中的插件市场子配置。"""
+        return (await self._settings_storage.get_settings()).plugin_market
+
+    async def capabilities(self) -> MarketCapabilities:
+        """返回当前设置允许前端使用的市场能力。
 
         Returns:
-            市场浏览、安装和进度传输能力开关。
+            市场安装和进度传输能力开关。
         """
+        settings = await self._get_market_settings()
         return MarketCapabilities(
-            market_enabled=self._config.plugin_market.enabled,
-            install_enabled=self._config.plugin_market_operations.install_enabled,
+            install_enabled=settings.install_enabled,
             supports_streaming_progress=False,
         )
 
@@ -295,7 +307,8 @@ class PluginMarketManager:
         Raises:
             PluginMarketError: 安装关闭、计划被阻止、频率受限或存在活动任务。
         """
-        if not self._config.plugin_market_operations.install_enabled:
+        settings = await self._get_market_settings()
+        if not settings.install_enabled:
             raise PluginMarketError("WebUI 插件市场安装功能已关闭")
         self._check_rate_limit()
         plan = await self.create_install_plan(plugin_id, version)
@@ -308,7 +321,7 @@ class PluginMarketManager:
         get_task_manager().create_task(
             self._run_install(operation.operation_id, plan),
             name=f"plugin-market-install-{plugin_id}",
-            timeout=float(self._config.plugin_market.request_timeout_seconds) + 180.0,
+            timeout=float(_REQUEST_TIMEOUT_SECONDS) + 180.0,
             metadata={"plugin_id": plugin_id, "operation_id": operation.operation_id},
         )
         return operation
@@ -371,7 +384,7 @@ class PluginMarketManager:
 
     async def _get_market_plugins(self, *, refresh: bool) -> list[MarketPlugin]:
         """按配置的有效期读取或刷新完整市场列表缓存。"""
-        cache_seconds = max(0, self._config.plugin_market.cache_seconds)
+        cache_seconds = max(0, _CACHE_SECONDS)
         if (
             not refresh
             and self._cache is not None
@@ -392,7 +405,7 @@ class PluginMarketManager:
 
     async def _fetch_all_plugins(self) -> list[MarketPlugin]:
         """分页读取上游市场，并按插件标识去重。"""
-        page_size = self._config.plugin_market.page_size
+        page_size = _PAGE_SIZE
         offset = 0
         total: int | None = None
         plugins: list[MarketPlugin] = []
@@ -625,7 +638,7 @@ class PluginMarketManager:
             raise PluginMarketError("安装器只接受 .mfp 或 .zip 插件包")
         root = self._plugins_root()
         root.mkdir(parents=True, exist_ok=True)
-        max_bytes = self._config.plugin_market.max_package_size_mb * 1024 * 1024
+        max_bytes = _MAX_PACKAGE_SIZE_MB * 1024 * 1024
         temporary = await self._download_file(
             version.asset_download_url,
             root,
@@ -804,7 +817,7 @@ class PluginMarketManager:
         Raises:
             PluginMarketError: 网络、安全、大小、编码或 JSON 解析失败。
         """
-        base = self._config.plugin_market.base_url.rstrip("/")
+        base = (await self._get_market_settings()).base_url.rstrip("/")
         url = f"{base}/{path.lstrip('/')}"
         try:
             async with self._open_url(url, _JSON_LIMIT_BYTES, query=query) as response:
@@ -839,7 +852,7 @@ class PluginMarketManager:
             PluginMarketError: URL、DNS、重定向、状态码、大小或网络请求无效。
         """
         timeout = aiohttp.ClientTimeout(
-            total=float(self._config.plugin_market.request_timeout_seconds)
+            total=float(_REQUEST_TIMEOUT_SECONDS)
         )
         try:
             current_url = URL(url)
@@ -851,7 +864,7 @@ class PluginMarketManager:
             # 禁止透明解压，确保大小限制和下载哈希基于服务器返回的原始字节。
             async with aiohttp.ClientSession(
                 timeout=timeout,
-                trust_env=self._config.plugin_market.trust_env,
+                trust_env=_TRUST_ENV,
                 auto_decompress=False,
                 headers={
                     "Accept-Encoding": "identity",
@@ -1011,7 +1024,7 @@ class PluginMarketManager:
             self._install_attempts.popleft()
         if (
             len(self._install_attempts)
-            >= self._config.plugin_market_operations.max_installs_per_10_minutes
+            >= _MAX_INSTALLS_PER_10_MINUTES
         ):
             raise PluginMarketError("安装操作过于频繁，请稍后再试")
 
@@ -1080,18 +1093,18 @@ class PluginMarketManager:
 _plugin_market_manager: PluginMarketManager | None = None
 
 
-def get_plugin_market_manager(config: WebUIConfig) -> PluginMarketManager:
-    """获取使用当前 WebUI 配置对象的市场 Manager 单例。
+def get_plugin_market_manager(settings_storage: SettingsStorage) -> PluginMarketManager:
+    """获取使用 WebUI 设置存储的市场 Manager 单例。
 
     Args:
-        config: 当前 WebUI 插件配置对象。
+        settings_storage: WebUI 设置存储实例，用于读取市场地址和安装开关。
 
     Returns:
-        与配置对象绑定的进程内 Manager；配置对象变化时重新创建。
+        与设置存储绑定的进程内 Manager；存储实例变化时重新创建。
     """
     global _plugin_market_manager
-    if _plugin_market_manager is None or _plugin_market_manager._config is not config:
-        _plugin_market_manager = PluginMarketManager(config)
+    if _plugin_market_manager is None or _plugin_market_manager._settings_storage is not settings_storage:
+        _plugin_market_manager = PluginMarketManager(settings_storage)
     return _plugin_market_manager
 
 

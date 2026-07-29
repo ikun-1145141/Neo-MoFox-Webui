@@ -66,6 +66,18 @@ class ConfigSettings(BaseModel):
     )
 
 
+class PluginMarketSettings(BaseModel):
+    """插件市场用户可调设置。
+
+    Attributes:
+        base_url: 官方插件市场 API 基础地址
+        install_enabled: 是否允许通过 WebUI 下载并安装市场插件
+    """
+
+    base_url: str = Field(default="https://39.96.71.162", description="官方插件市场 API 基础地址")
+    install_enabled: bool = Field(default=True, description="是否允许通过 WebUI 下载并安装市场插件")
+
+
 class WebuiSettings(BaseModel):
     """WebUI 全局设置模型。
 
@@ -74,12 +86,17 @@ class WebuiSettings(BaseModel):
         ui: 界面设置
         system: 系统设置
         config: 配置编辑器设置
+        plugin_market: 插件市场设置
     """
 
     theme: ThemeSettings = Field(default_factory=ThemeSettings, description="主题设置")
     ui: UISettings = Field(default_factory=UISettings, description="界面设置")
     system: SystemSettings = Field(default_factory=SystemSettings, description="系统设置")
     config: ConfigSettings = Field(default_factory=ConfigSettings, description="配置编辑器设置")
+    plugin_market: PluginMarketSettings = Field(
+        default_factory=PluginMarketSettings,
+        description="插件市场设置",
+    )
 
 
 class SettingsStorage(BaseStorage):

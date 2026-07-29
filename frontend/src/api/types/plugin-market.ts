@@ -103,7 +103,6 @@ export interface MarketPluginReadme {
 }
 
 export interface MarketCapabilities {
-  market_enabled: boolean
   install_enabled: boolean
   supports_streaming_progress: boolean
 }

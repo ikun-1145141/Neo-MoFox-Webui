@@ -158,7 +158,6 @@ class MarketPluginReadme(BaseModel):
 class MarketCapabilities(BaseModel):
     """插件市场能力开关。"""
 
-    market_enabled: bool = Field(description="是否允许浏览插件市场")
     install_enabled: bool = Field(description="是否允许创建安装或更新任务")
     supports_streaming_progress: bool = Field(
         default=False,

@@ -14,7 +14,7 @@ from ...managers.plugin_market_manager import (
     PluginMarketError,
     get_plugin_market_manager,
 )
-from ...plugin_market_config import WebUIConfig
+from ...storage.settings import SettingsStorage
 from ...utils.plugin_market_types import (
     InstallPlan,
     InstallPlanRequest,
@@ -47,17 +47,12 @@ class PluginMarketRouter(BaseRouter):
     dependencies: list[str] = []
 
     def __init__(self, plugin: "BasePlugin") -> None:
-        """使用 WebUI 插件配置初始化市场 Manager。
+        """使用 WebUI 设置存储初始化市场 Manager。
 
         Args:
             plugin: 已由 Neo-MoFox 插件系统实例化的 WebUI 插件。
-
-        Raises:
-            RuntimeError: WebUI 配置未加载或配置类型不正确。
         """
-        if not isinstance(plugin.config, WebUIConfig):
-            raise RuntimeError("WebUI 插件市场配置未加载")
-        self._manager = get_plugin_market_manager(plugin.config)
+        self._manager = get_plugin_market_manager(SettingsStorage())
         super().__init__(plugin)
 
     def register_endpoints(self) -> None:
@@ -71,8 +66,8 @@ class PluginMarketRouter(BaseRouter):
             description="返回市场浏览和安装功能的当前配置开关。",
         )
         async def get_capabilities() -> BaseResponse[MarketCapabilities]:
-            """返回当前配置允许前端使用的插件市场能力。"""
-            return BaseResponse.ok(self._manager.capabilities())
+            """返回当前设置允许前端使用的插件市场能力。"""
+            return BaseResponse.ok(await self._manager.capabilities())
 
         @self.app.get(
             "/plugins",
