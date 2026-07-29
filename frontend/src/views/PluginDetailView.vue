@@ -557,6 +557,11 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+/* ====== 详情容器背景 ====== */
+.plugin-detail {
+  background: color-mix(in srgb, var(--md-sys-color-surface) 72%, transparent);
+}
+
 /* ====== 加载状态 ====== */
 .loading-state {
   display: flex;

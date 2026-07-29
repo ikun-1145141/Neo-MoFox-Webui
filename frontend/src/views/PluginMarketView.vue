@@ -375,6 +375,7 @@ onMounted(() => {
   min-height: 0;
   padding: 1.25rem 1.5rem 2rem;
   overflow: auto;
+  background: color-mix(in srgb, var(--md-sys-color-surface) 72%, transparent);
 }
 
 .result-summary {
