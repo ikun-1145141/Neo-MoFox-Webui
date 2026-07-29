@@ -302,15 +302,16 @@ onMounted(async () => {
 </script>
 
 <template>
-  <AppShell>
-    <!-- 加载状态 -->
-    <div v-if="isLoading" class="loading-state">
-      <Icon icon="material-symbols:progress-activity" width="48" height="48" class="loading-spinner" />
-      <p>{{ t('plugins.loading') }}</p>
-    </div>
+  <AppShell no-padding>
+    <div class="plugin-detail-page">
+      <!-- 加载状态 -->
+      <div v-if="isLoading" class="loading-state">
+        <Icon icon="material-symbols:progress-activity" width="48" height="48" class="loading-spinner" />
+        <p>{{ t('plugins.loading') }}</p>
+      </div>
 
-    <!-- 插件详情 -->
-    <div v-else-if="plugin" class="plugin-detail">
+      <!-- 插件详情 -->
+      <div v-else-if="plugin" class="plugin-detail">
       <!-- 返回按钮 -->
       <button class="back-btn" @click="goBack">
         <Icon icon="material-symbols:arrow-back-rounded" width="20" height="20" />
@@ -553,13 +554,24 @@ onMounted(async () => {
         </div>
       </div>
     </div>
+    </div>
   </AppShell>
 </template>
 
 <style scoped>
 /* ====== 详情容器背景 ====== */
-.plugin-detail {
+.plugin-detail-page {
+  flex: 1;
+  min-height: 0;
+  padding: 1.5rem;
+  overflow-y: auto;
   background: color-mix(in srgb, var(--md-sys-color-surface) 72%, transparent);
+}
+
+@media (max-width: 640px) {
+  .plugin-detail-page {
+    padding: 1rem;
+  }
 }
 
 /* ====== 加载状态 ====== */
