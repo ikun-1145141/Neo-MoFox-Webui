@@ -351,6 +351,7 @@ const handleSearch = () => {
   min-height: 0;
   overflow-y: auto;
   padding: 1.5rem;
+  background: color-mix(in srgb, var(--md-sys-color-surface) 72%, transparent);
 }
 /* ====== 搜索栏 ====== */
 .search-bar {

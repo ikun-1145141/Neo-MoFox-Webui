@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import Icon from '../common/Icon.vue'
-import MdSelect from '../common/MdSelect.vue'
 import {
   getMarketCapabilities,
   getMarketInstallPlan,
@@ -22,7 +21,6 @@ import { useDialogStore } from '../../utils/dialog'
 import { useI18n } from '../../utils/i18n'
 import { useToastStore } from '../../utils/toast'
 
-type SelectOption = { label: string; value: string }
 type ReadmeTheme = {
   mode: 'light' | 'dark'
   background: string
@@ -52,6 +50,7 @@ const detail = ref<MarketPluginDetail | null>(null)
 const readme = ref<MarketPluginReadme | null>(null)
 const capabilities = ref<MarketCapabilities | null>(null)
 const selectedVersion = ref('')
+const activeTab = ref<'info' | 'docs'>('info')
 const operation = ref<MarketOperation | null>(null)
 const isLoading = ref(true)
 const isReadmeLoading = ref(true)
@@ -59,6 +58,9 @@ const isPlanning = ref(false)
 const errorMessage = ref('')
 const readmeErrorMessage = ref('')
 const imageFailed = ref(false)
+const isDescriptionExpanded = ref(false)
+const isDescriptionTruncated = ref(false)
+let descriptionResizeTimer: number | null = null
 const readmeTheme = ref<ReadmeTheme>({
   mode: 'light',
   background: '#fef7ff',
@@ -125,17 +127,6 @@ const selectedVersionInfo = computed<MarketVersion | null>(() => {
   return detail.value?.versions.find((item) => item.version === selectedVersion.value) ?? null
 })
 
-const versionOptions = computed<SelectOption[]>(() => {
-  return (detail.value?.versions ?? []).map((version) => {
-    const suffix: string[] = []
-    if (version.is_prerelease) suffix.push(t('pluginMarket.detail.prerelease'))
-    if (version.is_yanked || version.status !== 'published') suffix.push(t('pluginMarket.detail.yanked'))
-    if (version.compatibility.status === 'incompatible') suffix.push(t('pluginMarket.detail.incompatible'))
-    const label = suffix.length ? `v${version.version} · ${suffix.join(' · ')}` : `v${version.version}`
-    return { label, value: version.version }
-  })
-})
-
 const isOperationActive = computed(() => {
   return operation.value?.status === 'queued' || operation.value?.status === 'running'
 })
@@ -155,18 +146,56 @@ const primaryActionIcon = computed(() => {
 const canStartInstall = computed(() => {
   if (!plugin.value || !capabilities.value?.install_enabled || isOperationActive.value) return false
   if (!selectedVersionInfo.value) return false
-  if (selectedVersionInfo.value.is_yanked || selectedVersionInfo.value.status !== 'published') return false
-  if (selectedVersionInfo.value.compatibility.status === 'incompatible') return false
+  return canInstallVersion(selectedVersionInfo.value)
+})
+
+function canInstallVersion(version: MarketVersion): boolean {
+  if (!plugin.value || !capabilities.value?.install_enabled || isOperationActive.value) return false
+  if (version.is_yanked || version.status !== 'published') return false
+  if (version.compatibility.status === 'incompatible') return false
   return !(
     plugin.value.local_state.installed
-    && plugin.value.local_state.installed_version === selectedVersionInfo.value.version
+    && plugin.value.local_state.installed_version === version.version
   )
+}
+
+const isLatestSelected = computed(() => {
+  const versions = detail.value?.versions ?? []
+  if (!versions.length || !selectedVersion.value) return false
+  const latest = versions.find((item) => item.status === 'published' && !item.is_yanked)
+    ?? versions[0]
+  return latest?.version === selectedVersion.value
 })
 
 const pluginInitial = computed(() => {
   const value = plugin.value?.display_name || plugin.value?.plugin_id || 'P'
   return value.trim().slice(0, 1).toUpperCase()
 })
+
+const descriptionText = computed(() => {
+  return plugin.value?.description || plugin.value?.summary || ''
+})
+
+const MOBILE_DESCRIPTION_LIMIT = 20
+
+function checkDescriptionTruncation(): void {
+  const isMobile = window.innerWidth <= 560
+  if (!isMobile) {
+    isDescriptionTruncated.value = false
+    isDescriptionExpanded.value = false
+    return
+  }
+  isDescriptionTruncated.value = descriptionText.value.length > MOBILE_DESCRIPTION_LIMIT
+}
+
+function handleDescriptionResize(): void {
+  if (descriptionResizeTimer !== null) {
+    window.clearTimeout(descriptionResizeTimer)
+  }
+  descriptionResizeTimer = window.setTimeout(() => {
+    checkDescriptionTruncation()
+  }, 150)
+}
 
 async function loadDetail(): Promise<void> {
   if (!props.pluginId) return
@@ -186,7 +215,10 @@ async function loadDetail(): Promise<void> {
         ?? nextDetail.versions.find((item) => item.status === 'published' && !item.is_yanked)?.version
         ?? nextDetail.versions[0]?.version
         ?? ''
+      activeTab.value = 'info'
     }
+    isDescriptionExpanded.value = false
+    checkDescriptionTruncation()
   } catch (error: unknown) {
     errorMessage.value = errorText(error)
   } finally {
@@ -230,11 +262,21 @@ function syncReadmeTheme(): void {
   }
 }
 
-async function beginInstall(): Promise<void> {
-  if (!plugin.value || !canStartInstall.value) return
+async function beginInstall(versionOverride?: string): Promise<void> {
+  if (!plugin.value) return
+  const targetVersion = versionOverride ?? selectedVersion.value
+  if (!targetVersion) return
+  const versionInfo = detail.value?.versions.find((item) => item.version === targetVersion) ?? null
+  if (!versionInfo || !canInstallVersion(versionInfo)) {
+    if (versionOverride) selectedVersion.value = targetVersion
+    return
+  }
+  if (versionOverride && selectedVersion.value !== versionOverride) {
+    selectedVersion.value = versionOverride
+  }
   isPlanning.value = true
   try {
-    const plan = await getMarketInstallPlan(plugin.value.plugin_id, selectedVersion.value || null)
+    const plan = await getMarketInstallPlan(plugin.value.plugin_id, targetVersion || null)
     if (!plan.can_install) {
       await dialogStore.alert(plan.blocking_reasons.join('\n'), t('pluginMarket.detail.blockedTitle'))
       return
@@ -311,6 +353,39 @@ function openManage(): void {
   emit('manage', plugin.value.plugin_id)
 }
 
+function downloadVersion(version: MarketVersion): void {
+  if (!version.asset_download_url) return
+  const link = document.createElement('a')
+  link.href = version.asset_download_url
+  link.download = version.asset_name || ''
+  link.target = '_blank'
+  link.rel = 'noopener noreferrer'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
+function isVersionInstalled(version: MarketVersion): boolean {
+  return Boolean(plugin.value?.local_state.installed
+    && plugin.value.local_state.installed_version === version.version)
+}
+
+function installVersionLabel(version: MarketVersion): string {
+  if (isVersionInstalled(version)) return t('pluginMarket.detail.installed')
+  if (plugin.value?.local_state.installed) {
+    return plugin.value.local_state.update_available
+      ? t('pluginMarket.detail.update')
+      : t('pluginMarket.detail.switchVersion')
+  }
+  return t('pluginMarket.detail.install')
+}
+
+function installVersionIcon(version: MarketVersion): string {
+  if (isVersionInstalled(version)) return 'material-symbols:check-circle-outline-rounded'
+  if (plugin.value?.local_state.installed) return 'material-symbols:swap-vert-rounded'
+  return 'material-symbols:download-rounded'
+}
+
 function planMessage(plan: InstallPlan): string {
   const lines = [
     `${plan.plugin.display_name} @ ${plan.version.version}`,
@@ -355,6 +430,7 @@ onMounted(() => {
     attributes: true,
     attributeFilter: ['data-theme', 'style'],
   })
+  window.addEventListener('resize', handleDescriptionResize)
   void refreshDetail()
 })
 
@@ -362,6 +438,11 @@ onBeforeUnmount(() => {
   stopPolling()
   themeObserver?.disconnect()
   themeObserver = null
+  window.removeEventListener('resize', handleDescriptionResize)
+  if (descriptionResizeTimer !== null) {
+    window.clearTimeout(descriptionResizeTimer)
+    descriptionResizeTimer = null
+  }
 })
 </script>
 
@@ -401,133 +482,244 @@ onBeforeUnmount(() => {
         </div>
 
         <template v-else-if="plugin && detail">
-          <section class="plugin-overview">
-            <div class="plugin-icon" aria-hidden="true">
-              <img
-                v-if="plugin.icon_url && !imageFailed"
-                :src="plugin.icon_url"
-                alt=""
-                @error="imageFailed = true"
-              />
-              <span v-else>{{ pluginInitial }}</span>
-            </div>
-            <div class="overview-copy">
-              <div class="title-row">
-                <div>
-                  <h1>{{ plugin.display_name }}</h1>
-                  <code>{{ plugin.plugin_id }}</code>
-                </div>
-                <span class="trust-badge">{{ plugin.trust_level }}</span>
-              </div>
-              <p>{{ plugin.description || plugin.summary || t('pluginMarket.card.noSummary') }}</p>
-              <div class="overview-meta">
-                <span>
-                  <Icon icon="material-symbols:person-outline-rounded" width="18" height="18" />
-                  {{ plugin.owner_display_name || plugin.owner_login || t('pluginMarket.detail.unknown') }}
-                </span>
-                <span>
-                  <Icon icon="material-symbols:download-rounded" width="18" height="18" />
-                  {{ plugin.downloads_count }}
-                </span>
-                <span>
-                  <Icon icon="material-symbols:update-rounded" width="18" height="18" />
-                  {{ formatDate(plugin.updated_at) }}
-                </span>
-              </div>
-            </div>
-          </section>
-
-          <div v-if="plugin.risk_notice" class="notice error-notice">
-            <Icon icon="material-symbols:warning-outline-rounded" width="22" height="22" />
-            <span>{{ plugin.risk_notice }}</span>
-          </div>
-
-          <div v-if="operation" class="operation-panel" :class="operation.status">
-            <div class="operation-heading">
-              <Icon
-                :icon="operation.status === 'failed' ? 'material-symbols:error-outline-rounded' : 'material-symbols:sync-rounded'"
-                width="22"
-                height="22"
-                :class="{ spinning: isOperationActive }"
-              />
-              <div>
-                <strong>{{ operation.message }}</strong>
-                <span>{{ operation.error_message || operation.stage }}</span>
-              </div>
-              <em>{{ operation.progress }}%</em>
-            </div>
-            <div class="progress-track" role="progressbar" :aria-valuenow="operation.progress" aria-valuemin="0" aria-valuemax="100">
-              <span :style="{ width: `${operation.progress}%` }"></span>
-            </div>
-          </div>
-
           <div class="detail-layout">
             <main class="detail-main">
-              <section class="section-block">
-                <h2>{{ t('pluginMarket.detail.about') }}</h2>
-                <p class="long-copy">{{ plugin.description || plugin.summary }}</p>
-                <div class="tag-list">
-                  <span v-for="tag in plugin.tags" :key="tag">{{ tag }}</span>
-                </div>
-              </section>
-
-              <section class="section-block">
-                <h2>{{ t('pluginMarket.detail.dependencies') }}</h2>
-                <div v-if="detail.dependencies.length" class="dependency-list">
-                  <article v-for="dependency in detail.dependencies" :key="dependency.plugin_id">
-                    <div>
-                      <strong>{{ dependency.plugin_id }}</strong>
-                      <code>{{ dependency.version_constraint || dependency.required_version || '—' }}</code>
+              <section class="plugin-overview">
+                <div class="overview-body">
+                  <div class="overview-head">
+                    <div class="plugin-icon" aria-hidden="true">
+                      <img
+                        v-if="plugin.icon_url && !imageFailed"
+                        :src="plugin.icon_url"
+                        alt=""
+                        @error="imageFailed = true"
+                      />
+                      <span v-else>{{ pluginInitial }}</span>
                     </div>
-                    <span :class="{ satisfied: dependency.satisfied }">
-                      {{ dependency.satisfied ? t('pluginMarket.detail.satisfied') : t('pluginMarket.detail.missing') }}
-                    </span>
-                  </article>
-                </div>
-                <p v-else class="muted-text">{{ t('pluginMarket.detail.noDependencies') }}</p>
-              </section>
-
-              <section class="section-block">
-                <h2>{{ t('pluginMarket.detail.versionHistory') }}</h2>
-                <div class="version-list">
-                  <article v-for="version in detail.versions" :key="version.version" class="version-row">
-                    <div>
-                      <strong>v{{ version.version }}</strong>
-                      <span>{{ formatDate(version.published_at) }} · {{ formatBytes(version.file_size) }}</span>
+                    <div class="overview-copy">
+                      <div class="title-row">
+                        <div>
+                          <h1>{{ plugin.display_name }}</h1>
+                          <code>{{ plugin.plugin_id }}</code>
+                        </div>
+                        <span class="trust-badge">{{ plugin.trust_level }}</span>
+                      </div>
+                      <div class="overview-desc-wrapper" :class="{ expanded: isDescriptionExpanded }">
+                        <p class="overview-desc">{{ descriptionText || t('pluginMarket.card.noSummary') }}</p>
+                        <button
+                          v-if="isDescriptionTruncated || isDescriptionExpanded"
+                          class="desc-toggle-btn"
+                          type="button"
+                          @click="isDescriptionExpanded = !isDescriptionExpanded"
+                        >
+                          {{ isDescriptionExpanded ? t('pluginMarket.detail.collapse') : t('pluginMarket.detail.expand') }}
+                          <Icon
+                            :icon="isDescriptionExpanded ? 'material-symbols:expand-less-rounded' : 'material-symbols:expand-more-rounded'"
+                            width="18"
+                            height="18"
+                          />
+                        </button>
+                      </div>
+                      <div class="overview-meta">
+                        <span>
+                          <Icon icon="material-symbols:person-outline-rounded" width="18" height="18" />
+                          {{ plugin.owner_display_name || plugin.owner_login || t('pluginMarket.detail.unknown') }}
+                        </span>
+                        <span>
+                          <Icon icon="material-symbols:download-rounded" width="18" height="18" />
+                          {{ plugin.downloads_count }}
+                        </span>
+                        <span>
+                          <Icon icon="material-symbols:update-rounded" width="18" height="18" />
+                          {{ formatDate(plugin.updated_at) }}
+                        </span>
+                      </div>
+                      <div v-if="plugin.tags.length" class="tag-list">
+                        <span v-for="tag in plugin.tags" :key="tag">{{ tag }}</span>
+                      </div>
                     </div>
-                    <span class="compatibility" :class="version.compatibility.status">
-                      {{ version.compatibility.summary }}
-                    </span>
-                  </article>
-                </div>
-              </section>
-
-              <section class="section-block documentation-block">
-                <h2>{{ t('pluginMarket.detail.documentation') }}</h2>
-                <div v-if="isReadmeLoading" class="documentation-state" aria-busy="true">
-                  <Icon icon="material-symbols:progress-activity" width="24" height="24" class="spinning" />
-                  <span>{{ t('pluginMarket.detail.documentationLoading') }}</span>
-                </div>
-                <div v-else-if="readmeErrorMessage" class="documentation-state documentation-error">
-                  <Icon icon="material-symbols:error-outline-rounded" width="24" height="24" />
-                  <div>
-                    <strong>{{ t('pluginMarket.detail.documentationError') }}</strong>
-                    <span>{{ readmeErrorMessage }}</span>
                   </div>
-                  <button class="secondary-button" type="button" @click="loadReadme">
-                    <Icon icon="material-symbols:refresh-rounded" width="18" height="18" />
-                    {{ t('pluginMarket.retry') }}
-                  </button>
+
+                  <div class="source-links">
+                    <a
+                      v-if="plugin.repository_url"
+                      :href="plugin.repository_url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Icon icon="material-symbols:code-rounded" width="18" height="18" />
+                      {{ t('pluginMarket.detail.repository') }}
+                    </a>
+                    <a
+                      v-if="plugin.homepage && plugin.homepage !== plugin.repository_url"
+                      :href="plugin.homepage"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Icon icon="material-symbols:open-in-new-rounded" width="18" height="18" />
+                      {{ t('pluginMarket.detail.homepage') }}
+                    </a>
+                  </div>
                 </div>
-                <iframe
-                  v-else-if="readmeDocument"
-                  class="documentation-frame"
-                  :srcdoc="readmeDocument"
-                  :title="t('pluginMarket.detail.documentationFrameTitle', { name: plugin.display_name })"
-                  sandbox="allow-popups allow-popups-to-escape-sandbox"
-                  referrerpolicy="no-referrer"
-                ></iframe>
-                <p v-else class="muted-text">{{ t('pluginMarket.detail.documentationEmpty') }}</p>
+              </section>
+
+              <div v-if="plugin.risk_notice" class="notice error-notice">
+                <Icon icon="material-symbols:warning-outline-rounded" width="22" height="22" />
+                <span>{{ plugin.risk_notice }}</span>
+              </div>
+
+              <div v-if="operation" class="operation-panel" :class="operation.status">
+                <div class="operation-heading">
+                  <Icon
+                    :icon="operation.status === 'failed' ? 'material-symbols:error-outline-rounded' : 'material-symbols:sync-rounded'"
+                    width="22"
+                    height="22"
+                    :class="{ spinning: isOperationActive }"
+                  />
+                  <div>
+                    <strong>{{ operation.message }}</strong>
+                    <span>{{ operation.error_message || operation.stage }}</span>
+                  </div>
+                  <em>{{ operation.progress }}%</em>
+                </div>
+                <div class="progress-track" role="progressbar" :aria-valuenow="operation.progress" aria-valuemin="0" aria-valuemax="100">
+                  <span :style="{ width: `${operation.progress}%` }"></span>
+                </div>
+              </div>
+
+              <div class="tab-bar" role="tablist">
+                <button
+                  type="button"
+                  role="tab"
+                  :aria-selected="activeTab === 'info'"
+                  class="tab-button"
+                  :class="{ active: activeTab === 'info' }"
+                  @click="activeTab = 'info'"
+                >
+                  <Icon icon="material-symbols:info-outline-rounded" width="18" height="18" />
+                  {{ t('pluginMarket.detail.about') }}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  :aria-selected="activeTab === 'docs'"
+                  class="tab-button"
+                  :class="{ active: activeTab === 'docs' }"
+                  @click="activeTab = 'docs'"
+                >
+                  <Icon icon="material-symbols:description-outline-rounded" width="18" height="18" />
+                  {{ t('pluginMarket.detail.readme') }}
+                </button>
+              </div>
+
+              <section v-show="activeTab === 'info'" class="tab-panel">
+                <section class="section-block">
+                  <h2>{{ t('pluginMarket.detail.dependencies') }}</h2>
+                  <div v-if="detail.dependencies.length" class="dependency-list">
+                    <article v-for="dependency in detail.dependencies" :key="dependency.plugin_id">
+                      <div>
+                        <strong>{{ dependency.plugin_id }}</strong>
+                        <code>{{ dependency.version_constraint || dependency.required_version || '—' }}</code>
+                      </div>
+                      <span :class="{ satisfied: dependency.satisfied }">
+                        {{ dependency.satisfied ? t('pluginMarket.detail.satisfied') : t('pluginMarket.detail.missing') }}
+                      </span>
+                    </article>
+                  </div>
+                  <p v-else class="muted-text">{{ t('pluginMarket.detail.noDependencies') }}</p>
+                </section>
+
+                <section class="section-block">
+                  <h2>{{ t('pluginMarket.detail.versionHistory') }}</h2>
+                  <div class="version-list">
+                    <article
+                      v-for="version in detail.versions"
+                      :key="version.version"
+                      class="version-row"
+                      :class="{ 'version-yanked': version.is_yanked || version.status !== 'published' }"
+                    >
+                      <div class="version-info">
+                        <div class="version-title">
+                          <strong>v{{ version.version }}</strong>
+                          <span v-if="version.is_prerelease" class="version-badge prerelease">
+                            {{ t('pluginMarket.detail.prerelease') }}
+                          </span>
+                          <span v-if="version.is_yanked || version.status !== 'published'" class="version-badge yanked">
+                            {{ t('pluginMarket.detail.yanked') }}
+                          </span>
+                          <span v-if="version.compatibility.status === 'incompatible'" class="version-badge incompatible">
+                            {{ t('pluginMarket.detail.incompatible') }}
+                          </span>
+                        </div>
+                        <span class="compatibility" :class="version.compatibility.status">
+                          {{ version.compatibility.summary }}
+                        </span>
+                      </div>
+                      <div class="version-actions">
+                        <span class="version-meta">
+                          {{ formatDate(version.published_at) }} · {{ formatBytes(version.file_size) }}
+                        </span>
+                        <button
+                          v-if="version.asset_download_url"
+                          type="button"
+                          class="secondary-button version-download"
+                          :title="t('pluginMarket.detail.downloadVersion')"
+                          @click="downloadVersion(version)"
+                        >
+                          <Icon icon="material-symbols:download-rounded" width="18" height="18" />
+                          {{ t('pluginMarket.detail.download') }}
+                        </button>
+                        <button
+                          type="button"
+                          class="primary-button version-install"
+                          :disabled="!canInstallVersion(version) || isPlanning"
+                          :title="installVersionLabel(version)"
+                          @click="beginInstall(version.version)"
+                        >
+                          <Icon
+                            :icon="isPlanning && selectedVersion === version.version
+                              ? 'material-symbols:progress-activity'
+                              : installVersionIcon(version)"
+                            width="18"
+                            height="18"
+                            :class="{ spinning: isPlanning && selectedVersion === version.version }"
+                          />
+                          {{ installVersionLabel(version) }}
+                        </button>
+                      </div>
+                    </article>
+                  </div>
+                </section>
+              </section>
+
+              <section v-show="activeTab === 'docs'" class="tab-panel documentation-block">
+                <section class="section-block documentation-section">
+                  <h2>{{ t('pluginMarket.detail.readme') }}</h2>
+                  <div v-if="isReadmeLoading" class="documentation-state" aria-busy="true">
+                    <Icon icon="material-symbols:progress-activity" width="24" height="24" class="spinning" />
+                    <span>{{ t('pluginMarket.detail.documentationLoading') }}</span>
+                  </div>
+                  <div v-else-if="readmeErrorMessage" class="documentation-state documentation-error">
+                    <Icon icon="material-symbols:error-outline-rounded" width="24" height="24" />
+                    <div>
+                      <strong>{{ t('pluginMarket.detail.documentationError') }}</strong>
+                      <span>{{ readmeErrorMessage }}</span>
+                    </div>
+                    <button class="secondary-button" type="button" @click="loadReadme">
+                      <Icon icon="material-symbols:refresh-rounded" width="18" height="18" />
+                      {{ t('pluginMarket.retry') }}
+                    </button>
+                  </div>
+                  <iframe
+                    v-else-if="readmeDocument"
+                    class="documentation-frame"
+                    :srcdoc="readmeDocument"
+                    :title="t('pluginMarket.detail.documentationFrameTitle', { name: plugin.display_name })"
+                    sandbox="allow-popups allow-popups-to-escape-sandbox"
+                    referrerpolicy="no-referrer"
+                  ></iframe>
+                  <p v-else class="muted-text">{{ t('pluginMarket.detail.documentationEmpty') }}</p>
+                </section>
               </section>
             </main>
 
@@ -541,11 +733,6 @@ onBeforeUnmount(() => {
                     : t('pluginMarket.card.notInstalled') }}
                 </strong>
               </div>
-
-              <label class="version-select">
-                <span>{{ t('pluginMarket.detail.selectVersion') }}</span>
-                <MdSelect v-model="selectedVersion" :options="versionOptions" />
-              </label>
 
               <div v-if="selectedVersionInfo" class="selected-version-meta">
                 <span>
@@ -574,7 +761,7 @@ onBeforeUnmount(() => {
                 class="primary-button full-width"
                 type="button"
                 :disabled="!canStartInstall || isPlanning"
-                @click="beginInstall"
+                @click="beginInstall()"
               >
                 <Icon
                   :icon="isPlanning ? 'material-symbols:progress-activity' : primaryActionIcon"
@@ -584,6 +771,10 @@ onBeforeUnmount(() => {
                 />
                 {{ primaryActionLabel }}
               </button>
+
+              <p v-if="!isLatestSelected && selectedVersionInfo" class="action-hint">
+                {{ t('pluginMarket.detail.notLatestHint') }}
+              </p>
 
               <button
                 v-if="plugin.local_state.has_config"
@@ -610,27 +801,6 @@ onBeforeUnmount(() => {
               <p v-if="!capabilities?.install_enabled" class="action-hint">
                 {{ t('pluginMarket.detail.installDisabled') }}
               </p>
-
-              <div class="source-links">
-                <a
-                  v-if="plugin.repository_url"
-                  :href="plugin.repository_url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Icon icon="material-symbols:code-rounded" width="18" height="18" />
-                  {{ t('pluginMarket.detail.repository') }}
-                </a>
-                <a
-                  v-if="plugin.homepage && plugin.homepage !== plugin.repository_url"
-                  :href="plugin.homepage"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Icon icon="material-symbols:open-in-new-rounded" width="18" height="18" />
-                  {{ t('pluginMarket.detail.homepage') }}
-                </a>
-              </div>
             </aside>
           </div>
         </template>
@@ -707,23 +877,35 @@ button:disabled {
 }
 
 .plugin-overview {
+  position: relative;
+  margin: 0 0 1.25rem;
+  overflow: hidden;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 16px;
+  background: var(--md-sys-color-surface-container-low);
+}
+
+.overview-body {
+  padding: 1.4rem;
+}
+
+.overview-head {
   display: grid;
-  grid-template-columns: 76px minmax(0, 1fr);
+  grid-template-columns: 84px minmax(0, 1fr);
   gap: 18px;
-  max-width: 1240px;
-  margin: 0 auto 1.25rem;
+  align-items: center;
 }
 
 .plugin-icon {
-  width: 76px;
-  height: 76px;
+  width: 84px;
+  height: 84px;
   display: grid;
   place-items: center;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: 14px;
   color: var(--md-sys-color-on-primary-container);
   background: var(--md-sys-color-primary-container);
-  font-size: 1.8rem;
+  font-size: 1.9rem;
   font-weight: 700;
 }
 
@@ -735,6 +917,10 @@ button:disabled {
 
 .overview-copy,
 .title-row > div {
+  min-width: 0;
+}
+
+.overview-copy {
   min-width: 0;
 }
 
@@ -761,7 +947,6 @@ button:disabled {
 }
 
 .trust-badge,
-.tag-list span,
 .dependency-list article > span,
 .compatibility {
   padding: 4px 8px;
@@ -776,18 +961,42 @@ button:disabled {
   background: var(--md-sys-color-tertiary-container);
 }
 
-.overview-copy > p {
+.overview-desc-wrapper {
   max-width: 850px;
-  margin: 12px 0;
+  margin: 12px 0 0;
+}
+
+.overview-desc {
+  margin: 0;
   color: var(--md-sys-color-on-surface-variant);
   line-height: 1.55;
   overflow-wrap: anywhere;
+}
+
+.desc-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 6px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--md-sys-color-primary);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.desc-toggle-btn:hover {
+  text-decoration: underline;
 }
 
 .overview-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+  margin-top: 10px;
   color: var(--md-sys-color-on-surface-variant);
   font-size: 0.8rem;
 }
@@ -800,8 +1009,7 @@ button:disabled {
 
 .notice,
 .operation-panel {
-  max-width: 1240px;
-  margin: 0 auto 1rem;
+  margin: 0 0 1rem;
   border: 1px solid var(--md-sys-color-outline-variant);
   border-radius: 8px;
 }
@@ -868,7 +1076,7 @@ button:disabled {
 .detail-layout {
   max-width: 1240px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 400px);
   align-items: start;
   gap: 1rem;
   margin: 0 auto;
@@ -898,7 +1106,6 @@ button:disabled {
   font-size: 1rem;
 }
 
-.long-copy,
 .muted-text {
   margin: 0;
   color: var(--md-sys-color-on-surface-variant);
@@ -911,12 +1118,17 @@ button:disabled {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 13px;
+  margin-top: 10px;
 }
 
 .tag-list span {
+  padding: 4px 8px;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 700;
   color: var(--md-sys-color-on-surface-variant);
   background: var(--md-sys-color-surface-container-high);
+  white-space: nowrap;
 }
 
 .documentation-block {
@@ -963,6 +1175,27 @@ button:disabled {
   gap: 8px;
 }
 
+.version-list {
+  max-height: 480px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--md-sys-color-outline-variant) transparent;
+}
+
+.version-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.version-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.version-list::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: var(--md-sys-color-outline-variant);
+}
+
 .dependency-list article,
 .version-row {
   min-width: 0;
@@ -980,10 +1213,57 @@ button:disabled {
 }
 
 .dependency-list article > div,
-.version-row > div {
+.version-info {
   min-width: 0;
   display: grid;
-  gap: 3px;
+  gap: 5px;
+}
+
+.version-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.version-title > strong {
+  color: var(--md-sys-color-on-surface);
+  font-size: 0.92rem;
+}
+
+.version-badge {
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--md-sys-color-on-surface-variant);
+  background: var(--md-sys-color-surface-container-high);
+}
+
+.version-badge.prerelease {
+  color: var(--md-sys-color-on-primary-container);
+  background: var(--md-sys-color-primary-container);
+}
+
+.version-badge.yanked {
+  color: var(--md-sys-color-on-error-container);
+  background: var(--md-sys-color-error-container);
+}
+
+.version-badge.incompatible {
+  color: var(--md-sys-color-on-error-container);
+  background: var(--md-sys-color-error-container);
+}
+
+.version-yanked .version-title > strong {
+  color: var(--md-sys-color-on-surface-variant);
+  text-decoration: line-through;
+}
+
+.version-meta {
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.74rem;
+  white-space: nowrap;
 }
 
 .dependency-list code,
@@ -991,6 +1271,21 @@ button:disabled {
   color: var(--md-sys-color-on-surface-variant);
   font-size: 0.76rem;
   overflow-wrap: anywhere;
+}
+
+.version-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.version-download,
+.version-install {
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  font-size: 0.78rem;
 }
 
 .dependency-list article > span {
@@ -1006,16 +1301,59 @@ button:disabled {
 }
 
 .compatibility {
-  max-width: 54%;
+  justify-self: start;
+  max-width: 100%;
   color: var(--md-sys-color-on-surface-variant);
   background: var(--md-sys-color-surface-container-high);
-  text-align: right;
+  text-align: left;
   overflow-wrap: anywhere;
 }
 
 .compatibility.incompatible {
   color: var(--md-sys-color-on-error-container);
   background: var(--md-sys-color-error-container);
+}
+
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 9999px;
+  background: var(--md-sys-color-surface-container-low);
+}
+
+.tab-button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9999px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--md-sys-color-on-surface-variant);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.tab-button:hover:not(.active) {
+  background: var(--md-sys-color-surface-container-high);
+}
+
+.tab-button.active {
+  color: var(--md-sys-color-on-primary);
+  background: var(--md-sys-color-primary);
+}
+
+.tab-panel {
+  display: grid;
+  gap: 1rem;
 }
 
 .install-panel {
@@ -1040,19 +1378,9 @@ button:disabled {
 }
 
 .local-state span,
-.version-select > span,
 .selected-version-meta small {
   color: var(--md-sys-color-on-surface-variant);
   font-size: 0.75rem;
-}
-
-.version-select {
-  display: grid;
-  gap: 5px;
-}
-
-.version-select > span {
-  font-weight: 700;
 }
 
 .selected-version-meta > span {
@@ -1143,14 +1471,47 @@ button:disabled {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-@media (max-width: 850px) {
+@media (max-width: 1175px) {
   .detail-layout {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .detail-main {
+    display: contents;
+  }
+
+  .plugin-overview {
+    order: 1;
+    width: 100%;
+  }
+
+  .notice {
+    order: 2;
+    width: 100%;
+  }
+
+  .operation-panel {
+    order: 3;
+    width: 100%;
   }
 
   .install-panel {
     position: static;
-    grid-row: 1;
+    order: 4;
+    width: 100%;
+  }
+
+  .tab-bar {
+    order: 5;
+    width: 100%;
+  }
+
+  .tab-panel {
+    order: 6;
+    width: 100%;
   }
 }
 
@@ -1164,15 +1525,19 @@ button:disabled {
     padding: 1rem;
   }
 
-  .plugin-overview {
-    grid-template-columns: 58px minmax(0, 1fr);
+  .overview-body {
+    padding: 1rem;
+  }
+
+  .overview-head {
+    grid-template-columns: 64px minmax(0, 1fr);
     gap: 12px;
   }
 
   .plugin-icon {
-    width: 58px;
-    height: 58px;
-    font-size: 1.35rem;
+    width: 64px;
+    height: 64px;
+    font-size: 1.4rem;
   }
 
   .documentation-frame {
@@ -1189,11 +1554,60 @@ button:disabled {
     font-size: 1.4rem;
   }
 
+  .overview-desc-wrapper:not(.expanded) .overview-desc {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-height: 3.2em;
+  }
+
+  .tag-list {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin-left: -1rem;
+    margin-right: -1rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .tag-list::-webkit-scrollbar {
+    display: none;
+  }
+
   .dependency-list article,
   .version-row {
     align-items: flex-start;
     flex-direction: column;
-    gap: 7px;
+    gap: 9px;
+  }
+
+  .version-info {
+    grid-template-columns: 1fr;
+  }
+
+  .version-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
+
+  .version-meta {
+    width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .version-download,
+  .version-install {
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: center;
   }
 
   .compatibility {

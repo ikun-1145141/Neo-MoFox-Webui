@@ -662,7 +662,7 @@ class PluginMarketManager:
         else:
             compatibility = CompatibilityInfo(
                 status="compatible",
-                summary=f"兼容 Neo-MoFox {CORE_VERSION}",
+                summary="兼容当前版本",
             )
         return version.model_copy(update={"compatibility": compatibility})
 
