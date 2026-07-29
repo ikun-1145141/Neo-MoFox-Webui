@@ -40,6 +40,12 @@ const router = createRouter({
       meta: { requiresAuth: true, title: '插件详情', icon: 'material-symbols:extension-outline-rounded' },
     },
     {
+      path: '/plugin-market',
+      name: 'plugin-market',
+      component: () => import('../views/PluginMarketView.vue'),
+      meta: { requiresAuth: true, title: '插件市场', icon: 'material-symbols:storefront-outline-rounded' },
+    },
+    {
       path: '/chat',
       name: 'chat',
       component: () => import('../views/ChatView.vue'),

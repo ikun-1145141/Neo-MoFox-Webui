@@ -5,8 +5,7 @@
 
 from __future__ import annotations
 
-from src.core.components.base.plugin import BasePlugin
-from src.core.components.loader import register_plugin
+from src.app.plugin_system.base import BasePlugin, register_plugin
 from src.app.plugin_system.api.log_api import get_logger
 
 from .components.router.auth_router import AuthRouter
@@ -18,6 +17,7 @@ from .components.router.wallpaper_router import WallpaperRouter
 from .components.router.webui_router import WebuiSettingsRouter
 from .components.router.system_router import SystemRouter
 from .components.router.plugin_router import PluginRouter
+from .components.router.plugin_market_router import PluginMarketRouter
 from .components.router.frontend_router import FrontendRouter
 from .components.router.log_router import LogRouter
 from .components.router.config import (
@@ -33,6 +33,7 @@ from .components.router.plugin_ui import (
 )
 from .components.services.plugin_ui_service import PluginUIService
 from .components.handlers import WebuiStartupPanelHandler, LogBroadcastHandler, ChatBroadcastHandler
+from .plugin_market_config import WebUIConfig
 
 logger = get_logger("webui_plugin")
 
@@ -50,9 +51,9 @@ class WebuiPlugin(BasePlugin):
 
     plugin_name: str = "neo-mofox-webui"
     plugin_description: str = "Neo-MoFox WebUI 后端插件"
-    plugin_version: str = "1.0.0"
+    plugin_version: str = "1.0.18-dev"
 
-    configs: list[type] = []
+    configs: list[type] = [WebUIConfig]
     dependent_components: list[str] = []
 
     def get_components(self) -> list[type]:
@@ -87,6 +88,8 @@ class WebuiPlugin(BasePlugin):
             PluginUIRouter,
             PluginUIAssetRouter,
         ]
+        if isinstance(self.config, WebUIConfig) and self.config.plugin_market.enabled:
+            components.insert(10, PluginMarketRouter)
         return components
 
     async def on_plugin_loaded(self) -> None:
@@ -95,6 +98,8 @@ class WebuiPlugin(BasePlugin):
         logger.info("API 路径: /api/webui")
         logger.info("认证路径: /api/auth")
         logger.info("插件管理路径: /api/plugin")
+        if isinstance(self.config, WebUIConfig) and self.config.plugin_market.enabled:
+            logger.info("插件市场路径: /webui/api/plugin-market")
         logger.info("插件 UI 扩展路径: /webui/api/plugin-ui")
 
     async def on_plugin_unloaded(self) -> None:
