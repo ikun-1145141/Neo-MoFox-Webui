@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import inspect
 import tomllib
 from pathlib import Path
 from typing import Any, Literal, get_args, get_origin
@@ -149,6 +150,17 @@ class ConfigParser:
         section_title = getattr(section_model, "__config_section_title__", None)
         section_description = getattr(section_model, "__config_section_description__", None)
         section_tag = getattr(section_model, "__config_section_tag__", None)
+
+        # title 未显式指定时，回退到节名美化（与 config_section 装饰器文档承诺保持一致）
+        if section_title is None and section_name:
+            section_title = section_name.replace("_", " ").title()
+
+        # description 未显式指定时，回退到类 docstring 首行
+        # （与 config_section 装饰器文档承诺保持一致）
+        if section_description is None:
+            doc = inspect.getdoc(section_model) or ""
+            if doc:
+                section_description = doc.splitlines()[0].strip() or None
 
         # 提取字段 Schema
         fields: list[FieldSchema] = []

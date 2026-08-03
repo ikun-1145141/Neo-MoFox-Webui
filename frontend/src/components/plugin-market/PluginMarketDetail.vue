@@ -1289,6 +1289,11 @@ button:disabled {
   font-size: 0.78rem;
 }
 
+.version-install {
+  min-width: 124px;
+  justify-content: center;
+}
+
 .dependency-list article > span {
   flex: 0 0 auto;
   color: var(--md-sys-color-on-error-container);
