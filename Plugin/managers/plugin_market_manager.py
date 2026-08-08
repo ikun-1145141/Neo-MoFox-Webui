@@ -1,4 +1,4 @@
-"""插件市场业务逻辑与安全安装操作。"""
+﻿"""插件市场业务逻辑与安全安装操作。"""
 
 from __future__ import annotations
 
@@ -13,7 +13,6 @@ import sys
 import tempfile
 import time
 import zipfile
-from collections import deque
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -68,7 +67,6 @@ _PLUGIN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 _DEPENDENCY_PATTERN = re.compile(
     r"^(?P<name>[A-Za-z0-9_.-]+)(?P<spec>\s*(?:===|==|!=|~=|>=|<=|>|<).+)?$"
 )
-_RATE_WINDOW_SECONDS = 600.0
 _JSON_LIMIT_BYTES = 8 * 1024 * 1024
 _MAX_REDIRECTS = 10
 _REDIRECT_STATUSES = {301, 302, 303, 307, 308}
@@ -79,7 +77,6 @@ _PAGE_SIZE = 50
 _CACHE_SECONDS = 30
 _MAX_PACKAGE_SIZE_MB = 50
 _TRUST_ENV = False
-_MAX_INSTALLS_PER_10_MINUTES = 5
 
 
 class PluginMarketError(RuntimeError):
@@ -108,7 +105,7 @@ class PluginMarketManager:
         """初始化使用 WebUI 设置存储的市场 Manager。
 
         Args:
-            settings_storage: WebUI 设置存储实例，用于读取市场地址和安装开关。
+            settings_storage: WebUI 设置存储实例，用于读取市场地址。
         """
         self._settings_storage = settings_storage
         self._cache: list[MarketPlugin] | None = None
@@ -118,7 +115,6 @@ class PluginMarketManager:
         # 任务状态会由请求协程和后台任务跨异步上下文访问，使用同步锁保护短临界区。
         self._operation_state_lock = Lock()
         self._operations: dict[str, MarketOperation] = {}
-        self._install_attempts: deque[float] = deque()
 
     async def _get_market_settings(self):
         """读取当前 WebUI 设置中的插件市场子配置。"""
@@ -130,9 +126,8 @@ class PluginMarketManager:
         Returns:
             市场安装和进度传输能力开关。
         """
-        settings = await self._get_market_settings()
         return MarketCapabilities(
-            install_enabled=settings.install_enabled,
+            install_enabled=True,
             supports_streaming_progress=False,
         )
 
@@ -307,19 +302,14 @@ class PluginMarketManager:
             可由前端轮询的排队中操作状态。
 
         Raises:
-            PluginMarketError: 安装关闭、计划被阻止、频率受限或存在活动任务。
+            PluginMarketError: 计划被阻止或存在活动任务。
         """
-        settings = await self._get_market_settings()
-        if not settings.install_enabled:
-            raise PluginMarketError("WebUI 插件市场安装功能已关闭")
-        self._check_rate_limit()
         plan = await self.create_install_plan(plugin_id, version)
         if not plan.can_install:
             raise PluginMarketError("；".join(plan.blocking_reasons))
         self._ensure_no_active_operation(plugin_id)
 
         operation = self._new_operation(plugin_id, "install", "等待安装", "任务已进入队列")
-        self._install_attempts.append(time.monotonic())
         get_task_manager().create_task(
             self._run_install(operation.operation_id, plan),
             name=f"plugin-market-install-{plugin_id}",
@@ -1072,17 +1062,6 @@ class PluginMarketManager:
             ):
                 raise PluginMarketError(f"插件 {plugin_id} 已有操作正在执行")
 
-    def _check_rate_limit(self) -> None:
-        """按照滑动时间窗口限制当前进程创建安装任务的频率。"""
-        now = time.monotonic()
-        while self._install_attempts and now - self._install_attempts[0] >= _RATE_WINDOW_SECONDS:
-            self._install_attempts.popleft()
-        if (
-            len(self._install_attempts)
-            >= _MAX_INSTALLS_PER_10_MINUTES
-        ):
-            raise PluginMarketError("安装操作过于频繁，请稍后再试")
-
     def _plugins_root(self) -> Path:
         """返回主程序配置的插件目录规范化绝对路径。"""
         return Path(get_core_config().bot.plugins_dir).resolve()
@@ -1152,7 +1131,7 @@ def get_plugin_market_manager(settings_storage: SettingsStorage) -> PluginMarket
     """获取使用 WebUI 设置存储的市场 Manager 单例。
 
     Args:
-        settings_storage: WebUI 设置存储实例，用于读取市场地址和安装开关。
+        settings_storage: WebUI 设置存储实例，用于读取市场地址。
 
     Returns:
         与设置存储绑定的进程内 Manager；存储实例变化时重新创建。

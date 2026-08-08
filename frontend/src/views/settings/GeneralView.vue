@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, ref, onBeforeUnmount, onMounted, watch } from 'vue'
 import { getSettings, updateSettings, resetSettings } from '../../api/modules/settings'
 import { useToastStore } from '../../utils/toast'
@@ -33,7 +33,7 @@ const DEFAULT_SETTINGS: WebuiSettings = {
   ui: { language: 'zh-CN', font_size: 'medium' },
   system: { auto_update: false, check_update_on_startup: true },
   config: { auto_reload_after_save: true },
-  plugin_market: { base_url: 'https://39.96.71.162', install_enabled: true },
+  plugin_market: { base_url: 'https://39.96.71.162' },
 }
 
 const settings = ref<WebuiSettings>(structuredClone(DEFAULT_SETTINGS))
@@ -105,7 +105,7 @@ async function fetchSettings() {
       settings.value.config = { auto_reload_after_save: true }
     }
     if (!settings.value.plugin_market) {
-      settings.value.plugin_market = { base_url: 'https://39.96.71.162', install_enabled: true }
+      settings.value.plugin_market = { base_url: 'https://39.96.71.162' }
     }
     setLocale(settings.value.ui.language)
   } catch {
@@ -129,7 +129,7 @@ async function handleReset() {
       settings.value.config = { auto_reload_after_save: true }
     }
     if (!settings.value.plugin_market) {
-      settings.value.plugin_market = { base_url: 'https://39.96.71.162', install_enabled: true }
+      settings.value.plugin_market = { base_url: 'https://39.96.71.162' }
     }
     setLocale(data.ui.language)
     toast.show(t('settings.general.resetDone'), 'success')
@@ -150,7 +150,6 @@ watch(
     settings.value.system.check_update_on_startup,
     settings.value.config.auto_reload_after_save,
     settings.value.plugin_market.base_url,
-    settings.value.plugin_market.install_enabled,
   ],
   () => {
     setLocale(settings.value.ui.language)
@@ -321,23 +320,6 @@ onMounted(fetchSettings)
           />
         </div>
 
-        <div class="toggle-list">
-          <div class="toggle-row">
-            <div class="toggle-label-wrap">
-              <span class="toggle-label">{{ t('settings.general.installEnabled') }}</span>
-              <span class="toggle-hint">{{ t('settings.general.installEnabledHint') }}</span>
-            </div>
-            <button
-              class="toggle-btn"
-              :class="{ on: settings.plugin_market.install_enabled }"
-              @click="settings.plugin_market.install_enabled = !settings.plugin_market.install_enabled"
-              role="switch"
-              :aria-checked="settings.plugin_market.install_enabled"
-            >
-              <div class="toggle-thumb" />
-            </button>
-          </div>
-        </div>
       </section>
 
       <div class="actions-row">
