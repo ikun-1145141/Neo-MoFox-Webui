@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import Icon from '../common/Icon.vue'
 import {
@@ -1472,6 +1472,13 @@ button:disabled {
 }
 
 .spinning {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  line-height: 1;
+  vertical-align: middle;
+  transform-origin: 50% 50%;
+  will-change: transform;
   animation: spin 0.8s linear infinite;
 }
 

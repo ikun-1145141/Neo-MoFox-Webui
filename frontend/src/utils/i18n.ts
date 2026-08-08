@@ -1,4 +1,4 @@
-import { readonly, ref } from 'vue'
+﻿import { readonly, ref } from 'vue'
 import type { UISettings } from '../api/types/settings'
 
 export type Locale = UISettings['language']
@@ -427,7 +427,7 @@ const messages = {
         planSize: '安装包大小：{size}',
         planDependencies: '依赖项：{count} 个',
         planWarnings: '注意事项：',
-        planRestart: '安装或更新完成后需要重启 Neo-MoFox 才会加载新版本。',
+        planRestart: '下载完成后将立即加载新版本。',
         operationRestartRequired: '插件包已写入，请重启 Neo-MoFox 后生效',
         operationSucceeded: '操作已完成',
         operationFailed: '操作失败',
@@ -1448,7 +1448,7 @@ const messages = {
         planSize: 'Package size: {size}',
         planDependencies: 'Dependencies: {count}',
         planWarnings: 'Warnings:',
-        planRestart: 'Restart Neo-MoFox after installation or update to load the new version.',
+        planRestart: 'The new version will be loaded immediately after download.',
         operationRestartRequired: 'Plugin package stored. Restart Neo-MoFox to apply it.',
         operationSucceeded: 'Operation completed',
         operationFailed: 'Operation failed',
