@@ -1,4 +1,4 @@
-"""WebUI 全局设置存储。
+﻿"""WebUI 全局设置存储。
 
 管理 WebUI 的全局配置，包括主题、语言、自动更新等设置。
 """
@@ -71,11 +71,9 @@ class PluginMarketSettings(BaseModel):
 
     Attributes:
         base_url: 官方插件市场 API 基础地址
-        install_enabled: 是否允许通过 WebUI 下载并安装市场插件
     """
 
     base_url: str = Field(default="https://39.96.71.162", description="官方插件市场 API 基础地址")
-    install_enabled: bool = Field(default=True, description="是否允许通过 WebUI 下载并安装市场插件")
 
 
 class WebuiSettings(BaseModel):

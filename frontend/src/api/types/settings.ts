@@ -1,4 +1,4 @@
-export interface ThemeSettings {
+﻿export interface ThemeSettings {
   mode: 'light' | 'dark' | 'auto'
   primary_color: string
   has_wallpaper: boolean
@@ -22,7 +22,6 @@ export interface ConfigSettings {
 
 export interface PluginMarketSettings {
   base_url: string
-  install_enabled: boolean
 }
 
 export interface WebuiSettings {
