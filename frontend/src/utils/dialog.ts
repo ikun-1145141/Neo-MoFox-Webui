@@ -15,6 +15,7 @@ interface DialogItem {
   message: string
   buttons: DialogButton[]
   onClose?: () => void
+  closable?: boolean
 }
 
 const state = reactive<{ items: DialogItem[] }>({ items: [] })
@@ -134,6 +135,7 @@ export function useDialogStore() {
     message: string
     buttons?: Array<{ text: string; variant?: 'primary' | 'secondary' | 'ghost'; onClick: () => void }>
     onClose?: () => void
+    closable?: boolean
   }): number {
     const id = ++_id
     const dialog: DialogItem = {
@@ -143,6 +145,7 @@ export function useDialogStore() {
       message: options.message,
       buttons: options.buttons || [],
       onClose: options.onClose,
+      closable: options.closable ?? true,
     }
     state.items.push(dialog)
     return id

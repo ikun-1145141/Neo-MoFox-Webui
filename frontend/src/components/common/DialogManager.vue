@@ -5,15 +5,20 @@ import { onMounted, onBeforeUnmount } from 'vue'
 const dialogStore = useDialogStore()
 
 function handleBackdropClick(dialogId: number) {
-  // 点击遮罩层关闭对话框
-  dialogStore.close(dialogId)
+  // 点击遮罩层关闭对话框（不可关闭的对话框除外）
+  const dialog = dialogStore.items.find((d) => d.id === dialogId)
+  if (dialog && dialog.closable !== false) {
+    dialogStore.close(dialogId)
+  }
 }
 
 function handleEscape(event: KeyboardEvent) {
   if (event.key === 'Escape' && dialogStore.items.length > 0) {
-    // ESC 关闭最顶层对话框
+    // ESC 关闭最顶层对话框（不可关闭的对话框除外）
     const topDialog = dialogStore.items[dialogStore.items.length - 1]
-    dialogStore.close(topDialog.id)
+    if (topDialog.closable !== false) {
+      dialogStore.close(topDialog.id)
+    }
   }
 }
 

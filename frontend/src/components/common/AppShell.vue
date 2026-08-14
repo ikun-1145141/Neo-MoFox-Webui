@@ -132,6 +132,7 @@ async function performRestart() {
     title: t('app.dialogs.restartingTitle'),
     message: t('app.dialogs.restartingMessage'),
     buttons: [],
+    closable: false,
   })
 
   try {
