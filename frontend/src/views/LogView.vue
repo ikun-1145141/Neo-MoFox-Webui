@@ -913,9 +913,24 @@ function formatTimestamp(ts: string): string {
   }).format(parsed)
 }
 
-watch(activeTab, (tab) => {
+watch(activeTab, async (tab) => {
   if (tab === 'realtime') {
     connectWs()
+    // 实时面板通过 v-if 切换，切回时容器元素是全新挂载的：
+    // 其 scrollTop 已复位为 0，而 scrollTop.value 仍保留旧值，
+    // 会导致虚拟滚动的可见区间按旧偏移计算，渲染出的行全部落在视口下方而不可见。
+    // 这里在下一次渲染后重新对齐 scrollTop/视口高度，并让 ResizeObserver 改观察新容器。
+    await nextTick()
+    const container = logContainerRef.value
+    if (container) {
+      scrollTop.value = container.scrollTop
+      const h = container.clientHeight
+      if (h > 0) viewportHeight.value = h
+      if (viewportResizeObserver) {
+        viewportResizeObserver.disconnect()
+        viewportResizeObserver.observe(container)
+      }
+    }
   } else {
     loadLogFiles()
   }
