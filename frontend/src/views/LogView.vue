@@ -1882,7 +1882,7 @@ input:focus-visible {
   overflow: hidden;
 }
 
-.log-entry {
+.log-entries .log-entry {
   position: absolute;
   left: .55rem;
   right: .55rem;
