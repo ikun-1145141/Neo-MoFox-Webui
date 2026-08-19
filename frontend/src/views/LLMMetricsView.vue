@@ -416,7 +416,7 @@ function formatCurrency(value: number | null | undefined): string {
   const safeValue = normalizedNumber(value)
   return new Intl.NumberFormat(locale.value, {
     style: 'currency',
-    currency: 'USD',
+    currency: 'CNY',
     minimumFractionDigits: safeValue >= 10 ? 2 : 4,
     maximumFractionDigits: safeValue >= 10 ? 2 : 4,
   }).format(safeValue)

@@ -96,7 +96,7 @@ const formatPercent = (value: number | string | null | undefined): string => {
 }
 
 const formatCurrency = (value: number | string | null | undefined): string => {
-  return `$${normalizedNumber(value).toFixed(4)}`
+  return `¥${normalizedNumber(value).toFixed(4)}`
 }
 
 const getLlmInputTokens = (llm: DashboardOverview['llm']): number => {
