@@ -1,6 +1,6 @@
 {
     "name": "neo-mofox-webui",
-    "version": "1.0.21-dev",
+    "version": "1.0.23-dev",
     "display_name": "Neo-MoFox WebUI",
     "summary": "集成插件市场的 Neo-MoFox Web 管理界面。",
     "description": "Neo-MoFox WebUI 后端插件，提供前端静态资源托管、设置管理、插件配置、插件市场、安全安装、LLM 指标和请求检查器等 Web 管理接口。",
