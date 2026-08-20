@@ -869,6 +869,9 @@ const messages = {
         bodyLabel: '请求体字段（body）',
         bodyDesc: '合并到请求体字段，支持嵌套对象，如 {metadata: {source: "maibot"}}',
         bodyPlaceholder: '{metadata = {source = "mofox"}}',
+        webSearchPreset: '快捷添加联网搜索（web_search）',
+        webSearchReasonNotDeepSeek: '当前提供商不是 DeepSeek 端点，无法快捷添加联网搜索。',
+        webSearchReasonNotResponses: '当前提供商需将 client_type 设为 openai_response，才能快捷添加联网搜索。',
         antiTruncLabel: '启用反截断',
       },
       task: {
@@ -1894,6 +1897,9 @@ const messages = {
         bodyLabel: 'Request Body Fields (body)',
         bodyDesc: 'Merged into request body fields; nested objects supported, e.g. {metadata: {source: "maibot"}}',
         bodyPlaceholder: '{metadata = {source = "mofox"}}',
+        webSearchPreset: 'Quick-add web search (web_search)',
+        webSearchReasonNotDeepSeek: 'This provider is not a DeepSeek endpoint, so web search cannot be added.',
+        webSearchReasonNotResponses: 'Set this provider’s client_type to openai_response before adding web search.',
         antiTruncLabel: 'Enable anti-truncation',
       },
       task: {

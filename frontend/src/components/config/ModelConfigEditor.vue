@@ -298,6 +298,7 @@
       :mode="dialog.mode"
       :data="dialog.data"
       :providers="providerNames"
+      :providers-info="localData.api_providers"
       :models="modelNames"
       @close="closeDialog"
       @submit="handleDialogSubmit"

@@ -59,11 +59,7 @@
               <MdSelect
                 v-model="formData.client_type"
                 :label="t('modelEditDialog.provider.clientTypeLabel')"
-                :options="[
-                  { label: 'OpenAI', value: 'openai' },
-                  { label: 'Gemini', value: 'gemini' },
-                  { label: 'Bedrock', value: 'bedrock' },
-                ]"
+                :options="clientTypeOptions"
               />
             </div>
 
@@ -263,6 +259,18 @@
                 :placeholder="t('modelEditDialog.model.bodyPlaceholder')"
                 rows="3"
               />
+              <!-- 快捷添加服务端内置 web_search 工具（仅 DeepSeek responses 提供商可用） -->
+              <button
+                type="button"
+                class="preset-btn"
+                :class="{ 'preset-btn--disabled': !isDeepSeekProvider }"
+                :disabled="!isDeepSeekProvider"
+                :title="webSearchReason"
+                @click="fillWebSearchTool"
+              >
+                <Icon icon="material-symbols:travel-explore-rounded" :size="18" />
+                <span>{{ t('modelEditDialog.model.webSearchPreset') }}</span>
+              </button>
             </div>
 
             <div class="form-field checkbox-field">
@@ -366,7 +374,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { parse as parseToml } from 'toml'
 import { useI18n } from '@/utils/i18n'
 import { useDialogStore } from '@/utils/dialog'
@@ -377,6 +385,43 @@ import { closeAllDropdowns } from '@/utils/useDropdownManager'
 const { t } = useI18n()
 const dialogStore = useDialogStore()
 
+// 客户端类型选项（与后端 model_config 的 client_type Literal 对齐）
+const clientTypeOptions = [
+  { label: 'OpenAI', value: 'openai' },
+  { label: 'OpenAI Responses', value: 'openai_response' },
+  { label: 'Anthropic', value: 'anthropic' },
+  { label: 'Gemini', value: 'gemini' },
+  { label: 'Gemini (aiohttp)', value: 'aiohttp_gemini' },
+  { label: 'Bedrock', value: 'bedrock' },
+]
+
+// 是否允许快捷添加服务端内置 web_search 工具（DeepSeek responses 提供商）
+const isDeepSeekProvider = computed(() => !webSearchReason.value)
+
+// 不可用时的原因（悬停提示）；可用或未选提供商时为空字符串
+const webSearchReason = computed<string>(() => {
+  const providerName = formData.value.api_provider || ''
+  if (!providerName) {
+    return ''
+  }
+  const info = props.providersInfo.find(
+    (p: any) => String(p?.name) === providerName
+  )
+  const url = String(info?.base_url || '')
+  const clientType = String(info?.client_type || '')
+  const isDeepSeekUrl = /deepseek/i.test(url)
+  const isResponses = ['openai_response', 'responses', 'openai.responses'].includes(clientType)
+  const looksDeepSeek = info ? isDeepSeekUrl : /deepseek/i.test(providerName)
+
+  if (!looksDeepSeek) {
+    return t('modelEditDialog.model.webSearchReasonNotDeepSeek')
+  }
+  if (!isResponses) {
+    return t('modelEditDialog.model.webSearchReasonNotResponses')
+  }
+  return ''
+})
+
 // Props
 interface Props {
   isOpen: boolean
@@ -385,6 +430,7 @@ interface Props {
   data?: Record<string, any>
   providers?: string[] // 模型编辑时需要的提供商列表
   models?: string[] // 任务编辑时需要的模型列表
+  providersInfo?: Record<string, any>[] // 完整提供商信息（用于识别 DeepSeek responses）
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -394,6 +440,7 @@ const props = withDefaults(defineProps<Props>(), {
   data: () => ({}),
   providers: () => [],
   models: () => [],
+  providersInfo: () => [],
 })
 
 // Emits
@@ -540,6 +587,18 @@ function parseSpecialField(textRef: { value: string }): Record<string, any> {
 
 function fillToolChoiceAuto() {
   extraParamsText.value = '{ tool_choice = "auto" }'
+}
+
+// 快捷写入服务端内置 web_search 工具声明到 body.tools
+function fillWebSearchTool() {
+  if (!isDeepSeekProvider.value) return
+  const existing = parseSpecialField(bodyText)
+  const tools = Array.isArray(existing.tools) ? existing.tools : []
+  if (!tools.some((tool: any) => tool && typeof tool === 'object' && tool.type === 'web_search')) {
+    tools.push({ type: 'web_search' })
+  }
+  existing.tools = tools
+  bodyText.value = formatExtraParams(existing)
 }
 
 // 任务：添加模型
@@ -775,11 +834,27 @@ async function handleSubmit() {
   cursor: pointer;
   transition: all 0.2s;
   font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .preset-btn:hover {
   background: var(--md-sys-color-secondary);
   color: var(--md-sys-color-on-secondary);
+}
+
+.preset-btn:disabled,
+.preset-btn--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.preset-btn--disabled:hover {
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 .field-hint {
