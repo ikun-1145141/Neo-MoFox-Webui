@@ -28,6 +28,7 @@ const analytics = ref<InspectorAnalytics | null>(null)
 const isLoading = ref(true)
 const isDetailLoading = ref(false)
 const isRefreshing = ref(false)
+const isExporting = ref(false)
 const searchText = ref('')
 const selectedRole = ref('all')
 const viewMode = ref<'rendered' | 'raw'>('rendered')
@@ -130,6 +131,28 @@ async function clearRequests(): Promise<void> {
   toastStore.show(t('requestInspector.toast.clearSuccess'), 'success')
 }
 
+async function exportRequestDetail(): Promise<void> {
+  const request = selectedRequest.value
+  if (!request || isExporting.value) return
+  isExporting.value = true
+  try {
+    const json = JSON.stringify(request, null, 2)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `mofox-request-detail-${request.id}-${request.model.replace(/[^\w.-]+/g, '-')}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    toastStore.show(t('requestInspector.toast.exportSuccess', { id: String(request.id) }), 'success')
+  } catch (error) {
+    console.error('导出请求体详情失败:', error)
+    toastStore.show(t('requestInspector.toast.exportFailed'), 'error')
+  } finally {
+    isExporting.value = false
+  }
+}
+
 function roleClass(role: string): string {
   return `role-${role.replace(/[^a-z0-9_-]/gi, '-').toLowerCase()}`
 }
@@ -198,10 +221,12 @@ function formatTime(timestamp: number): string {
                 <span>{{ t('requestInspector.stats.toolDeclarations') }} <strong>{{ totalTools }}</strong></span>
                 <span>{{ t('requestInspector.stats.statsRequests') }} <strong>{{ formatMetric(statsSummary.total_requests) }}</strong></span>
               </div>
-              <button class="danger-button" :disabled="requests.length === 0" @click="clearRequests">
-                <Icon icon="material-symbols:delete-outline-rounded" width="18" height="18" />
-                {{ t('requestInspector.actions.clear') }}
-              </button>
+              <div class="status-actions">
+                <button class="danger-button" :disabled="requests.length === 0" @click="clearRequests">
+                  <Icon icon="material-symbols:delete-outline-rounded" width="18" height="18" />
+                  {{ t('requestInspector.actions.clear') }}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -251,10 +276,12 @@ function formatTime(timestamp: number): string {
                 <span>{{ t('requestInspector.stats.toolDeclarations') }} <strong>{{ totalTools }}</strong></span>
                 <span>{{ t('requestInspector.stats.statsRequests') }} <strong>{{ formatMetric(statsSummary.total_requests) }}</strong></span>
               </div>
-              <button class="danger-button" :disabled="requests.length === 0" @click="clearRequests">
-                <Icon icon="material-symbols:delete-outline-rounded" width="18" height="18" />
-                {{ t('requestInspector.actions.clear') }}
-              </button>
+              <div class="status-actions">
+                <button class="danger-button" :disabled="requests.length === 0" @click="clearRequests">
+                  <Icon icon="material-symbols:delete-outline-rounded" width="18" height="18" />
+                  {{ t('requestInspector.actions.clear') }}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -313,9 +340,15 @@ function formatTime(timestamp: number): string {
                 <h2>{{ selectedRequest.model }}</h2>
                 <p>{{ selectedRequest.api_name }} · {{ selectedRequest.api_provider }}</p>
               </div>
-              <div class="segmented">
-                <button :class="{ active: viewMode === 'rendered' }" @click="viewMode = 'rendered'">{{ t('requestInspector.viewMode.rendered') }}</button>
-                <button :class="{ active: viewMode === 'raw' }" @click="viewMode = 'raw'">{{ t('requestInspector.viewMode.raw') }}</button>
+              <div class="detail-header-actions">
+                <button class="export-button" :disabled="isDetailLoading || isExporting" @click="exportRequestDetail">
+                  <Icon icon="material-symbols:download-rounded" width="18" height="18" />
+                  {{ isExporting ? t('requestInspector.actions.exporting') : t('requestInspector.actions.export') }}
+                </button>
+                <div class="segmented">
+                  <button :class="{ active: viewMode === 'rendered' }" @click="viewMode = 'rendered'">{{ t('requestInspector.viewMode.rendered') }}</button>
+                  <button :class="{ active: viewMode === 'raw' }" @click="viewMode = 'raw'">{{ t('requestInspector.viewMode.raw') }}</button>
+                </div>
               </div>
             </div>
 
@@ -421,6 +454,7 @@ p {
 }
 
 .danger-button,
+.export-button,
 .segmented button {
   display: inline-flex;
   align-items: center;
@@ -435,6 +469,24 @@ p {
 .danger-button {
   color: var(--md-sys-color-on-error-container);
   background: var(--md-sys-color-error-container);
+}
+
+.export-button {
+  color: var(--md-sys-color-on-primary-container);
+  background: var(--md-sys-color-primary-container);
+}
+
+.status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+
+.detail-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: .75rem;
+  flex: 0 0 auto;
 }
 
 button:disabled {

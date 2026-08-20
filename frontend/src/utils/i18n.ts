@@ -539,6 +539,8 @@ const messages = {
       },
       actions: {
         clear: '清空',
+        export: '导出',
+        exporting: '导出中...',
       },
       dialogs: {
         clearTitle: '清空请求体记录',
@@ -547,6 +549,8 @@ const messages = {
       },
       toast: {
         clearSuccess: '请求体记录已清空',
+        exportSuccess: '已导出请求体详情 #{id}',
+        exportFailed: '导出失败',
       },
       stats: {
         capturedRequests: '捕获请求',
@@ -1724,6 +1728,8 @@ const messages = {
       },
       actions: {
         clear: 'Clear',
+        export: 'Export',
+        exporting: 'Exporting...',
       },
       dialogs: {
         clearTitle: 'Clear Request Records',
@@ -1732,6 +1738,8 @@ const messages = {
       },
       toast: {
         clearSuccess: 'Request records cleared',
+        exportSuccess: 'Exported request detail #{id}',
+        exportFailed: 'Export failed',
       },
       stats: {
         capturedRequests: 'Captured Requests',
