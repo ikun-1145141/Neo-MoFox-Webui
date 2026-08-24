@@ -6,6 +6,11 @@ import Icon from '../common/Icon.vue'
 
 const props = defineProps<{
   plugin: MarketPlugin
+  busy?: boolean
+}>()
+
+const emit = defineEmits<{
+  action: [plugin: MarketPlugin]
 }>()
 
 const { t } = useI18n()
@@ -28,6 +33,28 @@ const statusLabel = computed(() => {
   return t('pluginMarket.card.notInstalled')
 })
 
+const actionKind = computed<'install' | 'update' | 'configure' | 'manage'>(() => {
+  if (props.plugin.local_state.update_available) return 'update'
+  if (!props.plugin.local_state.installed) return 'install'
+  if (props.plugin.local_state.has_config) return 'configure'
+  return 'manage'
+})
+
+const actionLabel = computed(() => {
+  if (props.busy) return t('pluginMarket.card.processing')
+  return t('pluginMarket.card.' + actionKind.value)
+})
+
+const actionIcon = computed(() => {
+  if (props.busy) return 'material-symbols:progress-activity'
+  if (actionKind.value === 'update') return 'material-symbols:update-rounded'
+  if (actionKind.value === 'install') return 'material-symbols:download-rounded'
+  if (actionKind.value === 'configure') return 'material-symbols:settings-outline-rounded'
+  return 'material-symbols:extension-outline-rounded'
+})
+
+const isPrimaryAction = computed(() => actionKind.value === 'install' || actionKind.value === 'update')
+
 function formatCount(value: number): string {
   return new Intl.NumberFormat(undefined, {
     notation: value >= 10_000 ? 'compact' : 'standard',
@@ -38,7 +65,11 @@ function formatCount(value: number): string {
 
 <template>
   <article class="market-card">
-    <RouterLink class="card-link" :to="detailRoute">
+    <RouterLink
+      class="card-main"
+      :to="detailRoute"
+      :aria-label="t('pluginMarket.card.details')"
+    >
       <header class="card-header">
         <div class="plugin-icon" aria-hidden="true">
           <img
@@ -75,25 +106,37 @@ function formatCount(value: number): string {
         </span>
         <span v-if="plugin.tags.length > 3" class="tag">+{{ plugin.tags.length - 3 }}</span>
       </div>
-
-      <footer class="card-footer">
-        <div class="metrics">
-          <span :title="t('pluginMarket.card.downloads')">
-            <Icon icon="material-symbols:download-rounded" width="17" height="17" />
-            {{ formatCount(plugin.downloads_count) }}
-          </span>
-          <span v-if="plugin.rating_count > 0" :title="t('pluginMarket.card.rating')">
-            <Icon icon="material-symbols:star-rounded" width="17" height="17" />
-            {{ plugin.rating_avg.toFixed(1) }}
-          </span>
-          <span class="version">v{{ plugin.latest_version || '—' }}</span>
-        </div>
-        <span class="details-action">
-          {{ t('pluginMarket.card.details') }}
-          <Icon icon="material-symbols:arrow-forward-rounded" width="18" height="18" />
-        </span>
-      </footer>
     </RouterLink>
+
+    <footer class="card-footer">
+      <div class="metrics">
+        <span :title="t('pluginMarket.card.downloads')">
+          <Icon icon="material-symbols:download-rounded" width="17" height="17" />
+          {{ formatCount(plugin.downloads_count) }}
+        </span>
+        <span v-if="plugin.rating_count > 0" :title="t('pluginMarket.card.rating')">
+          <Icon icon="material-symbols:star-rounded" width="17" height="17" />
+          {{ plugin.rating_avg.toFixed(1) }}
+        </span>
+        <span class="version">v{{ plugin.latest_version || '—' }}</span>
+      </div>
+
+      <button
+        type="button"
+        class="card-action"
+        :class="{ primary: isPrimaryAction }"
+        :disabled="busy"
+        @click="emit('action', plugin)"
+      >
+        <Icon
+          :icon="actionIcon"
+          width="18"
+          height="18"
+          :class="{ spinning: busy }"
+        />
+        {{ actionLabel }}
+      </button>
+    </footer>
   </article>
 </template>
 
@@ -101,6 +144,8 @@ function formatCount(value: number): string {
 .market-card {
   min-width: 0;
   min-height: 250px;
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--md-sys-color-outline-variant);
   border-radius: 8px;
   background: color-mix(in srgb, var(--md-sys-color-surface-container-low) 92%, transparent);
@@ -114,17 +159,17 @@ function formatCount(value: number): string {
   transform: translateY(-2px);
 }
 
-.card-link {
-  min-height: 250px;
+.card-main {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 17px;
+  padding: 17px 17px 0;
   color: inherit;
   text-decoration: none;
 }
 
-.card-link:focus-visible {
+.card-main:focus-visible {
   outline: 2px solid var(--md-sys-color-primary);
   outline-offset: -3px;
 }
@@ -243,14 +288,14 @@ function formatCount(value: number): string {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-top: auto;
+  margin: auto 17px 17px;
   padding-top: 13px;
   border-top: 1px solid var(--md-sys-color-outline-variant);
 }
 
 .metrics,
 .metrics span,
-.details-action {
+.card-action {
   display: inline-flex;
   align-items: center;
 }
@@ -271,13 +316,48 @@ function formatCount(value: number): string {
   font-weight: 700;
 }
 
-.details-action {
+.card-action {
   flex: 0 0 auto;
-  gap: 4px;
+  min-height: 36px;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 13px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 8px;
   color: var(--md-sys-color-primary);
+  background: var(--md-sys-color-surface-container);
+  font: inherit;
   font-size: 0.78rem;
   font-weight: 700;
+  cursor: pointer;
+  transition: background 0.16s, border-color 0.16s, color 0.16s;
 }
+
+.card-action:hover:not(:disabled) {
+  border-color: var(--md-sys-color-outline);
+  background: var(--md-sys-color-surface-container-high);
+}
+
+.card-action.primary {
+  border-color: transparent;
+  color: var(--md-sys-color-on-primary);
+  background: var(--md-sys-color-primary);
+}
+
+.card-action.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--md-sys-color-primary) 90%, black);
+}
+
+.card-action:disabled {
+  opacity: 0.68;
+  cursor: wait;
+}
+
+.spinning {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 420px) {
   .card-header {
