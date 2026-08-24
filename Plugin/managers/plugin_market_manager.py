@@ -574,8 +574,6 @@ class PluginMarketManager:
         dependents: list[str],
     ) -> tuple[bool, str | None]:
         """判断本地插件是否满足市场覆盖白名单。"""
-        if plugin_id == "neo-mofox-webui":
-            return False, "WebUI 插件不能从其自身市场中覆盖"
         root = self._plugins_root()
         if record.path.parent != root:
             return False, "插件路径不在配置的插件目录根级"

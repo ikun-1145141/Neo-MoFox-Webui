@@ -1999,6 +1999,10 @@ input:focus-visible {
   backdrop-filter: blur(12px) saturate(1.1);
   -webkit-backdrop-filter: blur(12px) saturate(1.1);
   box-shadow: 0 10px 24px rgba(0, 0, 0, .14), 0 2px 6px rgba(0, 0, 0, .06);
+  pointer-events: none;
+}
+
+.selection-bar button {
   pointer-events: auto;
 }
 
