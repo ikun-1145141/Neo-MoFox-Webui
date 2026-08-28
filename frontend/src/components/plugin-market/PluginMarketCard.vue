@@ -121,21 +121,33 @@ function formatCount(value: number): string {
         <span class="version">v{{ plugin.latest_version || '—' }}</span>
       </div>
 
-      <button
-        type="button"
-        class="card-action"
-        :class="{ primary: isPrimaryAction }"
-        :disabled="busy"
-        @click="emit('action', plugin)"
-      >
-        <Icon
-          :icon="actionIcon"
-          width="18"
-          height="18"
-          :class="{ spinning: busy }"
-        />
-        {{ actionLabel }}
-      </button>
+      <div class="card-actions">
+        <RouterLink
+          class="card-action card-details"
+          :to="detailRoute"
+          :title="t('pluginMarket.card.details')"
+          :aria-label="t('pluginMarket.card.details')"
+        >
+          <Icon icon="material-symbols:info-outline-rounded" width="18" height="18" />
+          <span class="details-text">{{ t('pluginMarket.card.details') }}</span>
+        </RouterLink>
+
+        <button
+          type="button"
+          class="card-action"
+          :class="{ primary: isPrimaryAction }"
+          :disabled="busy"
+          @click="emit('action', plugin)"
+        >
+          <Icon
+            :icon="actionIcon"
+            width="18"
+            height="18"
+            :class="{ spinning: busy }"
+          />
+          {{ actionLabel }}
+        </button>
+      </div>
     </footer>
   </article>
 </template>
@@ -295,9 +307,15 @@ function formatCount(value: number): string {
 
 .metrics,
 .metrics span,
+.card-actions,
 .card-action {
   display: inline-flex;
   align-items: center;
+}
+
+.card-actions {
+  flex: 0 0 auto;
+  gap: 8px;
 }
 
 .metrics {
@@ -353,11 +371,35 @@ function formatCount(value: number): string {
   cursor: wait;
 }
 
+.card-details {
+  color: var(--md-sys-color-on-surface-variant);
+  text-decoration: none;
+}
+
+.card-details:hover {
+  color: var(--md-sys-color-primary);
+}
+
+.card-details:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+
 .spinning {
   animation: spin 0.8s linear infinite;
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 560px) {
+  .card-details .details-text {
+    display: none;
+  }
+
+  .card-details {
+    padding: 0 9px;
+  }
+}
 
 @media (max-width: 420px) {
   .card-header {
