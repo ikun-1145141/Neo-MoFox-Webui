@@ -30,7 +30,8 @@ class ModelConfigRouter(BaseRouter):
     - POST /api/config-model/reload - 热重载模型配置
     - POST /api/config-model/test - 测试模型连通性
     - GET /api/config-model/providers - 获取提供商列表
-    - GET /api/config-model/models - 获取模型列表
+    - GET /api/config-model/models - 获取已配置的模型列表
+    - GET /api/config-model/models/available - 从提供商获取远程模型列表
     """
 
     name: str = "config-model"
@@ -117,6 +118,24 @@ class ModelConfigRouter(BaseRouter):
                 logger.error(f"获取提供商列表失败: {e}")
                 raise HTTPException(status_code=500, detail=f"获取提供商列表失败: {str(e)}")
 
+        @self.app.get(
+            "/models/available",
+            response_model=BaseResponse[list[str]],
+            dependencies=[VerifiedDep],
+        )
+        async def fetch_provider_models(
+            provider: str = Query(..., min_length=1, description="提供商名称")
+        ) -> BaseResponse[list[str]]:
+            """从指定提供商的远程 API 获取可用模型标识符。"""
+            try:
+                models = await self.manager.fetch_provider_models(provider)
+                return BaseResponse.ok(data=models, message="获取远程模型列表成功")
+            except ValueError as e:
+                logger.warning(f"获取远程模型列表参数错误: {e}")
+                raise HTTPException(status_code=400, detail=str(e)) from e
+            except Exception as e:
+                logger.error(f"获取远程模型列表失败: {e}")
+                raise HTTPException(status_code=502, detail=f"获取远程模型列表失败: {str(e)}") from e
         @self.app.get(
             "/models",
             response_model=BaseResponse[list[str]],

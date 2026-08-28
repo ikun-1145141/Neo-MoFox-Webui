@@ -114,12 +114,40 @@
 
             <div class="form-field">
               <label for="model-identifier">{{ t('modelEditDialog.model.identifierLabel') }} *</label>
-              <input
-                id="model-identifier"
+              <div class="model-identifier-control">
+                <input
+                  id="model-identifier"
+                  v-model="formData.model_identifier"
+                  type="text"
+                  :placeholder="t('modelEditDialog.model.identifierPlaceholder')"
+                  required
+                />
+                <button
+                  type="button"
+                  class="fetch-models-btn"
+                  :disabled="isFetchingModels || !formData.api_provider"
+                  :title="t('modelEditDialog.model.fetchModelsDesc')"
+                  @click="fetchAvailableModels"
+                >
+                  <Icon
+                    :icon="isFetchingModels ? 'material-symbols:progress-activity' : 'material-symbols:sync-rounded'"
+                    :size="18"
+                    :class="{ spinning: isFetchingModels }"
+                  />
+                  <span>{{ isFetchingModels ? t('modelEditDialog.model.fetchingModels') : t('modelEditDialog.model.fetchModelsButton') }}</span>
+                </button>
+              </div>
+              <p class="field-description">{{ t('modelEditDialog.model.fetchModelsDesc') }}</p>
+              <p v-if="availableModels.length > 0" class="field-hint">
+                {{ t('modelEditDialog.model.fetchedModels', { count: String(availableModels.length) }) }}
+              </p>
+              <p v-if="modelFetchError" class="model-fetch-error">{{ modelFetchError }}</p>
+              <MdSelect
+                v-if="availableModels.length > 0"
                 v-model="formData.model_identifier"
-                type="text"
-                :placeholder="t('modelEditDialog.model.identifierPlaceholder')"
-                required
+                :options="availableModels"
+                :placeholder="t('modelEditDialog.model.availableModelsPlaceholder')"
+                :empty-text="t('modelEditDialog.model.noModels')"
               />
             </div>
 
@@ -381,6 +409,7 @@ import { useDialogStore } from '@/utils/dialog'
 import Icon from '../common/Icon.vue'
 import MdSelect from '../common/MdSelect.vue'
 import { closeAllDropdowns } from '@/utils/useDropdownManager'
+import { getAvailableModels } from '@/api/modules/config'
 
 const { t } = useI18n()
 const dialogStore = useDialogStore()
@@ -451,6 +480,9 @@ const emit = defineEmits<{
 
 // 表单数据
 const formData = ref<Record<string, any>>({})
+const availableModels = ref<string[]>([])
+const isFetchingModels = ref(false)
+const modelFetchError = ref('')
 const extraParamsText = ref('{}')
 // HTTP 层特殊键：headers/query/body，从 extra_params 中拆出独立编辑
 const headersText = ref('{}')
@@ -471,7 +503,21 @@ watch(
   { immediate: true }
 )
 
+watch(
+  () => formData.value.api_provider,
+  (provider, previousProvider) => {
+    if (provider !== previousProvider) {
+      availableModels.value = []
+      modelFetchError.value = ''
+    }
+  }
+)
+
 function initForm() {
+  availableModels.value = []
+  isFetchingModels.value = false
+  modelFetchError.value = ''
+
   // 设置标题
   if (props.type === 'provider') {
     title.value = props.mode === 'add' ? t('modelEditDialog.provider.add') : t('modelEditDialog.provider.edit')
@@ -582,6 +628,39 @@ function parseSpecialField(textRef: { value: string }): Record<string, any> {
     return parseToml(`_v = ${text}`)._v || {}
   } catch {
     return JSON.parse(text)
+  }
+}
+
+function getModelFetchError(error: unknown): string {
+  const requestError = error as any
+  const detail = requestError?.response?.data?.detail
+  if (typeof detail === 'string' && detail.trim()) return detail
+  const message = requestError?.message
+  return typeof message === 'string' && message.trim()
+    ? message
+    : t('modelEditDialog.model.fetchModelsFailed')
+}
+
+async function fetchAvailableModels() {
+  const provider = String(formData.value.api_provider || '').trim()
+  if (!provider || isFetchingModels.value) return
+
+  isFetchingModels.value = true
+  modelFetchError.value = ''
+  availableModels.value = []
+
+  try {
+    const models = await getAvailableModels(provider)
+    availableModels.value = Array.from(
+      new Set(models.filter((model): model is string => typeof model === 'string' && model.trim().length > 0).map((model) => model.trim()))
+    )
+    if (availableModels.value.length === 0) {
+      modelFetchError.value = t('modelEditDialog.model.noModels')
+    }
+  } catch (error) {
+    modelFetchError.value = getModelFetchError(error)
+  } finally {
+    isFetchingModels.value = false
   }
 }
 
@@ -803,6 +882,55 @@ async function handleSubmit() {
   transition: all 0.2s;
 }
 
+.model-identifier-control {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.model-identifier-control > input {
+  min-width: 0;
+  flex: 1;
+}
+
+.fetch-models-btn {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 8px;
+  color: var(--md-sys-color-primary);
+  background: var(--md-sys-color-primary-container);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.fetch-models-btn:hover:not(:disabled) {
+  border-color: var(--md-sys-color-primary);
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+}
+
+.fetch-models-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.model-fetch-error {
+  margin: -2px 0 0;
+  color: var(--md-sys-color-error);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
 .form-field input:focus,
 .form-field textarea:focus,
 .form-field select:focus {
@@ -1048,5 +1176,14 @@ async function handleSubmit() {
 .submit-btn:hover {
   box-shadow: 0 2px 8px rgba(0, 88, 189, 0.3);
   transform: translateY(-1px);
+}
+@media screen and (max-width: 520px) {
+  .model-identifier-control {
+    flex-direction: column;
+  }
+
+  .fetch-models-btn {
+    width: 100%;
+  }
 }
 </style>

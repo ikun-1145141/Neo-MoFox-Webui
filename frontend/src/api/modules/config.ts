@@ -117,6 +117,17 @@ export function listModels(provider?: string): Promise<string[]> {
   return http.get(`${BASE}-model/models${params}`)
 }
 
+/**
+ * 从指定提供商的远程 API 获取可用模型标识符
+ * @param provider 提供商名称（必填）
+ */
+export function getAvailableModels(provider: string): Promise<string[]> {
+  return http.get(`${BASE}-model/models/available`, {
+    params: { provider },
+    timeout: 45000,
+  })
+}
+
 // ===== MCP 配置路由 =====
 
 /**

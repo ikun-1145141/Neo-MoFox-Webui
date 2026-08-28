@@ -136,6 +136,55 @@ class ModelConfigManager:
         model_config = ModelConfig.load(self.model_config_path)
         return [p.name for p in model_config.api_providers]
 
+    async def fetch_provider_models(self, provider_name: str) -> list[str]:
+        """从提供商的 OpenAI 兼容接口获取可用模型。
+
+        list_models 返回本地 model.toml 中已经配置的模型；本方法只负责
+        向选定提供商的远程 /models 接口查询模型，不会修改本地配置。
+        """
+        model_config = ModelConfig.load(self.model_config_path)
+
+        try:
+            provider = model_config.get_provider(provider_name)
+        except KeyError as exc:
+            raise ValueError(f"提供商不存在: {provider_name}") from exc
+
+        # OpenAI Responses 使用相同的 /models 发现接口。其他客户端的模型发现协议不同，
+        # 不在这里伪造兼容请求，避免返回无法实际调用的模型。
+        client_type = str(getattr(provider, "client_type", "openai")).strip().lower()
+        if client_type not in {"openai", "openai_response", "responses", "openai.responses"}:
+            raise ValueError(
+                f"客户端类型 {client_type or '未知'} 暂不支持自动获取模型列表，"
+                "请使用 OpenAI 兼容客户端或手动填写模型标识符"
+            )
+
+        api_key = provider.get_api_key()
+        if not isinstance(api_key, str) or not api_key.strip():
+            raise ValueError(f"提供商 {provider_name} 未配置有效 API Key")
+
+        client = openai.AsyncOpenAI(
+            base_url=provider.base_url,
+            api_key=api_key,
+            timeout=provider.timeout,
+        )
+        try:
+            response = await client.models.list()
+        finally:
+            await client.close()
+
+        models: list[str] = []
+        seen: set[str] = set()
+        for item in response.data:
+            model_id = getattr(item, "id", None)
+            if not isinstance(model_id, str):
+                continue
+            model_id = model_id.strip()
+            if model_id and model_id not in seen:
+                seen.add(model_id)
+                models.append(model_id)
+
+        return models
+
     async def list_models(self, provider_name: str | None = None) -> list[str]:
         """获取模型名称列表。
 
