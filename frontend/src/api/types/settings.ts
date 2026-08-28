@@ -22,7 +22,6 @@ export interface ConfigSettings {
 
 export interface PluginMarketSettings {
   base_url: string
-  install_enabled: boolean
 }
 
 export interface WebuiSettings {

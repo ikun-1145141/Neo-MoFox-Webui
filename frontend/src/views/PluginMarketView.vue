@@ -7,15 +7,24 @@ import MdSelect from '../components/common/MdSelect.vue'
 import PageHeader from '../components/common/PageHeader.vue'
 import PluginMarketCard from '../components/plugin-market/PluginMarketCard.vue'
 import PluginMarketDetail from '../components/plugin-market/PluginMarketDetail.vue'
-import { getMarketPlugins } from '../api/modules/plugin-market'
-import type { MarketPlugin } from '../api/types/plugin-market'
+import {
+  getMarketInstallPlan,
+  getMarketOperation,
+  getMarketPlugins,
+  startMarketInstall,
+} from '../api/modules/plugin-market'
+import type { InstallPlan, MarketOperation, MarketPlugin } from '../api/types/plugin-market'
+import { useDialogStore } from '../utils/dialog'
 import { useI18n } from '../utils/i18n'
+import { useToastStore } from '../utils/toast'
 
 type SelectOption = { label: string; value: string }
 type MarketStateFilter = 'all' | 'installed' | 'updates' | 'not-installed'
 type MarketSort = 'updated' | 'downloads' | 'rating' | 'name'
 
 const { t } = useI18n()
+const dialogStore = useDialogStore()
+const toastStore = useToastStore()
 const route = useRoute()
 const router = useRouter()
 const plugins = ref<MarketPlugin[]>([])
@@ -26,6 +35,7 @@ const searchQuery = ref('')
 const category = ref('')
 const stateFilter = ref<MarketStateFilter>('all')
 const sortBy = ref<MarketSort>('updated')
+const busyPluginIds = ref<string[]>([])
 
 const selectedPluginId = computed(() => {
   const value = route.query.plugin
@@ -123,6 +133,112 @@ async function openManage(pluginId: string): Promise<void> {
     name: 'plugin-detail',
     params: { name: pluginId },
   })
+}
+
+function isPluginBusy(pluginId: string): boolean {
+  return busyPluginIds.value.includes(pluginId)
+}
+
+function setPluginBusy(pluginId: string, busy: boolean): void {
+  if (busy) {
+    if (!busyPluginIds.value.includes(pluginId)) {
+      busyPluginIds.value = [...busyPluginIds.value, pluginId]
+    }
+    return
+  }
+  busyPluginIds.value = busyPluginIds.value.filter((item) => item !== pluginId)
+}
+
+async function handleCardAction(plugin: MarketPlugin): Promise<void> {
+  if (isPluginBusy(plugin.plugin_id)) return
+  if (plugin.local_state.update_available || !plugin.local_state.installed) {
+    await installOrUpdatePlugin(plugin)
+    return
+  }
+  if (plugin.local_state.has_config) {
+    await openConfig(plugin.plugin_id)
+    return
+  }
+  await openManage(plugin.plugin_id)
+}
+
+async function installOrUpdatePlugin(plugin: MarketPlugin): Promise<void> {
+  setPluginBusy(plugin.plugin_id, true)
+  try {
+    const plan = await getMarketInstallPlan(plugin.plugin_id, null)
+    if (!plan.can_install) {
+      await dialogStore.alert(plan.blocking_reasons.join('\n'), t('pluginMarket.detail.blockedTitle'))
+      return
+    }
+
+    const confirmed = await dialogStore.confirm(
+      planMessage(plan),
+      plan.action === 'update'
+        ? t('pluginMarket.detail.updateConfirmTitle')
+        : t('pluginMarket.detail.installConfirmTitle'),
+      plan.action === 'update'
+        ? t('pluginMarket.detail.update')
+        : t('pluginMarket.detail.install'),
+      t('pluginMarket.detail.cancel'),
+    )
+    if (!confirmed) return
+
+    const operation = await startMarketInstall(plugin.plugin_id, plan.version.version)
+    const completed = await waitForOperation(operation)
+    if (completed.status === 'succeeded') {
+      const message = completed.result?.restart_required
+        ? t('pluginMarket.detail.operationRestartRequired')
+        : t('pluginMarket.detail.operationSucceeded')
+      toastStore.show(message, 'success', 6000)
+      await loadPlugins(true)
+      return
+    }
+    toastStore.show(
+      completed.error_message || t('pluginMarket.detail.operationFailed'),
+      'error',
+      7000,
+    )
+  } catch (error: unknown) {
+    toastStore.show(errorText(error), 'error', 6000)
+  } finally {
+    setPluginBusy(plugin.plugin_id, false)
+  }
+}
+
+async function waitForOperation(operation: MarketOperation): Promise<MarketOperation> {
+  let current = operation
+  while (current.status === 'queued' || current.status === 'running') {
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 700))
+    current = await getMarketOperation(current.operation_id)
+  }
+  return current
+}
+
+function planMessage(plan: InstallPlan): string {
+  const lines = [
+    plan.plugin.display_name + ' @ ' + plan.version.version,
+    t('pluginMarket.detail.planSource', {
+      source: plan.plugin.repository_url || plan.plugin.homepage || '—',
+    }),
+    t('pluginMarket.detail.planSize', { size: formatBytes(plan.version.file_size) }),
+  ]
+  if (plan.dependencies.length) {
+    lines.push(t('pluginMarket.detail.planDependencies', {
+      count: String(plan.dependencies.length),
+    }))
+  }
+  if (plan.warnings.length) {
+    lines.push('', t('pluginMarket.detail.planWarnings'), ...plan.warnings.map((item) => '• ' + item))
+  }
+  lines.push('', t('pluginMarket.detail.planRestart'))
+  return lines.join('\n')
+}
+
+function formatBytes(value: number | null): string {
+  if (value === null) return t('pluginMarket.detail.unknown')
+  if (value < 1024) return value + ' B'
+  if (value < 1024 * 1024) return (value / 1024).toFixed(1) + ' KiB'
+  return (value / (1024 * 1024)).toFixed(1) + ' MiB'
 }
 
 async function handlePluginChanged(): Promise<void> {
@@ -246,6 +362,8 @@ onMounted(() => {
               v-for="plugin in visiblePlugins"
               :key="plugin.plugin_id"
               :plugin="plugin"
+              :busy="isPluginBusy(plugin.plugin_id)"
+              @action="handleCardAction"
             />
           </div>
 

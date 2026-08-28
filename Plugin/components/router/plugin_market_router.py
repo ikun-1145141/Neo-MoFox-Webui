@@ -207,7 +207,7 @@ class PluginMarketRouter(BaseRouter):
                 已进入队列的异步操作状态。
 
             Raises:
-                HTTPException: 安装被阻止、存在冲突或触发频率限制。
+                HTTPException: 安装被阻止或存在冲突。
             """
             try:
                 return BaseResponse.ok(
@@ -215,9 +215,7 @@ class PluginMarketRouter(BaseRouter):
                     message="安装任务已创建",
                 )
             except PluginMarketError as error:
-                message = str(error)
-                status_code = 429 if "频繁" in message else 409
-                raise HTTPException(status_code=status_code, detail=message) from error
+                raise HTTPException(status_code=409, detail=str(error)) from error
 
         @self.app.get(
             "/operations/{operation_id}",
