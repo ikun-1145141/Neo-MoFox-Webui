@@ -106,6 +106,36 @@ export interface PatchWriteRequest {
 }
 
 /**
+ * 远程模型列表请求中支持的客户端类型。
+ */
+export type ModelClientType =
+  | 'openai'
+  | 'openai_response'
+  | 'anthropic'
+  | 'gemini'
+  | 'aiohttp_gemini'
+  | 'bedrock'
+
+/**
+ * 临时供应商配置（仅用于一次远程模型列表请求，不会写入磁盘）。
+ */
+export interface RemoteModelProvider {
+  name?: string
+  base_url: string
+  api_key?: string | string[]
+  client_type: ModelClientType
+  timeout?: number
+  extra_params?: Record<string, unknown>
+}
+
+/**
+ * 远程模型列表请求（对应后端 RemoteModelListRequest）。
+ */
+export interface RemoteModelListRequest {
+  provider_name?: string
+  provider?: RemoteModelProvider
+}
+/**
  * 模型测试请求（对应后端 ModelTestRequest）
  */
 export interface ModelTestRequest {

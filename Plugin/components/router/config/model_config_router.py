@@ -15,7 +15,11 @@ from src.app.plugin_system.api.log_api import get_logger
 
 from ....managers.config import get_model_config_manager
 from ....utils.response import BaseResponse
-from ....utils.config_types import ModelTestRequest, ModelTestResult
+from ....utils.config_types import (
+    ModelTestRequest,
+    ModelTestResult,
+    RemoteModelListRequest,
+)
 
 if TYPE_CHECKING:
     from src.core.components.base.plugin import BasePlugin
@@ -116,6 +120,29 @@ class ModelConfigRouter(BaseRouter):
             except Exception as e:
                 logger.error(f"获取提供商列表失败: {e}")
                 raise HTTPException(status_code=500, detail=f"获取提供商列表失败: {str(e)}")
+
+        @self.app.post(
+            "/remote-models",
+            response_model=BaseResponse[list[str]],
+            dependencies=[VerifiedDep],
+        )
+        async def list_remote_models(
+            request: RemoteModelListRequest,
+        ) -> BaseResponse[list[str]]:
+            """从供应商远程接口获取模型标识符列表。
+
+            请求可以只提供已保存的 ``provider_name``，也可以直接携带
+            当前前端编辑态的临时 ``provider``；后者不会修改磁盘配置。
+            """
+            try:
+                models = await self.manager.list_remote_models(request)
+                return BaseResponse.ok(data=models, message="获取远程模型列表成功")
+            except ValueError as e:
+                logger.warning("获取远程模型列表参数/上游错误")
+                raise HTTPException(status_code=400, detail=str(e))
+            except Exception:
+                logger.error("获取远程模型列表失败")
+                raise HTTPException(status_code=500, detail="获取远程模型列表失败")
 
         @self.app.get(
             "/models",

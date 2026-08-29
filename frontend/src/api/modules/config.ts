@@ -12,6 +12,7 @@ import type {
   ModelTestRequest,
   ModelTestResult,
   PluginConfigEntry,
+  RemoteModelListRequest,
   SectionSchema,
 } from '../types/config'
 
@@ -108,6 +109,15 @@ export function listProviders(): Promise<string[]> {
   return http.get(`${BASE}-model/providers`)
 }
 
+/**
+ * 从供应商远程接口获取模型标识符列表。
+ *
+ * 传入 provider 时使用当前表单内存中的临时配置，不会写入 model.toml；
+ * 仅传 providerName 时由后端读取已保存的供应商配置。
+ */
+export function listRemoteModels(request: RemoteModelListRequest): Promise<string[]> {
+  return http.post(`${BASE}-model/remote-models`, request)
+}
 /**
  * 获取模型名称列表
  * @param provider 提供商名称（可选，不指定则返回所有模型）

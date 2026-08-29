@@ -164,6 +164,52 @@ class PatchWriteRequest(BaseModel):
     data: dict[str, Any] = Field(..., description="部分配置数据")
 
 
+# ===== 远程模型列表相关结构 =====
+
+
+ModelClientType = Literal[
+    "openai",
+    "openai_response",
+    "anthropic",
+    "gemini",
+    "aiohttp_gemini",
+    "bedrock",
+]
+
+
+class RemoteModelProvider(BaseModel):
+    """用于获取远程模型列表的临时供应商配置。
+
+    该模型既可以承载前端尚未保存的供应商配置，也可以复用
+    ``model.toml`` 中供应商配置的最小字段集合。临时配置只在本次
+    请求中使用，不会被写回磁盘。
+    """
+
+    name: str = Field(default="temporary", description="提供商名称")
+    base_url: str = Field(..., description="API 基础 URL")
+    api_key: str | list[str] = Field(default="", description="API 密钥")
+    client_type: ModelClientType = Field(default="openai", description="客户端类型")
+    timeout: float = Field(default=30, ge=1, le=300, description="请求超时时间（秒）")
+    extra_params: dict[str, Any] = Field(
+        default_factory=dict,
+        description="可选的 HTTP 扩展参数，支持 headers/query",
+    )
+
+
+class RemoteModelListRequest(BaseModel):
+    """远程模型列表请求。
+
+    ``provider_name`` 用于读取已保存供应商；``provider`` 用于提交
+    前端当前编辑态的临时供应商配置。两者同时存在时，以临时配置为准。
+    """
+
+    provider_name: str | None = Field(default=None, description="已保存的提供商名称")
+    provider: RemoteModelProvider | None = Field(
+        default=None,
+        description="临时供应商配置，不写入磁盘",
+    )
+
+
 # ===== 模型测试相关结构 =====
 
 

@@ -109,6 +109,26 @@
                     <span>{{ provider.name || t('modelConfigEditor.providers.name') }}</span>
                   </div>
                   <div class="card-actions">
+                    <button
+                      type="button"
+                      class="remote-model-btn"
+                      @click="openProviderModelImport(provider, idx)"
+                      :disabled="fetchingRemoteProviderIndex === Number(idx)"
+                      :title="t('modelConfigEditor.actions.importModels')"
+                    >
+                      <Icon
+                        v-if="fetchingRemoteProviderIndex !== Number(idx)"
+                        icon="material-symbols:cloud-download-rounded"
+                        :size="18"
+                      />
+                      <Icon
+                        v-else
+                        icon="material-symbols:progress-activity"
+                        :size="18"
+                        class="spinning"
+                      />
+                      <span>{{ fetchingRemoteProviderIndex === Number(idx) ? t('modelConfigEditor.actions.fetchingModels') : t('modelConfigEditor.actions.importModels') }}</span>
+                    </button>
                     <button type="button" class="icon-btn" @click="testProvider(provider, String(idx))" :disabled="testingProviders.has(String(idx))" :title="t('modelConfigEditor.actions.test')">
                       <Icon v-if="!testingProviders.has(String(idx))" icon="material-symbols:play-arrow-rounded" :size="20" />
                       <Icon v-else icon="material-symbols:progress-activity" :size="20" class="spinning" />
@@ -303,6 +323,84 @@
       @close="closeDialog"
       @submit="handleDialogSubmit"
     />
+
+    <!-- 远程模型批量导入弹窗（只修改当前编辑态） -->
+    <Teleport to="body">
+      <div
+        v-if="remoteImportDialogOpen"
+        class="remote-import-overlay"
+        @click="closeRemoteImportDialog"
+      >
+        <div class="remote-import-dialog" @click.stop>
+          <div class="remote-import-header">
+            <div>
+              <h2>{{ t('modelConfigEditor.import.title') }}</h2>
+              <p>{{ remoteImportProviderName }}</p>
+            </div>
+            <button type="button" class="close-btn" @click="closeRemoteImportDialog">
+              <Icon icon="material-symbols:close-rounded" :size="24" />
+            </button>
+          </div>
+
+          <div class="remote-import-body">
+            <div v-if="remoteImportError" class="remote-import-error">
+              <Icon icon="material-symbols:error-outline-rounded" :size="20" />
+              <span>{{ remoteImportError }}</span>
+            </div>
+
+            <div v-if="fetchingRemoteProviderIndex !== null" class="remote-import-loading">
+              <Icon icon="material-symbols:progress-activity" :size="24" class="spinning" />
+              <span>{{ t('modelConfigEditor.actions.fetchingModels') }}</span>
+            </div>
+
+            <template v-else-if="!remoteImportError">
+              <div class="remote-import-toolbar">
+                <span>{{ t('modelConfigEditor.import.selectedCount', { count: String(selectedRemoteModels.length) }) }}</span>
+                <button type="button" class="text-btn" @click="toggleAllRemoteModels">
+                  {{ allRemoteModelsSelected ? t('modelConfigEditor.import.deselectAll') : t('modelConfigEditor.import.selectAll') }}
+                </button>
+              </div>
+
+              <div v-if="remoteImportModels.length > 0" class="remote-import-list">
+                <label
+                  v-for="modelIdentifier in remoteImportModels"
+                  :key="modelIdentifier"
+                  class="remote-import-option"
+                >
+                  <input
+                    v-model="selectedRemoteModels"
+                    type="checkbox"
+                    :value="modelIdentifier"
+                  />
+                  <span class="checkbox-box">
+                    <Icon icon="material-symbols:check-rounded" :size="16" />
+                  </span>
+                  <span class="remote-import-option-label">{{ modelIdentifier }}</span>
+                </label>
+              </div>
+              <div v-else class="remote-import-empty">
+                <Icon icon="material-symbols:info-outline-rounded" :size="20" />
+                <span>{{ t('modelConfigEditor.import.noModels') }}</span>
+              </div>
+            </template>
+          </div>
+
+          <div class="remote-import-footer">
+            <button type="button" class="cancel-btn" @click="closeRemoteImportDialog">
+              {{ t('modelEditDialog.actions.cancel') }}
+            </button>
+            <button
+              type="button"
+              class="submit-btn"
+              :disabled="!!remoteImportError || selectedRemoteModels.length === 0"
+              @click="confirmRemoteModelImport"
+            >
+              {{ t('modelConfigEditor.import.confirm') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -314,11 +412,13 @@ import { useDialogStore } from '@/utils/dialog'
 import Icon from '../common/Icon.vue'
 import TomlEditor from './TomlEditor.vue'
 import ModelEditDialog from './ModelEditDialog.vue'
-import { testModel as apiTestModel, getRawConfig } from '@/api/modules/config'
-import type { SectionSchema, ModelTestResult } from '@/api/types/config'
+import { getRawConfig, listRemoteModels, testModel as apiTestModel } from '@/api/modules/config'
+import type { ModelTestResult, RemoteModelProvider, SectionSchema } from '@/api/types/config'
+import { useToastStore } from '@/utils/toast'
 
 const { t } = useI18n()
 const dialogStore = useDialogStore()
+const toastStore = useToastStore()
 
 // Props
 interface Props {
@@ -374,6 +474,19 @@ const originalData = ref<Record<string, any>>({})
 // 保存状态
 const isSaving = ref(false)
 const errorMessage = ref('')
+
+// 远程模型批量导入状态（只修改 localData，最终由顶部保存按钮统一写盘）
+const fetchingRemoteProviderIndex = ref<number | null>(null)
+const remoteImportDialogOpen = ref(false)
+const remoteImportProviderName = ref('')
+const remoteImportModels = ref<string[]>([])
+const selectedRemoteModels = ref<string[]>([])
+const remoteImportError = ref('')
+
+const allRemoteModelsSelected = computed(() => {
+  return remoteImportModels.value.length > 0 &&
+    selectedRemoteModels.value.length === remoteImportModels.value.length
+})
 
 // 测试状态（使用 string 键以兼容 v-for index）
 const testingProviders = ref(new Set<string>())
@@ -621,6 +734,136 @@ function addModel() {
     mode: 'add',
     data: {},
   }
+}
+
+function buildRemoteProviderRequest(provider: Record<string, any>): RemoteModelProvider {
+  return {
+    name: String(provider.name || ''),
+    base_url: String(provider.base_url || ''),
+    api_key: provider.api_key ?? '',
+    client_type: provider.client_type || 'openai',
+    timeout: Number(provider.timeout) || 30,
+    extra_params: provider.extra_params && typeof provider.extra_params === 'object'
+      ? provider.extra_params
+      : {},
+  }
+}
+
+async function openProviderModelImport(provider: Record<string, any>, index: string | number) {
+  const idx = Number(index)
+  remoteImportProviderName.value = String(provider.name || '').trim()
+  remoteImportModels.value = []
+  selectedRemoteModels.value = []
+  remoteImportError.value = ''
+  remoteImportDialogOpen.value = true
+
+  if (!String(provider.name || '').trim() || !String(provider.base_url || '').trim()) {
+    remoteImportError.value = t('modelConfigEditor.import.providerConfigIncomplete')
+    return
+  }
+
+  const clientType = String(provider.client_type || 'openai')
+  if (clientType === 'bedrock') {
+    remoteImportError.value = t('modelConfigEditor.import.bedrockUnsupported')
+    return
+  }
+  if (!['openai', 'openai_response', 'anthropic', 'gemini', 'aiohttp_gemini'].includes(clientType)) {
+    remoteImportError.value = t('modelConfigEditor.import.unsupportedClientType')
+    return
+  }
+
+  fetchingRemoteProviderIndex.value = idx
+  try {
+    const models = await listRemoteModels({
+      provider: buildRemoteProviderRequest(provider),
+    })
+    remoteImportModels.value = Array.from(
+      new Set(models
+        .filter((model): model is string => typeof model === 'string' && model.trim() !== '')
+        .map((model) => model.trim())),
+    )
+    selectedRemoteModels.value = [...remoteImportModels.value]
+    if (remoteImportModels.value.length === 0) {
+      remoteImportError.value = t('modelConfigEditor.import.noModels')
+    } else {
+      toastStore.show(
+        t('modelConfigEditor.import.fetchSuccess', { count: String(remoteImportModels.value.length) }),
+        'success',
+      )
+    }
+  } catch (error: any) {
+    remoteImportError.value = error?.response?.data?.detail || error?.message || t('modelConfigEditor.import.fetchFailed')
+  } finally {
+    fetchingRemoteProviderIndex.value = null
+  }
+}
+
+function closeRemoteImportDialog() {
+  if (fetchingRemoteProviderIndex.value !== null) return
+  remoteImportDialogOpen.value = false
+  remoteImportProviderName.value = ''
+  remoteImportModels.value = []
+  selectedRemoteModels.value = []
+  remoteImportError.value = ''
+}
+
+function toggleAllRemoteModels() {
+  selectedRemoteModels.value = allRemoteModelsSelected.value
+    ? []
+    : [...remoteImportModels.value]
+}
+
+function createImportedModel(modelIdentifier: string, providerName: string): Record<string, any> {
+  return {
+    name: modelIdentifier,
+    model_identifier: modelIdentifier,
+    api_provider: providerName,
+    price_in: 0,
+    cache_hit_price_in: 0,
+    price_out: 0,
+    force_stream_mode: false,
+    max_context: 32768,
+    tool_call_compat: false,
+    extra_params: {},
+    anti_truncation: false,
+  }
+}
+
+function confirmRemoteModelImport() {
+  if (remoteImportError.value || !remoteImportProviderName.value) return
+
+  const providerName = remoteImportProviderName.value.trim()
+  const existingKeys = new Set(
+    localData.value.models.map((model: any) => String(model.api_provider || '') + '\u0000' + String(model.model_identifier || '')),
+  )
+  let imported = 0
+  let skipped = 0
+  let failed = 0
+
+  for (const modelIdentifier of selectedRemoteModels.value) {
+    try {
+      const key = providerName + '\u0000' + modelIdentifier
+      if (existingKeys.has(key)) {
+        skipped += 1
+        continue
+      }
+      localData.value.models.push(createImportedModel(modelIdentifier, providerName))
+      existingKeys.add(key)
+      imported += 1
+    } catch {
+      failed += 1
+    }
+  }
+
+  toastStore.show(
+    t('modelConfigEditor.import.summary', {
+      imported: String(imported),
+      skipped: String(skipped),
+      failed: String(failed),
+    }),
+    failed > 0 ? 'error' : 'success',
+  )
+  closeRemoteImportDialog()
 }
 
 function editModel(index: string | number) {
@@ -966,6 +1209,282 @@ function handleDialogSubmit(data: Record<string, any>) {
 .config-list {
   display: grid;
   gap: 16px;
+}
+
+.remote-model-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  border: none;
+  border-radius: 18px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.remote-model-btn:hover:not(:disabled) {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  transform: translateY(-1px);
+}
+
+.remote-model-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.remote-import-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.remote-import-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, 100%);
+  max-height: min(720px, 90vh);
+  overflow: hidden;
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 20px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
+}
+
+.remote-import-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.remote-import-header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.remote-import-header p {
+  margin: 6px 0 0;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 13px;
+}
+
+.remote-import-header .close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.remote-import-header .close-btn:hover {
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+}
+
+.remote-import-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+.remote-import-loading,
+.remote-import-empty,
+.remote-import-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 120px;
+  color: var(--md-sys-color-on-surface-variant);
+  text-align: center;
+  line-height: 1.5;
+}
+
+.remote-import-error {
+  justify-content: flex-start;
+  min-height: 0;
+  padding: 14px;
+  color: var(--md-sys-color-on-error-container);
+  background: var(--md-sys-color-error-container);
+  border: 1px solid var(--md-sys-color-error);
+  border-radius: 10px;
+  word-break: break-word;
+}
+
+.remote-import-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 13px;
+}
+
+.text-btn {
+  padding: 6px 8px;
+  background: transparent;
+  color: var(--md-sys-color-primary);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 500;
+}
+
+.text-btn:hover {
+  background: var(--md-sys-color-primary-container);
+}
+
+.remote-import-list {
+  display: grid;
+  gap: 6px;
+  max-height: 440px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.remote-import-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.remote-import-option:hover {
+  background: var(--md-sys-color-surface-container-highest);
+}
+
+.remote-import-option input[type="checkbox"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.remote-import-option .checkbox-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  color: transparent;
+  border: 2px solid var(--md-sys-color-outline);
+  border-radius: 4px;
+}
+
+.remote-import-option .checkbox-box :deep(svg) {
+  opacity: 0;
+}
+
+.remote-import-option input[type="checkbox"]:checked + .checkbox-box {
+  color: var(--md-sys-color-on-primary);
+  background: var(--md-sys-color-primary);
+  border-color: var(--md-sys-color-primary);
+}
+
+.remote-import-option input[type="checkbox"]:checked + .checkbox-box :deep(svg) {
+  opacity: 1;
+}
+
+.remote-import-option input[type="checkbox"]:focus-visible + .checkbox-box {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+
+.remote-import-option-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+
+.remote-import-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.remote-import-footer .cancel-btn,
+.remote-import-footer .submit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 10px 24px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.remote-import-footer .cancel-btn {
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.remote-import-footer .cancel-btn:hover:not(:disabled) {
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+}
+
+.remote-import-footer .submit-btn {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+
+.remote-import-footer .submit-btn:hover:not(:disabled) {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  box-shadow: 0 2px 8px rgba(0, 88, 189, 0.3);
+  transform: translateY(-1px);
+}
+
+.remote-import-footer .cancel-btn:focus-visible,
+.remote-import-footer .submit-btn:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+
+.remote-import-footer .cancel-btn:disabled,
+.remote-import-footer .submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .config-card {

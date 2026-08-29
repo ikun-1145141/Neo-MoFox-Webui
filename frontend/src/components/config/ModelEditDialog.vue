@@ -113,7 +113,28 @@
             </div>
 
             <div class="form-field">
-              <label for="model-identifier">{{ t('modelEditDialog.model.identifierLabel') }} *</label>
+              <div class="field-label-row">
+                <label for="model-identifier">{{ t('modelEditDialog.model.identifierLabel') }} *</label>
+                <button
+                  type="button"
+                  class="preset-btn remote-model-fetch-btn"
+                  :disabled="isFetchingRemoteModels || !formData.api_provider"
+                  @click="fetchRemoteModels"
+                >
+                  <Icon
+                    v-if="!isFetchingRemoteModels"
+                    icon="material-symbols:cloud-download-rounded"
+                    :size="18"
+                  />
+                  <Icon
+                    v-else
+                    icon="material-symbols:progress-activity"
+                    :size="18"
+                    class="spinning"
+                  />
+                  <span>{{ isFetchingRemoteModels ? t('modelEditDialog.model.fetchingModels') : t('modelEditDialog.model.fetchModels') }}</span>
+                </button>
+              </div>
               <input
                 id="model-identifier"
                 v-model="formData.model_identifier"
@@ -121,6 +142,18 @@
                 :placeholder="t('modelEditDialog.model.identifierPlaceholder')"
                 required
               />
+              <MdSelect
+                v-if="remoteModelOptions.length > 0"
+                v-model="selectedRemoteModel"
+                :options="remoteModelOptions"
+                :placeholder="t('modelEditDialog.model.selectRemoteModelPlaceholder')"
+                :empty-text="t('modelEditDialog.model.noRemoteModels')"
+                @change="selectRemoteModel"
+              />
+              <span v-if="remoteModelFetchError" class="field-error">{{ remoteModelFetchError }}</span>
+              <span v-else-if="remoteModelsFetched && remoteModelOptions.length === 0" class="field-hint">
+                {{ t('modelEditDialog.model.noRemoteModels') }}
+              </span>
             </div>
 
             <div class="form-field">
@@ -381,9 +414,12 @@ import { useDialogStore } from '@/utils/dialog'
 import Icon from '../common/Icon.vue'
 import MdSelect from '../common/MdSelect.vue'
 import { closeAllDropdowns } from '@/utils/useDropdownManager'
+import { listRemoteModels } from '@/api/modules/config'
+import { useToastStore } from '@/utils/toast'
 
 const { t } = useI18n()
 const dialogStore = useDialogStore()
+const toastStore = useToastStore()
 
 // 客户端类型选项（与后端 model_config 的 client_type Literal 对齐）
 const clientTypeOptions = [
@@ -457,6 +493,13 @@ const headersText = ref('{}')
 const queryText = ref('{}')
 const bodyText = ref('{}')
 
+// 远程模型发现（仅作用于当前编辑态，不会自动保存）
+const isFetchingRemoteModels = ref(false)
+const remoteModelOptions = ref<string[]>([])
+const selectedRemoteModel = ref<string | null>(null)
+const remoteModelFetchError = ref('')
+const remoteModelsFetched = ref(false)
+
 // 标题
 const title = ref('')
 
@@ -525,11 +568,23 @@ function initForm() {
     }
   }
 
+  remoteModelOptions.value = []
+  selectedRemoteModel.value = null
+  remoteModelFetchError.value = ''
+  remoteModelsFetched.value = false
+  isFetchingRemoteModels.value = false
+
   if (props.type === 'model') {
     syncExtraParamsText()
   }
 }
 
+watch(
+  () => formData.value.api_provider,
+  () => {
+    if (props.type === 'model') clearRemoteModelState()
+  },
+)
 function syncExtraParamsText() {
   const source = formData.value.extra_params
   if (!source || typeof source !== 'object') {
@@ -559,6 +614,92 @@ function formatExtraParams(value: Record<string, any> | undefined) {
 
   return JSON.stringify(value, null, 2)
 }
+
+function clearRemoteModelState() {
+  remoteModelOptions.value = []
+  selectedRemoteModel.value = null
+  remoteModelFetchError.value = ''
+  remoteModelsFetched.value = false
+}
+
+async function fetchRemoteModels() {
+  if (isFetchingRemoteModels.value || props.type !== 'model') return
+
+  const providerName = String(formData.value.api_provider || '').trim()
+  const providerInfo = props.providersInfo.find(
+    (provider: any) => String(provider?.name || '') === providerName,
+  )
+  if (!providerInfo) {
+    remoteModelFetchError.value = t('modelEditDialog.model.providerConfigIncomplete')
+    remoteModelsFetched.value = true
+    return
+  }
+
+  if (!String(providerInfo.base_url || '').trim()) {
+    remoteModelFetchError.value = t('modelEditDialog.model.providerConfigIncomplete')
+    remoteModelsFetched.value = true
+    return
+  }
+
+  const clientType = String(providerInfo.client_type || 'openai')
+  if (clientType === 'bedrock') {
+    remoteModelFetchError.value = t('modelEditDialog.model.bedrockUnsupported')
+    remoteModelsFetched.value = true
+    return
+  }
+  if (!['openai', 'openai_response', 'anthropic', 'gemini', 'aiohttp_gemini'].includes(clientType)) {
+    remoteModelFetchError.value = t('modelEditDialog.model.unsupportedClientType')
+    remoteModelsFetched.value = true
+    return
+  }
+
+  isFetchingRemoteModels.value = true
+  remoteModelFetchError.value = ''
+  remoteModelsFetched.value = false
+  remoteModelOptions.value = []
+  selectedRemoteModel.value = null
+
+  try {
+    const models = await listRemoteModels({
+      provider: {
+        name: providerName,
+        base_url: String(providerInfo.base_url || ''),
+        api_key: providerInfo.api_key ?? '',
+        client_type: providerInfo.client_type || 'openai',
+        timeout: Number(providerInfo.timeout) || 30,
+        extra_params: providerInfo.extra_params && typeof providerInfo.extra_params === 'object'
+          ? providerInfo.extra_params
+          : {},
+      },
+    })
+    remoteModelOptions.value = Array.from(
+      new Set(models.filter((model): model is string => typeof model === 'string' && model.trim() !== '').map((model) => model.trim())),
+    )
+    remoteModelsFetched.value = true
+    if (remoteModelOptions.value.length === 0) {
+      remoteModelFetchError.value = t('modelEditDialog.model.noRemoteModels')
+    } else {
+      toastStore.show(
+        t('modelEditDialog.model.fetchModelsSuccess', { count: String(remoteModelOptions.value.length) }),
+        'success',
+      )
+    }
+  } catch (error: any) {
+    remoteModelsFetched.value = true
+    remoteModelFetchError.value = error?.response?.data?.detail || error?.message || t('modelEditDialog.model.fetchModelsFailed')
+  } finally {
+    isFetchingRemoteModels.value = false
+  }
+}
+
+function selectRemoteModel(value: string | number | null) {
+  if (typeof value !== 'string' || !value) return
+  formData.value.model_identifier = value
+  if (!String(formData.value.name || '').trim()) {
+    formData.value.name = value
+  }
+}
+
 
 function parseExtraParamsText() {
   const text = extraParamsText.value.trim()
@@ -773,6 +914,26 @@ async function handleSubmit() {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.remote-model-fetch-btn {
+  align-self: center;
+  white-space: nowrap;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.field-error {
+  color: var(--md-sys-color-error);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .form-field {
