@@ -11,6 +11,8 @@ import type {
   McpTestResult,
   ModelTestRequest,
   ModelTestResult,
+  RemoteModelListRequest,
+  RemoteModelOption,
   PluginConfigEntry,
   SectionSchema,
 } from '../types/config'
@@ -115,6 +117,14 @@ export function listProviders(): Promise<string[]> {
 export function listModels(provider?: string): Promise<string[]> {
   const params = provider ? `?provider=${provider}` : ''
   return http.get(`${BASE}-model/models${params}`)
+}
+
+/** 从当前供应商获取模型列表；只读操作，不要求该配置已经保存。 */
+export function listRemoteModels(
+  request: RemoteModelListRequest,
+  signal?: AbortSignal
+): Promise<RemoteModelOption[]> {
+  return http.post(`${BASE}-model/remote-models`, request, { signal, timeout: 20000 })
 }
 
 // ===== MCP 配置路由 =====

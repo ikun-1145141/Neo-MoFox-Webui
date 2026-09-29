@@ -14,7 +14,10 @@ import openai
 from src.app.plugin_system.api.log_api import get_logger
 from src.core.config.model_config import ModelConfig, init_model_config
 
-from ...utils.config_types import ModelTestRequest, ModelTestResult
+from ...utils.config_types import (
+    ModelTestRequest, ModelTestResult, RemoteModelListRequest, RemoteModelOption,
+)
+from .remote_model_list import fetch_remote_models
 
 logger = get_logger("model_config_manager")
 
@@ -29,6 +32,10 @@ class ModelConfigManager:
     def __init__(self) -> None:
         """初始化管理器。"""
         self.model_config_path = Path("config/model.toml")
+
+    async def list_remote_models(self, request: RemoteModelListRequest) -> list[RemoteModelOption]:
+        """根据页面中的供应商配置快照拉取模型列表，不保存或热重载配置。"""
+        return await fetch_remote_models(request)
 
     async def reload_config(self) -> None:
         """热重载模型配置。

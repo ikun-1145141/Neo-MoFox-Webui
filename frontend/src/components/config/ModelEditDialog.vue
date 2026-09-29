@@ -114,12 +114,17 @@
 
             <div class="form-field">
               <label for="model-identifier">{{ t('modelEditDialog.model.identifierLabel') }} *</label>
-              <input
-                id="model-identifier"
+              <ModelIdentifierInput
                 v-model="formData.model_identifier"
-                type="text"
-                :placeholder="t('modelEditDialog.model.identifierPlaceholder')"
-                required
+                :options="remoteModelOptions"
+                :loading="remoteModelsLoading"
+                :error="remoteModelsError"
+                :notice="remoteModelsNotice"
+                :reset-key="remoteProviderKey"
+                @open="loadRemoteModels"
+                @retry="loadRemoteModels"
+                @close="cancelRemoteModels"
+                @select="handleRemoteModelSelect"
               />
             </div>
 
@@ -374,12 +379,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onBeforeUnmount } from 'vue'
+import { isAxiosError } from 'axios'
 import { parse as parseToml } from 'toml'
 import { useI18n } from '@/utils/i18n'
 import { useDialogStore } from '@/utils/dialog'
 import Icon from '../common/Icon.vue'
 import MdSelect from '../common/MdSelect.vue'
+import ModelIdentifierInput from './ModelIdentifierInput.vue'
+import { listRemoteModels } from '@/api/modules/config'
+import type { RemoteModelListRequest, RemoteModelOption } from '@/api/types/config'
 import { closeAllDropdowns } from '@/utils/useDropdownManager'
 
 const { t } = useI18n()
@@ -460,10 +469,121 @@ const bodyText = ref('{}')
 // 标题
 const title = ref('')
 
+// 远程列表只使用当前页面的供应商快照，不保存配置。
+const remoteModelOptions = ref<RemoteModelOption[]>([])
+const remoteModelsLoading = ref(false)
+const remoteModelsError = ref('')
+let remoteModelsController: AbortController | null = null
+let remoteModelsPending: Promise<void> | null = null
+let remoteModelsGeneration = 0
+
+const remoteProvider = computed(() => props.providersInfo.find(
+  provider => String(provider?.name ?? '') === String(formData.value.api_provider ?? '')
+))
+
+const remoteModelRequest = computed<RemoteModelListRequest | null>(() => {
+  const provider = remoteProvider.value
+  if (!provider) return null
+  const clientType = String(provider.client_type ?? '')
+  if (clientType !== 'openai' && clientType !== 'anthropic' && clientType !== 'gemini') return null
+  const key = provider.api_key
+  return {
+    base_url: String(provider.base_url ?? '').trim(),
+    api_key: Array.isArray(key)
+      ? key.filter((value): value is string => typeof value === 'string')
+      : typeof key === 'string' ? key : '',
+    client_type: clientType,
+  }
+})
+
+const remoteModelsNotice = computed(() => {
+  if (!formData.value.api_provider || !remoteProvider.value) {
+    return t('modelEditDialog.modelList.providerRequired')
+  }
+  const request = remoteModelRequest.value
+  if (!request) return t('modelEditDialog.modelList.unsupported')
+  const keys = Array.isArray(request.api_key) ? request.api_key : [request.api_key]
+  if (!request.base_url || !keys.some(key => key.trim())) {
+    return t('modelEditDialog.modelList.missingConfig')
+  }
+  return ''
+})
+
+// 仅存在组件内存中，不写入 DOM、日志或浏览器持久化存储。
+const remoteProviderKey = computed(() => JSON.stringify([
+  formData.value.api_provider,
+  remoteProvider.value?.base_url,
+  remoteProvider.value?.api_key,
+  remoteProvider.value?.client_type,
+]))
+
+function cancelRemoteModels() {
+  remoteModelsGeneration += 1
+  remoteModelsController?.abort()
+  remoteModelsController = null
+  remoteModelsPending = null
+  remoteModelsLoading.value = false
+}
+
+function resetRemoteModels() {
+  cancelRemoteModels()
+  remoteModelOptions.value = []
+  remoteModelsError.value = ''
+}
+
+function loadRemoteModels(): Promise<void> {
+  if (remoteModelsPending) return remoteModelsPending
+  const request = remoteModelRequest.value
+  if (!props.isOpen || props.type !== 'model' || !request || remoteModelsNotice.value) {
+    return Promise.resolve()
+  }
+  const generation = ++remoteModelsGeneration
+  const controller = new AbortController()
+  remoteModelsController = controller
+  remoteModelsLoading.value = true
+  remoteModelsError.value = ''
+  remoteModelOptions.value = []
+
+  remoteModelsPending = (async () => {
+    try {
+      const models = await listRemoteModels(request, controller.signal)
+      if (generation !== remoteModelsGeneration || controller.signal.aborted) return
+      remoteModelOptions.value = models
+    } catch (error: unknown) {
+      if (generation !== remoteModelsGeneration || controller.signal.aborted) return
+      // 全局拦截器负责 Toast；此处只提供下拉内的错误与重试入口。
+      const message = isAxiosError(error)
+        ? error.response?.data?.message ?? error.response?.data?.detail
+        : error && typeof error === 'object' && 'message' in error ? error.message : null
+      remoteModelsError.value = typeof message === 'string'
+        ? message
+        : t('modelEditDialog.modelList.loadFailed')
+    } finally {
+      if (generation === remoteModelsGeneration) {
+        remoteModelsLoading.value = false
+        remoteModelsController = null
+        remoteModelsPending = null
+      }
+    }
+  })()
+  return remoteModelsPending
+}
+
+function handleRemoteModelSelect(option: RemoteModelOption) {
+  // 只在新增、名称为空且明确选择了选项时补名；不覆盖已有别名。
+  if (props.mode === 'add' && !String(formData.value.name ?? '').trim()) {
+    formData.value.name = option.id
+  }
+}
+
+watch(remoteProviderKey, resetRemoteModels, { flush: 'sync' })
+onBeforeUnmount(resetRemoteModels)
+
 // 监听 props 变化初始化表单
 watch(
   () => [props.isOpen, props.type, props.mode, props.data],
   () => {
+    resetRemoteModels()
     if (props.isOpen) {
       initForm()
     }

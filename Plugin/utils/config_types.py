@@ -164,6 +164,26 @@ class PatchWriteRequest(BaseModel):
     data: dict[str, Any] = Field(..., description="部分配置数据")
 
 
+# ===== 远程模型列表 =====
+
+
+class RemoteModelListRequest(BaseModel):
+    """使用页面中的供应商配置查询模型，不保存配置或消耗模型调用。"""
+
+    base_url: str = Field(..., description="当前供应商的 API 基础地址")
+    api_key: str | list[str] = Field(..., repr=False, description="API 密钥或密钥列表")
+    client_type: Literal["openai", "anthropic", "gemini"] = Field(
+        ..., description="支持枚举模型的供应商协议"
+    )
+
+
+class RemoteModelOption(BaseModel):
+    """可直接填写到模型配置中的远程模型选项。"""
+
+    id: str = Field(..., description="实际模型标识符")
+    display_name: str | None = Field(default=None, description="供应商提供的展示名称")
+
+
 # ===== 模型测试相关结构 =====
 
 

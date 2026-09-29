@@ -828,6 +828,20 @@ const messages = {
       },
     },
     modelEditDialog: {
+      modelList: {
+        placeholder: '点击获取列表，或直接输入模型 ID',
+        loading: '正在获取模型列表…',
+        empty: '供应商未返回模型，可手动输入模型 ID',
+        noMatch: '没有匹配的模型，可保留当前输入',
+        retry: '重新获取',
+        loadFailed: '获取模型列表失败，请重试或手动输入',
+        providerRequired: '请先选择供应商，也可直接手动输入模型 ID',
+        unsupported: '此客户端类型暂不支持自动获取，请手动输入模型 ID',
+        missingConfig: '请先填写供应商地址和 API 密钥，也可手动输入模型 ID',
+        manualHint: '可搜索选择，也可手动输入列表以外的模型 ID',
+        toggleLabel: '展开或收起模型列表',
+        listLabel: '供应商模型列表',
+      },
       provider: {
         add: '添加供应商',
         edit: '编辑供应商',
@@ -1859,6 +1873,20 @@ const messages = {
       },
     },
     modelEditDialog: {
+      modelList: {
+        placeholder: 'Click to load models, or enter a model ID',
+        loading: 'Loading models…',
+        empty: 'No models returned. You can enter a model ID manually.',
+        noMatch: 'No matching models. You can keep your input.',
+        retry: 'Retry',
+        loadFailed: 'Could not load models. Retry or enter an ID manually.',
+        providerRequired: 'Select a provider first, or enter a model ID manually.',
+        unsupported: 'Model listing is unavailable for this client type. Enter an ID manually.',
+        missingConfig: 'Fill in the provider URL and API key, or enter a model ID manually.',
+        manualHint: 'Search and select a model, or enter any custom model ID.',
+        toggleLabel: 'Show or hide the model list',
+        listLabel: 'Provider models',
+      },
       provider: {
         add: 'Add Provider',
         edit: 'Edit Provider',
