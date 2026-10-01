@@ -18,7 +18,6 @@ from ....utils.response import BaseResponse
 from ....utils.config_types import (
     ModelTestRequest, ModelTestResult, RemoteModelListRequest, RemoteModelOption,
 )
-from ....managers.config.remote_model_list import RemoteModelListError
 
 if TYPE_CHECKING:
     from src.core.components.base.plugin import BasePlugin
@@ -65,15 +64,7 @@ class ModelConfigRouter(BaseRouter):
             request: RemoteModelListRequest,
         ) -> BaseResponse[list[RemoteModelOption]]:
             """读取远程模型列表，不持久化请求中的供应商信息。"""
-            try:
-                models = await self.manager.list_remote_models(request)
-                return BaseResponse.ok(data=models, message="获取远程模型列表成功")
-            except RemoteModelListError as error:
-                # 此异常仅含本地生成的安全文案，不含上游响应正文或凭据。
-                return BaseResponse.error(code=error.code, message=str(error))
-            except Exception as error:
-                logger.error(f"获取远程模型列表失败，异常类型: {type(error).__name__}")
-                return BaseResponse.error(code=500, message="获取模型列表失败，请稍后重试或手动输入模型 ID。")
+            return await self.manager.list_remote_models(request)
 
         @self.app.post(
             "/reload",

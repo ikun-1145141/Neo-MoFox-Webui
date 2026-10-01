@@ -6,10 +6,16 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import re
 import time
 from pathlib import Path
+from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
+import aiohttp
 import openai
+from yarl import URL
 
 from src.app.plugin_system.api.log_api import get_logger
 from src.core.config.model_config import ModelConfig, init_model_config
@@ -17,9 +23,13 @@ from src.core.config.model_config import ModelConfig, init_model_config
 from ...utils.config_types import (
     ModelTestRequest, ModelTestResult, RemoteModelListRequest, RemoteModelOption,
 )
-from .remote_model_list import fetch_remote_models
+from ...utils.response import BaseResponse
 
 logger = get_logger("model_config_manager")
+
+REMOTE_MODEL_TIMEOUT = 15
+MAX_MODEL_LIST_PAGES = 100
+MAX_MODEL_LIST_PAGE_BYTES = 4 * 1024 * 1024
 
 
 class ModelConfigManager:
@@ -33,9 +43,191 @@ class ModelConfigManager:
         """初始化管理器。"""
         self.model_config_path = Path("config/model.toml")
 
-    async def list_remote_models(self, request: RemoteModelListRequest) -> list[RemoteModelOption]:
-        """根据页面中的供应商配置快照拉取模型列表，不保存或热重载配置。"""
-        return await fetch_remote_models(request)
+    async def list_remote_models(
+        self, request: RemoteModelListRequest
+    ) -> BaseResponse[list[RemoteModelOption]]:
+        """根据页面配置快照枚举供应商模型，统一返回 BaseResponse。
+
+        Args:
+            request: 当前供应商配置，不要求已保存到 model.toml。
+        Returns:
+            成功时包含去重后的模型列表；失败时只包含本地生成的安全文案。
+            不保存配置、不改变密钥轮询状态，所有分页共用 15 秒时限。
+        """
+        try:
+            url = self._remote_models_url(request.base_url, request.client_type)
+            headers = self._remote_model_headers(request)
+        except ValueError as error:
+            return BaseResponse.error(code=400, message=str(error))
+
+        params: dict[str, str | int] = {}
+        if request.client_type == "anthropic":
+            params["limit"] = 100
+        elif request.client_type == "gemini":
+            params["pageSize"] = 1000
+        options: dict[str, RemoteModelOption] = {}
+        seen_cursors: set[str] = set()
+
+        try:
+            async with asyncio.timeout(REMOTE_MODEL_TIMEOUT):
+                async with aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(total=REMOTE_MODEL_TIMEOUT)
+                ) as session:
+                    for _ in range(MAX_MODEL_LIST_PAGES):
+                        # 分页只更新当前地址的游标，不采用上游返回的 next URL。
+                        async with session.get(
+                            url.update_query(params), headers=headers, allow_redirects=False
+                        ) as response:
+                            page = await self._read_remote_model_page(response)
+                        if page.code != 200:
+                            return BaseResponse.error(code=page.code, message=page.message)
+                        data = page.data
+                        if data is None:
+                            return BaseResponse.error(code=502, message="供应商返回了无法识别的模型列表。")
+
+                        items = data.get("models", []) if request.client_type == "gemini" else data.get("data")
+                        if not isinstance(items, list):
+                            return BaseResponse.error(code=502, message="供应商返回的模型列表格式不正确。")
+                        self._collect_remote_model_options(items, request.client_type, options)
+
+                        if request.client_type == "gemini":
+                            cursor = data.get("nextPageToken")
+                            cursor_key = "pageToken"
+                        else:
+                            has_more = data.get("has_more", False)
+                            if not isinstance(has_more, bool):
+                                return BaseResponse.error(code=502, message="供应商返回的分页标记无效。")
+                            if not has_more:
+                                break
+                            cursor = data.get("last_id")
+                            if not cursor and items and isinstance(items[-1], dict):
+                                cursor = items[-1].get("id")
+                            if not cursor:
+                                return BaseResponse.error(code=502, message="供应商返回的模型列表缺少下一页游标。")
+                            cursor_key = "after_id"
+                        if cursor is None or cursor == "":
+                            break
+                        if not isinstance(cursor, str) or cursor in seen_cursors:
+                            return BaseResponse.error(code=502, message="供应商返回的模型列表分页无效或重复。")
+                        seen_cursors.add(cursor)
+                        params[cursor_key] = cursor
+                    else:
+                        return BaseResponse.error(code=502, message="供应商模型列表分页过多，请手动输入模型 ID。")
+        except TimeoutError:
+            return BaseResponse.error(code=504, message="获取模型列表超时，请重试或手动输入模型 ID。")
+        except aiohttp.ClientError:
+            return BaseResponse.error(code=502, message="无法连接供应商，请检查地址、网络或证书后重试。")
+        except Exception as error:
+            logger.error(f"获取远程模型列表失败，异常类型: {type(error).__name__}")
+            return BaseResponse.error(code=500, message="获取模型列表失败，请稍后重试或手动输入模型 ID。")
+
+        return BaseResponse.ok(
+            data=sorted(options.values(), key=lambda option: (option.id.casefold(), option.id)),
+            message="获取远程模型列表成功",
+        )
+
+    @staticmethod
+    def _remote_models_url(base_url: str, client_type: str) -> URL:
+        """保留代理路径和已有版本段，仅补全模型枚举端点。"""
+        try:
+            parts = urlsplit(base_url.strip())
+            if (
+                parts.scheme not in {"http", "https"}
+                or not parts.hostname
+                or parts.username is not None
+                or parts.password is not None
+                or parts.fragment
+            ):
+                raise ValueError
+            # 访问 port 属性同时校验端口是否合法。
+            _ = parts.port
+            path = parts.path.rstrip("/")
+            if not path.endswith("/models"):
+                if client_type == "anthropic" and not path.endswith("/v1"):
+                    path += "/v1"
+                elif client_type == "gemini" and not re.search(
+                    r"/v[0-9]+(?:(?:beta|alpha)[0-9]*)?$", path
+                ):
+                    path += "/v1beta"
+                path += "/models"
+            return URL(urlunsplit((parts.scheme, parts.netloc, path, parts.query, "")))
+        except (ValueError, TypeError):
+            raise ValueError(
+                "供应商地址无效，请填写不含用户名、密码或片段的 HTTP/HTTPS 基础地址。"
+            ) from None
+
+    @staticmethod
+    def _remote_model_headers(request: RemoteModelListRequest) -> dict[str, str]:
+        """仅取首个非空密钥；不调用核心的轮询取钥函数。"""
+        keys = [request.api_key] if isinstance(request.api_key, str) else request.api_key
+        key = next((value.strip() for value in keys if value.strip()), "")
+        if not key or any(ord(char) < 32 or ord(char) == 127 for char in key):
+            raise ValueError("请先为供应商填写有效的 API 密钥。")
+
+        headers = {"Accept": "application/json"}
+        if request.client_type == "openai":
+            headers["Authorization"] = f"Bearer {key}"
+        elif request.client_type == "anthropic":
+            headers["x-api-key"] = key
+            headers["anthropic-version"] = "2023-06-01"
+        else:
+            headers["x-goog-api-key"] = key
+        return headers
+
+    @staticmethod
+    async def _read_remote_model_page(
+        response: aiohttp.ClientResponse,
+    ) -> BaseResponse[dict[str, Any]]:
+        """限量读取 JSON；错误只返回安全文案，不透传上游正文。"""
+        status = response.status
+        if not 200 <= status < 300:
+            if status in {401, 403}:
+                message = "供应商认证失败，请检查 API 密钥和模型列表访问权限。"
+            elif status == 404:
+                message = "供应商未提供此模型列表接口，请检查基础地址或手动输入模型 ID。"
+            elif status == 429:
+                message = "供应商请求过于频繁，请稍后重试或手动输入模型 ID。"
+            elif 300 <= status < 400:
+                message = "模型列表接口返回重定向，请直接配置最终供应商地址后重试。"
+            else:
+                message = f"获取模型列表失败，供应商返回 HTTP {status}。"
+            return BaseResponse.error(code=502, message=message)
+
+        body = bytearray()
+        async for chunk in response.content.iter_chunked(64 * 1024):
+            body.extend(chunk)
+            if len(body) > MAX_MODEL_LIST_PAGE_BYTES:
+                return BaseResponse.error(code=502, message="供应商返回的模型列表过大，请手动输入模型 ID。")
+        try:
+            data = json.loads(body)
+        except (ValueError, UnicodeError):
+            return BaseResponse.error(code=502, message="供应商返回的模型列表不是有效的 JSON。")
+        if not isinstance(data, dict) or "error" in data:
+            return BaseResponse.error(code=502, message="供应商返回了无法识别的模型列表。")
+        return BaseResponse.ok(data=data)
+
+    @staticmethod
+    def _collect_remote_model_options(
+        items: list[Any], client_type: str, options: dict[str, RemoteModelOption]
+    ) -> None:
+        """忽略无效项并按 ID 去重，不推断价格或模型能力。"""
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            identifier = item.get("name" if client_type == "gemini" else "id")
+            if not isinstance(identifier, str):
+                continue
+            identifier = identifier.strip()
+            if client_type == "gemini":
+                identifier = identifier.removeprefix("models/")
+            if not identifier or identifier in options:
+                continue
+            label = item.get("displayName") if client_type == "gemini" else item.get("display_name")
+            if not isinstance(label, str) or not label.strip():
+                label = None
+            else:
+                label = label.strip()
+            options[identifier] = RemoteModelOption(id=identifier, display_name=label)
 
     async def reload_config(self) -> None:
         """热重载模型配置。
