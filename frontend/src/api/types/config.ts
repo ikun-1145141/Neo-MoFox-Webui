@@ -151,3 +151,18 @@ export interface PluginConfigEntry {
   config_description: string
   is_loaded: boolean
 }
+/** 仅这三种协议支持自动枚举，不限制供应商配置中已有的其他类型。 */
+export type RemoteModelClientType = 'openai' | 'anthropic' | 'gemini'
+
+/** 远程模型列表请求，对应后端 RemoteModelListRequest。 */
+export interface RemoteModelListRequest {
+  base_url: string
+  api_key: string | string[]
+  client_type: RemoteModelClientType
+}
+
+/** 远程模型选项，对应后端 RemoteModelOption。 */
+export interface RemoteModelOption {
+  id: string
+  display_name: string | null
+}

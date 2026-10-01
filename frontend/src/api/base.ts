@@ -114,6 +114,10 @@ instance.interceptors.response.use(
     return res.data as any
   },
   (error) => {
+    // 主动关闭弹窗或切换供应商导致的取消不是请求失败。
+    if (axios.isCancel(error)) {
+      return Promise.reject(error)
+    }
     const requestUrl = String(error?.config?.url ?? '')
     const status = error?.response?.status as number | undefined
     const backendMessage = error?.response?.data?.message as string | undefined

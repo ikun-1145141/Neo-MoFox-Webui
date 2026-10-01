@@ -15,7 +15,9 @@ from src.app.plugin_system.api.log_api import get_logger
 
 from ....managers.config import get_model_config_manager
 from ....utils.response import BaseResponse
-from ....utils.config_types import ModelTestRequest, ModelTestResult
+from ....utils.config_types import (
+    ModelTestRequest, ModelTestResult, RemoteModelListRequest, RemoteModelOption,
+)
 
 if TYPE_CHECKING:
     from src.core.components.base.plugin import BasePlugin
@@ -30,7 +32,8 @@ class ModelConfigRouter(BaseRouter):
     - POST /api/config-model/reload - 热重载模型配置
     - POST /api/config-model/test - 测试模型连通性
     - GET /api/config-model/providers - 获取提供商列表
-    - GET /api/config-model/models - 获取模型列表
+    - GET /api/config-model/models - 获取已配置的模型列表
+    - POST /api/config-model/remote-models - 从供应商获取可用模型列表
     """
 
     name: str = "config-model"
@@ -51,6 +54,17 @@ class ModelConfigRouter(BaseRouter):
 
     def register_endpoints(self) -> None:
         """注册 API 端点。"""
+
+        @self.app.post(
+            "/remote-models",
+            response_model=BaseResponse[list[RemoteModelOption]],
+            dependencies=[VerifiedDep],
+        )
+        async def list_remote_models(
+            request: RemoteModelListRequest,
+        ) -> BaseResponse[list[RemoteModelOption]]:
+            """读取远程模型列表，不持久化请求中的供应商信息。"""
+            return await self.manager.list_remote_models(request)
 
         @self.app.post(
             "/reload",

@@ -635,3 +635,28 @@ def get_components(self) -> list[type]:
 ---
 
 *文档结束*
+
+
+## 增补：远程供应商模型列表
+
+新增 `POST /webui/api/config-model/remote-models`，使用 `VerifiedDep` 认证。
+这与原有 `GET /webui/api/config-model/models` 不同：原接口枚举本地已配置模型，新接口读取供应商可用模型。
+
+请求体对应 `RemoteModelListRequest`：
+
+```json
+{
+  "base_url": "https://api.example.com/v1",
+  "api_key": "your-provider-api-key",
+  "client_type": "openai"
+}
+```
+
+- `api_key` 可为字符串或字符串列表，仅使用首个非空密钥。
+- `client_type` 仅支持 `openai`、`anthropic`、`gemini`；不改变原有供应商类型选项。
+- 使用前端当前配置快照，无须先保存；不写 TOML、不热重载，也不发送聊天补全请求。
+- 成功响应为 `BaseResponse[list[RemoteModelOption]]`，`data` 中每项包含 `id: str` 与 `display_name: str | null`。
+- 远程列表逻辑集中在现有 `ModelConfigManager`，负责基础地址拼接、协议鉴权、分页、去重和 Gemini 标识符规范化；成功及业务错误统一使用现有 `BaseResponse`，Router 仅转发结果。
+- 整个后端枚举过程限时 15 秒，前端请求限时 20 秒。失败返回安全的本地错误文案，不包含密钥或上游原始响应正文。
+
+前端在模型标识符输入框展开时请求列表，输入仅触发本地筛选。仅在新增模式、名称为空且用户选择选项时，将模型 ID 同时填入模型名称。
