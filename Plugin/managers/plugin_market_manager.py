@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import ipaddress
 import json
 import os
 import re
@@ -881,7 +880,7 @@ class PluginMarketManager:
         *,
         query: dict[str, str] | None = None,
     ) -> AsyncIterator[aiohttp.ClientResponse]:
-        """打开经过逐跳公网 HTTPS 校验且响应体受限的请求。
+        """打开经过逐跳 HTTPS 校验且响应体受限的请求。
 
         Args:
             url: 初始请求地址。
@@ -915,7 +914,7 @@ class PluginMarketManager:
                 },
             ) as session:
                 for redirect_count in range(_MAX_REDIRECTS + 1):
-                    # 每次重定向后重新解析 DNS，避免跳转到本机、局域网或保留网络。
+                    # 每次重定向后重新检查 HTTPS 地址和 DNS 解析结果。
                     await asyncio.to_thread(self._validate_remote_url, str(current_url))
                     response = await session.get(current_url, allow_redirects=False)
                     if response.status in _REDIRECT_STATUSES:
@@ -973,7 +972,7 @@ class PluginMarketManager:
 
     @staticmethod
     def _validate_remote_url(url: str) -> None:
-        """要求 URL 使用 HTTPS，且所有 DNS 结果均为公网地址。"""
+        """要求 URL 使用 HTTPS，且主机地址可以解析。"""
         try:
             parsed = URL(url)
             hostname = parsed.host
@@ -981,7 +980,7 @@ class PluginMarketManager:
         except ValueError as error:
             raise PluginMarketError("市场地址格式无效") from error
         if parsed.scheme.lower() != "https" or not hostname:
-            raise PluginMarketError("市场只允许访问 HTTPS 公网地址")
+            raise PluginMarketError("市场只允许访问 HTTPS 地址")
         try:
             addresses = {
                 item[4][0]
@@ -995,12 +994,6 @@ class PluginMarketManager:
             raise PluginMarketError(f"无法解析市场地址: {error}") from error
         if not addresses:
             raise PluginMarketError("市场地址未解析到有效 IP")
-        for address in addresses:
-            try:
-                if not ipaddress.ip_address(address).is_global:
-                    raise PluginMarketError("市场地址不能指向本机、局域网或保留网络")
-            except ValueError as error:
-                raise PluginMarketError("市场地址解析结果无效") from error
 
     def _new_operation(
         self,
