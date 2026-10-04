@@ -35,7 +35,10 @@ jobs:
             exit 0
           fi
 
-          if git log --since="24 hours ago" --invert-grep --author="github-actions\[bot\]" --pretty=format:'%H' -- frontend Plugin .github/workflows/build-and-deploy.yml | grep -q .; then
+          # --invert-grep does not negate --author; filter the author field explicitly.
+          SOURCE_COMMITS=$(git log --since="24 hours ago" --format='%an%x09%H' -- frontend Plugin .github/workflows/build-and-deploy.yml |
+            awk -F '\t' '$1 != "github-actions[bot]" { print $2 }')
+          if [ -n "${SOURCE_COMMITS}" ]; then
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
             echo "Recent changes found, build will continue."
           else
@@ -156,7 +159,8 @@ jobs:
             echo ""
             echo "## 最近 24 小时内的提交"
             echo ""
-            git log --since="${SINCE_TIME}" --invert-grep --author="github-actions\[bot\]" --pretty=format:'- %h %s（%an）' || true
+            git log --since="${SINCE_TIME}" --format='%an%x09- %h %s（%an）' |
+              awk -F '\t' '$1 != "github-actions[bot]" { print substr($0, index($0, "\t") + 1) }'
           } > "${NOTES_FILE}"
 
           if ! grep -q '^- ' "${NOTES_FILE}"; then
