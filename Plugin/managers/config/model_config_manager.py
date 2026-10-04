@@ -245,60 +245,76 @@ class ModelConfigManager:
             raise ValueError(f"热重载模型配置失败: {e}")
 
     async def test_model(self, request: ModelTestRequest) -> ModelTestResult:
-        """测试模型连通性。
+        """使用页面快照测试连通性，不保存配置或热重载运行时。
 
         Args:
-            request: 测试请求
+            request: 测试请求；provider/model 成对提供时优先使用页面值，
+                均未提供时兼容旧客户端，按名称读取已保存配置。
 
         Returns:
             测试结果
 
         Raises:
-            ValueError: 配置不存在或测试失败
+            ValueError: 快照不完整、不一致，或已保存的配置不存在。
         """
-        # 读取模型配置
-        model_config = ModelConfig.load(self.model_config_path)
+        if request.provider is not None or request.model is not None:
+            # 不把不完整的页面数据与磁盘配置混用，也不回退到同名旧配置。
+            if request.provider is None or request.model is None:
+                raise ValueError("测试时必须同时提供供应商和模型配置")
+            provider = request.provider
+            model = request.model
+            if provider.name != request.provider_name:
+                raise ValueError("供应商配置与测试的供应商名称不一致")
+            if model.name != request.model_name:
+                raise ValueError("模型配置与测试的模型名称不一致")
+            if model.api_provider != provider.name:
+                raise ValueError("模型所属供应商与测试的供应商不一致")
+        else:
+            # 旧请求仅包含名称，继续使用已保存的配置。
+            model_config = ModelConfig.load(self.model_config_path)
+            try:
+                provider = model_config.get_provider(request.provider_name)
+            except KeyError:
+                raise ValueError(f"提供商不存在: {request.provider_name}")
 
-        # 查找提供商
-        try:
-            provider = model_config.get_provider(request.provider_name)
-        except KeyError:
-            raise ValueError(f"提供商不存在: {request.provider_name}")
-
-        # 查找模型
-        model = None
-        for m in model_config.models:
-            if m.name == request.model_name and m.api_provider == request.provider_name:
-                model = m
-                break
-
-        if not model:
-            raise ValueError(
-                f"模型不存在: {request.model_name} (提供商: {request.provider_name})"
+            model = next(
+                (m for m in model_config.models
+                 if m.name == request.model_name and m.api_provider == request.provider_name),
+                None,
             )
+            if model is None:
+                raise ValueError(
+                    f"模型不存在: {request.model_name} (提供商: {request.provider_name})"
+                )
+
+        if not provider.base_url.strip():
+            raise ValueError("供应商 API 地址不能为空")
+        if not model.model_identifier.strip():
+            raise ValueError("模型标识符不能为空")
 
         # 执行测试
         try:
-            # 获取 API 密钥
-            api_key = provider.api_key
-            if isinstance(api_key, list):
-                api_key = api_key[0] if api_key else ""
+            # 测试仅使用首个非空密钥，不改变运行时密钥轮询状态。
+            api_keys = provider.api_key if isinstance(provider.api_key, list) else [provider.api_key]
+            api_key = next((key.strip() for key in api_keys if key.strip()), "")
+            if not api_key:
+                raise ValueError("供应商 API 密钥不能为空")
 
-            # 创建客户端
-            client = openai.AsyncOpenAI(
-                base_url=provider.base_url,
-                api_key=api_key,
-                timeout=request.timeout,
-            )
-
-            # 发送测试请求
-            start_time = time.time()
-            response = await client.chat.completions.create(
-                model=model.model_identifier,
-                messages=[{"role": "user", "content": request.test_prompt}],
-                max_tokens=50,
-            )
-            end_time = time.time()
+            # 临时客户端必须关闭；整次测试受同一个超时时限约束。
+            start_time = time.perf_counter()
+            async with asyncio.timeout(request.timeout):
+                async with openai.AsyncOpenAI(
+                    base_url=provider.base_url,
+                    api_key=api_key,
+                    timeout=request.timeout,
+                    max_retries=0,
+                ) as client:
+                    response = await client.chat.completions.create(
+                        model=model.model_identifier,
+                        messages=[{"role": "user", "content": request.test_prompt}],
+                        max_tokens=50,
+                    )
+            end_time = time.perf_counter()
 
             # 提取响应
             response_text = response.choices[0].message.content or ""
@@ -316,12 +332,17 @@ class ModelConfigManager:
             )
 
         except Exception as e:
-            logger.error(f"模型测试失败: {e}")
+            error_message = (
+                f"模型测试超时（{request.timeout} 秒）"
+                if isinstance(e, (TimeoutError, openai.APITimeoutError))
+                else str(e)
+            )
+            logger.error(f"模型测试失败: {error_message}")
             return ModelTestResult(
                 success=False,
                 response_text=None,
                 latency_ms=None,
-                error_message=str(e),
+                error_message=error_message,
                 model_identifier=model.model_identifier,
                 provider_base_url=provider.base_url,
             )

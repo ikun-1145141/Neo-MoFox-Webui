@@ -433,7 +433,9 @@ class ModelTestRequest(BaseModel):
     provider_name: str       # 提供商名称（对应 model.toml 中 api_providers[].name）
     model_name: str          # 模型 name 字段（model.toml 中 models[].name）
     test_prompt: str = "你好"  # 测试用的提示词
-    timeout: int = 15        # 超时时间（秒）
+    timeout: int = 15        # 超时时间（秒），必须大于 0
+    provider: ModelTestProvider | None = None  # 页面供应商快照，包含 name/base_url/api_key
+    model: ModelTestModel | None = None        # 页面模型快照，包含 name/model_identifier/api_provider
 
 class ModelTestResult(BaseModel):
     """模型测试结果。"""
@@ -445,7 +447,7 @@ class ModelTestResult(BaseModel):
     provider_base_url: str       # 使用的 base_url
 ```
 
-ModelConfigManager 直接从 `model.toml` 读取对应提供商的 `api_key` 和 `base_url`，通过大模型API进行请求测试，记录响应和耗时。
+ModelConfigManager 优先使用请求中的 `provider` / `model` 页面快照进行单次测试，无需保存即可测试新增模型，以及当前修改后的模型标识符、供应商地址和密钥。只有两个快照均未提供时，才兼容按名称从 `model.toml` 读取已保存配置。测试不写入 TOML、不热重载；实际路由前缀为 `/webui/api/config-model`。完整快照契约及测试边界见文末「未保存模型连通性测试」增补。
 
 ---
 
@@ -575,7 +577,7 @@ PluginConfigManager 通过 `config_api.get_loaded_plugins()` 获取运行时已�
   │─────────────────>│                       │
   │                  │  test_model(...)      │
   │                  │──────────────────────>│
-  │                  │                       │  从 model.toml 读取 provider 信息
+  │                  │                       │  优先使用页面快照；旧请求按名称读配置
   │                  │                       │  构造临时 openai.AsyncOpenAI 客户端
   │                  │                       │  发送 chat.completions 请求
   │                  │                       │  记录耗时
@@ -660,3 +662,48 @@ def get_components(self) -> list[type]:
 - 整个后端枚举过程限时 15 秒，前端请求限时 20 秒。失败返回安全的本地错误文案，不包含密钥或上游原始响应正文。
 
 前端在模型标识符输入框展开时请求列表，输入仅触发本地筛选。仅在新增模式、名称为空且用户选择选项时，将模型 ID 同时填入模型名称。
+
+
+## 增补：未保存模型连通性测试（2026-10-04）
+
+`POST /webui/api/config-model/test` 继续使用 `VerifiedDep` 认证和
+`BaseResponse[ModelTestResult]` 响应。前端点击模型列表中的测试按钮时，提交当前页面的测试配置快照：
+
+```json
+{
+  "provider_name": "draft-provider",
+  "model_name": "draft-model",
+  "provider": {
+    "name": "draft-provider",
+    "base_url": "https://api.example.com/v1",
+    "api_key": "example-key"
+  },
+  "model": {
+    "name": "draft-model",
+    "model_identifier": "actual-model-id",
+    "api_provider": "draft-provider"
+  },
+  "test_prompt": "你好",
+  "timeout": 30
+}
+```
+
+- **优先级**：快照优先于磁盘配置。新增、重命名、同名模型修改均不需要先保存；即使没有 `model.toml`，完整快照仍可测试。
+- **兼容性**：`provider` 和 `model` 均省略或均为 `null` 时，保留旧的按名称查找已保存配置的行为。
+- **一致性**：只提供其中一个快照会返回参数错误，不与磁盘配置混用。两个快照的名称须与请求名称对应，且 `model.api_provider` 必须等于 `provider.name`。
+- **无持久化副作用**：测试不保存配置、不调用热重载，不修改运行时密钥轮询状态。只有用户显式保存时才走原配置写入流程。
+- **密钥**：支持字符串和字符串数组，取首个非空密钥；全部为空时返回明确错误。快照的 Pydantic `repr` 不展示密钥。
+- **测试范围**：保留原有 OpenAI 兼容 `chat.completions` 连通性探测，发送测试消息并限制输出为 50 tokens。本修复不新增其他供应商协议，也不验证 `extra_params`、流式模式、工具调用等完整运行时行为。
+- **超时和资源**：后端以 `timeout` 秒限制整次探测，禁用 SDK 自动重试并关闭临时客户端；前端 HTTP 超时为 `(timeout + 5) * 1000` 毫秒，避免全局 15 秒默认值提前终止测试。
+- **错误展示**：结果卡片优先展示后端的 `message` / 字符串 `detail`，不再用 Axios 的通用 HTTP 400 文案覆盖具体配置错误；全局 Toast 仍由统一拦截器负责。
+
+回归验证（在仓库根目录执行）：
+
+```shell
+python -m unittest discover -s tests -v
+node --test frontend/tests/model-test.test.mjs
+```
+
+后端回归使用真实 FastAPI 路由、Pydantic 校验和 OpenAI SDK，替换 Neo-MoFox 宿主依赖，
+通过 `httpx.MockTransport` 模拟供应商，不启动机器人、不使用真实 API Key、不会产生模型调用费用。
+前端回归使用现有 Vue / TypeScript 编译器及内存渲染器，验证真实组件的请求、状态和错误展示逻辑。

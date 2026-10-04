@@ -105,14 +105,31 @@ export interface PatchWriteRequest {
   data: Record<string, unknown>
 }
 
+/** 单次测试的供应商快照，不保存到配置文件。 */
+export interface ModelTestProvider {
+  name: string
+  base_url: string
+  api_key: string | string[]
+}
+
+/** 单次测试的模型快照，不要求模型已经保存。 */
+export interface ModelTestModel {
+  name: string
+  model_identifier: string
+  api_provider: string
+}
+
 /**
  * 模型测试请求（对应后端 ModelTestRequest）
+ * provider/model 须同时传入；均不传时兼容按名称测试已保存配置。
  */
 export interface ModelTestRequest {
   provider_name: string
   model_name: string
   test_prompt: string
   timeout: number
+  provider?: ModelTestProvider | null
+  model?: ModelTestModel | null
 }
 
 /**
