@@ -187,12 +187,30 @@ class RemoteModelOption(BaseModel):
 # ===== 模型测试相关结构 =====
 
 
+class ModelTestProvider(BaseModel):
+    """单次连通性测试使用的供应商快照，不持久化。"""
+
+    name: str = Field(..., description="供应商名称")
+    base_url: str = Field(..., description="当前 API 基础地址")
+    api_key: str | list[str] = Field(..., repr=False, description="当前 API 密钥或密钥列表")
+
+
+class ModelTestModel(BaseModel):
+    """单次连通性测试使用的模型快照，不要求已保存。"""
+
+    name: str = Field(..., description="模型名称")
+    model_identifier: str = Field(..., description="实际模型标识符")
+    api_provider: str = Field(..., description="所属供应商名称")
+
+
 class ModelTestRequest(BaseModel):
     """模型测试请求。
 
     Attributes:
-        provider_name: 提供商名称（对应 model.toml 中 api_providers[].name）
-        model_name: 模型 name 字段（model.toml 中 models[].name）
+        provider_name: 提供商名称
+        model_name: 模型 name 字段
+        provider: 当前页面的供应商快照，须与 model 同时提供
+        model: 当前页面的模型快照；两者均未提供时兼容从 model.toml 查找
         test_prompt: 测试用的提示词
         timeout: 超时时间（秒）
     """
@@ -200,7 +218,13 @@ class ModelTestRequest(BaseModel):
     provider_name: str = Field(..., description="提供商名称")
     model_name: str = Field(..., description="模型名称")
     test_prompt: str = Field(default="你好", description="测试提示词")
-    timeout: int = Field(default=15, description="超时时间")
+    timeout: int = Field(default=15, gt=0, description="超时时间（秒）")
+    provider: ModelTestProvider | None = Field(
+        default=None, repr=False, description="供应商快照，仅用于本次测试"
+    )
+    model: ModelTestModel | None = Field(
+        default=None, description="模型快照，仅用于本次测试"
+    )
 
 
 class ModelTestResult(BaseModel):

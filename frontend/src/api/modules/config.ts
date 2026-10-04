@@ -100,7 +100,10 @@ export function reloadModelConfig(): Promise<void> {
  * @param request 测试请求
  */
 export function testModel(request: ModelTestRequest): Promise<ModelTestResult> {
-  return http.post(`${BASE}-model/test`, request)
+  return http.post(`${BASE}-model/test`, request, {
+    // 为后端测试时限预留传输余量，避免默认 15 秒先于模型测试结束。
+    timeout: (request.timeout + 5) * 1000,
+  })
 }
 
 /**

@@ -309,6 +309,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { parse as parseToml } from 'toml'
+import { isAxiosError } from 'axios'
 import { useI18n } from '@/utils/i18n'
 import { useDialogStore } from '@/utils/dialog'
 import Icon from '../common/Icon.vue'
@@ -664,15 +665,30 @@ async function testModel(model: any, index: string | number) {
     const result = await apiTestModel({
       provider_name: model.api_provider,
       model_name: model.name,
+      // 只提交本次连通性测试所需的页面快照，不触发保存或热重载。
+      provider: {
+        name: provider.name,
+        base_url: provider.base_url,
+        api_key: Array.isArray(provider.api_key) ? [...provider.api_key] : provider.api_key,
+      },
+      model: {
+        name: model.name,
+        model_identifier: model.model_identifier,
+        api_provider: model.api_provider,
+      },
       test_prompt: '你好',
       timeout: 30,
     })
 
     testResults.value.models.set(idx, result)
-  } catch (error: any) {
+  } catch (error: unknown) {
+    // Toast 仍由全局拦截器处理；结果卡片优先显示后端的具体错误。
+    const message = isAxiosError(error)
+      ? error.response?.data?.message ?? error.response?.data?.detail ?? error.message
+      : error && typeof error === 'object' && 'message' in error ? error.message : null
     testResults.value.models.set(idx, {
       success: false,
-      error_message: error.message || t('modelConfigEditor.test.failed'),
+      error_message: typeof message === 'string' ? message : t('modelConfigEditor.test.failed'),
       model_identifier: model.model_identifier,
       provider_base_url: '',
     })
