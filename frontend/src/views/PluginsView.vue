@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import AppShell from '../components/common/AppShell.vue'
 import PageHeader from '../components/common/PageHeader.vue'
 import Icon from '../components/common/Icon.vue'
+import PluginImportDialog from '../components/plugins/PluginImportDialog.vue'
 import { getPluginList, loadPlugin } from '../api/modules/plugin'
 import type { PluginSummary } from '../api/types/plugin'
 import { useDialogStore } from '../utils/dialog'
@@ -55,7 +56,6 @@ const handleLoad = async (plugin: PluginSummary) => {
     if (result.success) {
       toastStore.show(tr('plugins.detail.toast.loadSuccess', { name: plugin.plugin_name }), 'success')
       await fetchPlugins()
-      filterPlugins()
     } else {
       toastStore.show(tr('plugins.detail.toast.loadFailed', { error: result.error_message }), 'error')
     }
@@ -68,19 +68,14 @@ const handleLoad = async (plugin: PluginSummary) => {
 }
 
 // 搜索过滤
-const filteredPlugins = ref<PluginSummary[]>([])
-const filterPlugins = () => {
+const filteredPlugins = computed(() => {
   const query = searchQuery.value.toLowerCase().trim()
-  if (!query) {
-    filteredPlugins.value = plugins.value
-    return
-  }
-  
-  filteredPlugins.value = plugins.value.filter(plugin => 
+  if (!query) return plugins.value
+  return plugins.value.filter(plugin =>
     plugin.plugin_name.toLowerCase().includes(query) ||
     plugin.plugin_description?.toLowerCase().includes(query)
   )
-}
+})
 
 // 按加载状态分类
 const loadedPlugins = computed(() => 
@@ -130,32 +125,26 @@ const tr = (key: string, params?: Record<string, any>): string => {
   return text
 }
 
-onMounted(async () => {
-  await fetchPlugins()
-  filteredPlugins.value = plugins.value
-})
-
-// 监听搜索变化
-const handleSearch = () => {
-  filterPlugins()
-}
+onMounted(fetchPlugins)
 </script>
 
 <template>
   <AppShell no-padding>
     <div class="plugins-view">
       <div class="plugins-header-area">
+        <div class="plugins-toolbar">
         <PageHeader 
           :title="t('plugins.title')" 
           icon="material-symbols:extension-outline-rounded"
           :subtitle="t('plugins.subtitle')"
-        >
-          <template #actions>
+        />
+          <div class="plugins-toolbar-actions">
+            <PluginImportDialog @finished="fetchPlugins" />
             <button class="icon-btn" @click="fetchPlugins" :disabled="isLoading" :title="t('plugins.refresh')">
               <Icon icon="material-symbols:refresh-rounded" width="20" height="20" />
             </button>
-          </template>
-        </PageHeader>
+          </div>
+        </div>
 
         <!-- 搜索栏 -->
         <div class="search-bar">
@@ -163,7 +152,6 @@ const handleSearch = () => {
             <Icon icon="material-symbols:search-rounded" width="20" height="20" class="search-icon" />
             <input
               v-model="searchQuery"
-              @input="handleSearch"
               type="text"
               :placeholder="t('plugins.searchPlaceholder')"
               class="search-input"
@@ -327,6 +315,11 @@ const handleSearch = () => {
 </template>
 
 <style scoped>
+.plugins-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.plugins-toolbar :deep(.page-header) { margin-bottom: 0; }
+.plugins-toolbar-actions { display: flex; align-items: center; gap: 8px; }
+.plugins-toolbar-actions .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 50%; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); cursor: pointer; }
+.plugins-toolbar-actions .icon-btn:disabled { opacity: .5; cursor: not-allowed; }
 /* ====== 布局 ====== */
 .plugins-view {
   height: calc(100dvh - var(--app-top-bar-height, 64px) - var(--app-bottom-nav-height, 0px));

@@ -30,6 +30,7 @@ from src.core.components.registry import get_global_registry  # type: ignore
 from src.core.components.types import ComponentType, parse_signature  # type: ignore
 from src.core.config.core_config import get_core_config  # type: ignore
 
+from ..utils.plugin_write_lock import serialized_plugin_write
 from ..utils.plugin_types import (
     PluginComponentInfo,
     PluginDetail,
@@ -321,6 +322,7 @@ class PluginManagementManager:
 
         return result
 
+    @serialized_plugin_write
     async def reload_plugin_operation(self, plugin_name: str) -> PluginReloadResult:
         """重载插件。
 
@@ -406,6 +408,7 @@ class PluginManagementManager:
 
         return components
 
+    @serialized_plugin_write
     async def load_plugin_operation(self, plugin_path: str) -> PluginLoadResult:
         """加载插件。
 
@@ -450,6 +453,7 @@ class PluginManagementManager:
                 error_message=str(e),
             )
 
+    @serialized_plugin_write
     async def unload_plugin_operation(self, plugin_name: str) -> PluginUnloadResult:
         """卸载插件并删除插件文件。
 

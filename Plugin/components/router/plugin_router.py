@@ -7,13 +7,22 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fastapi import HTTPException, Query
+from fastapi import File, HTTPException, Query, Request, UploadFile
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.app.plugin_system.api.log_api import get_logger  # type: ignore
 from src.core.components.base.router import BaseRouter  # type: ignore
 from src.core.utils.security import VerifiedDep  # type: ignore
 
 from ...managers.plugin_manager import get_plugin_management_manager
+from ...managers.plugin_import_manager import PluginImportError, get_plugin_import_manager
+from ...utils.plugin_import_types import (
+    PluginImportCommit, PluginImportDeleteResult, PluginImportOperation, PluginImportPreview,
+)
+from ...utils.plugin_import_upload import PluginImportUploadGuard
 from ...utils.response import BaseResponse
 from ...utils.plugin_types import (
     PluginComponentInfo,
@@ -46,11 +55,65 @@ class PluginRouter(BaseRouter):
         Args:
             plugin: 所属插件实例
         """
-        super().__init__(plugin)
         self.plugin_manager = get_plugin_management_manager()
+        self.import_manager = get_plugin_import_manager(plugin.plugin_name)
+        super().__init__(plugin)
+        self.app.add_middleware(PluginImportUploadGuard)
 
     def register_endpoints(self) -> None:
         """注册 API 端点。"""
+
+        @self.app.exception_handler(StarletteHTTPException)
+        async def import_http_error(request: Request, error: StarletteHTTPException) -> JSONResponse:
+            if "/import/" not in request.url.path:
+                return await http_exception_handler(request, error)
+            return JSONResponse(status_code=error.status_code, headers=error.headers,
+                                content=BaseResponse.error(code=error.status_code, message=str(error.detail)).model_dump())
+
+        @self.app.exception_handler(RequestValidationError)
+        async def import_validation_error(request: Request, error: RequestValidationError) -> JSONResponse:
+            if "/import/" not in request.url.path:
+                return await request_validation_exception_handler(request, error)
+            return JSONResponse(status_code=422, content=BaseResponse.error(
+                code=422, message="导入请求参数无效，请检查文件和确认信息").model_dump())
+
+        @self.app.exception_handler(PluginImportError)
+        async def import_error_handler(request: Request, error: PluginImportError) -> JSONResponse:
+            return JSONResponse(status_code=error.code, content=BaseResponse.error(
+                code=error.code, message=str(error)).model_dump())
+
+        @self.app.post("/import/prepare", response_model=BaseResponse[PluginImportPreview], dependencies=[VerifiedDep])
+        async def prepare_import(file: UploadFile = File(...)) -> BaseResponse[PluginImportPreview]:
+            """Upload and preview a standard package, without executing plugin code."""
+            try:
+                return BaseResponse.ok(await self.import_manager.prepare(file))
+            except PluginImportError:
+                raise
+            except Exception as error:
+                logger.error("插件包上传校验失败", exc_info=True)
+                raise PluginImportError("插件包上传校验失败，请查看服务端日志", 500) from error
+            finally:
+                await file.close()
+
+        @self.app.post("/import/commit", response_model=BaseResponse[PluginImportOperation], dependencies=[VerifiedDep])
+        async def commit_import(request: PluginImportCommit) -> BaseResponse[PluginImportOperation]:
+            """Confirm a preview and return an idempotent, pollable installation task."""
+            try:
+                return BaseResponse.ok(await self.import_manager.commit(request))
+            except PluginImportError:
+                raise
+            except Exception as error:
+                logger.error("创建插件导入任务失败", exc_info=True)
+                raise PluginImportError("创建导入任务失败，请查看服务端日志", 500) from error
+
+        @self.app.get("/import/operations/{operation_id}", response_model=BaseResponse[PluginImportOperation], dependencies=[VerifiedDep])
+        async def get_import_operation(operation_id: str) -> BaseResponse[PluginImportOperation]:
+            return BaseResponse.ok(self.import_manager.get_operation(operation_id))
+
+        @self.app.delete("/import/uploads/{upload_id}", response_model=BaseResponse[PluginImportDeleteResult], dependencies=[VerifiedDep])
+        async def discard_import(upload_id: str) -> BaseResponse[PluginImportDeleteResult]:
+            self.import_manager.discard(upload_id)
+            return BaseResponse.ok(PluginImportDeleteResult())
 
         @self.app.get(
             "/list",
@@ -193,6 +256,13 @@ class PluginRouter(BaseRouter):
             except Exception as e:
                 logger.error(f"插件卸载异常: {e}", exc_info=True)
                 raise HTTPException(status_code=500, detail=f"插件卸载异常: {str(e)}")
+
+    async def startup(self) -> None:
+        """Clean stale import uploads when this router is mounted."""
+        await self.import_manager.initialize()
+
+    async def shutdown(self) -> None:
+        await self.import_manager.shutdown()
 
 
 __all__ = ["PluginRouter"]

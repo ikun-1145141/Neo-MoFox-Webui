@@ -396,3 +396,7 @@ Pydantic 校验 → settings.py 写入 data/WebUI_data/config.json
 | **禁止大范围壁纸铺设** | 壁纸渲染由前端统一处理，不得在单页面大范围平铺 |
 | **字体规范** | 标题使用 Plus Jakarta Sans，正文使用 Inter |
 | **MD3U 取色** | 所有主题色提取必须通过 MD3U 包进行 |
+
+## 本地插件包导入
+
+插件管理页面支持 ZIP / MFP 标准插件包上传、预览、确认覆盖和自动加载。WebUI 自身更新只写入包，需手动重启；目录版插件不自动覆盖。使用说明、接口和构建方式见 [插件包导入说明](docs/plugin-package-import.md)。

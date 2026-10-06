@@ -5,13 +5,11 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import os
 import re
 import socket
 import sys
 import tempfile
 import time
-import zipfile
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -40,6 +38,8 @@ from src.core.config.core_config import get_core_config
 from src.kernel.concurrency import get_task_manager
 
 from ..storage.settings import SettingsStorage
+from ..utils.plugin_write_lock import plugin_write_lock
+from ..utils.plugin_package import PackageError, atomic_store, validate_package
 from ..utils.plugin_market_types import (
     CompatibilityInfo,
     InstallPlan,
@@ -110,7 +110,7 @@ class PluginMarketManager:
         self._cache: list[MarketPlugin] | None = None
         self._cache_at = 0.0
         self._cache_lock = asyncio.Lock()
-        self._operation_lock = asyncio.Lock()
+        self._operation_lock = plugin_write_lock
         # 任务状态会由请求协程和后台任务跨异步上下文访问，使用同步锁保护短临界区。
         self._operation_state_lock = Lock()
         self._operations: dict[str, MarketOperation] = {}
@@ -339,6 +339,16 @@ class PluginMarketManager:
         """串行执行下载、校验、原子写入和热加载，并持续更新操作状态。"""
         async with self._operation_lock:
             try:
+                # A queued local import/lifecycle action may have changed this plugin.
+                records = await self._load_local_plugins()
+                current = records.get(plan.plugin.plugin_id)
+                expected = plan.plugin.local_state
+                if bool(current) != expected.installed or (current is not None and (
+                    str(current.path) != expected.plugin_path
+                    or current.manifest.version != expected.installed_version
+                    or current.loaded != expected.loaded
+                )):
+                    raise PluginMarketError("本地插件在安装确认后发生变化，请重新生成安装计划")
                 self._update_operation(
                     operation_id,
                     status="running",
@@ -705,9 +715,11 @@ class PluginMarketManager:
             if str(manifest.get("version") or "") != version.version:
                 raise PluginMarketError("安装包版本与市场记录不一致")
 
-            existing_path = Path(existing_plugin_path).resolve() if existing_plugin_path else None
+            existing_path = Path(existing_plugin_path).absolute() if existing_plugin_path else None
             if existing_path is not None and (
                 existing_path.parent != root
+                or existing_path.resolve().parent != root
+                or existing_path.is_symlink()
                 or existing_path.suffix.lower() not in {".mfp", ".zip"}
                 or not existing_path.is_file()
             ):
@@ -719,12 +731,12 @@ class PluginMarketManager:
                 progress=85,
                 message="正在原子写入插件目录",
             )
-            destination = (root / f"{plugin_id}.mfp").resolve()
+            destination = existing_path or (root / f"{plugin_id}.mfp")
+            if existing_path is None and (destination.exists() or destination.is_symlink()):
+                raise PluginMarketError("目标插件文件已被占用，拒绝覆盖")
             if destination.parent != root:
                 raise PluginMarketError("插件安装路径无效")
-            os.replace(temporary, destination)
-            if existing_path is not None and existing_path != destination:
-                existing_path.unlink(missing_ok=True)
+            atomic_store(temporary, destination, root, overwrite=existing_path is not None)
             return destination
         finally:
             temporary.unlink(missing_ok=True)
@@ -790,57 +802,11 @@ class PluginMarketManager:
 
     @staticmethod
     def _validate_package(path: Path, max_uncompressed_bytes: int) -> dict[str, Any]:
-        """验证 ZIP 安全边界、唯一清单和入口文件后返回清单对象。
-
-        Args:
-            path: 已通过下载哈希校验的插件包路径。
-            max_uncompressed_bytes: 允许的 ZIP 条目累计解压大小。
-
-        Returns:
-            从唯一根级或一级 ``manifest.json`` 读取的清单对象。
-
-        Raises:
-            PluginMarketError: 压缩包路径、符号链接、体积、清单或入口校验失败。
-        """
+        """Use the same non-executing validation for market and local packages."""
         try:
-            with zipfile.ZipFile(path) as archive:
-                entries = archive.infolist()
-                if not entries:
-                    raise PluginMarketError("插件压缩包为空")
-                total = 0
-                manifest_paths: list[str] = []
-                normalized_names: set[str] = set()
-                for entry in entries:
-                    # 只检查包结构，不解压文件；路径、符号链接和累计体积均在写入前拒绝。
-                    normalized = entry.filename.replace("\\", "/").rstrip("/")
-                    entry_path = Path(normalized)
-                    if entry_path.is_absolute() or ".." in entry_path.parts:
-                        raise PluginMarketError("插件压缩包包含非法路径")
-                    if not normalized:
-                        continue
-                    normalized_names.add(normalized)
-                    if not entry.is_dir():
-                        total += entry.file_size
-                        if total > max_uncompressed_bytes:
-                            raise PluginMarketError("插件包解压后超过大小限制")
-                        mode = entry.external_attr >> 16
-                        if mode and (mode & 0o170000) == 0o120000:
-                            raise PluginMarketError("插件压缩包不能包含符号链接")
-                        if normalized.endswith("manifest.json") and len(entry_path.parts) <= 2:
-                            manifest_paths.append(normalized)
-                if len(manifest_paths) != 1:
-                    raise PluginMarketError("插件包必须包含唯一的根级或一级 manifest.json")
-                manifest = json.loads(archive.read(manifest_paths[0]).decode("utf-8"))
-                if not isinstance(manifest, dict):
-                    raise PluginMarketError("manifest.json 必须是 JSON 对象")
-                entry_point = str(manifest.get("entry_point") or "plugin.py")
-                parent = manifest_paths[0].rsplit("/", 1)[0] if "/" in manifest_paths[0] else ""
-                entry_path = f"{parent}/{entry_point}".lstrip("/")
-                if entry_path not in normalized_names:
-                    raise PluginMarketError("插件入口文件不存在")
-                return manifest
-        except (zipfile.BadZipFile, UnicodeDecodeError, json.JSONDecodeError) as error:
-            raise PluginMarketError(f"插件包格式无效: {error}") from error
+            return validate_package(path, max_uncompressed_bytes)
+        except PackageError as error:
+            raise PluginMarketError(str(error)) from error
 
     async def _get_json(
         self,
