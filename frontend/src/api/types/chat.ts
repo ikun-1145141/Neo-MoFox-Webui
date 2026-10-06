@@ -4,7 +4,8 @@
  * 与后端聊天 Pydantic 模型严格对应。
  */
 
-export type ChatMessageType = 'text' | 'image' | 'voice'
+export type ChatMessageType = 'text' | 'image' | 'emoji' | 'voice' | 'video' | 'file'
+export type ChatSegmentType = 'text' | 'at' | 'image' | 'emoji' | 'voice' | 'video' | 'file'
 export type ChatWindowDirection = 'up' | 'down'
 
 /** 前端聊天流列表项 */
@@ -19,6 +20,7 @@ export interface ChatStreamInfo {
   last_active_time: number
   last_message_preview: string
   last_message_type: ChatMessageType | string
+  peer_user_id: string | null
 }
 
 /** 按平台与聊天类型分组的聊天流 */
@@ -40,6 +42,33 @@ export interface ChatMessageMedia {
   data_url: string
 }
 
+/** 消息正文片段 */
+export interface ChatMessageSegment {
+  type: ChatSegmentType
+  text: string
+  user_id: string | null
+  media_id: string | null
+  data_url: string | null
+}
+
+/** 被引用消息摘要 */
+export interface ChatReply {
+  message_id: string | null
+  sender_id: string | null
+  sender_name: string
+  is_self: boolean
+  segments: ChatMessageSegment[]
+  preview: string
+  found: boolean
+}
+
+/** 按需拉取的聊天媒体 */
+export interface ChatMedia {
+  media_id: string
+  mime_type: string
+  data_url: string
+}
+
 /** 前端可渲染的聊天消息 */
 export interface ChatMessage {
   message_id: string
@@ -55,6 +84,8 @@ export interface ChatMessage {
   sender_role: string | null
   time: number
   is_self: boolean
+  segments: ChatMessageSegment[]
+  reply: ChatReply | null
 }
 
 /** 指定锚点消息窗口响应 */

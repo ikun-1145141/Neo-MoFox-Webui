@@ -7,6 +7,7 @@
 import instance from '../base'
 import { API_BASE_URL, API_WEBUI_PREFIX } from '../config'
 import type {
+  ChatMedia,
   ChatStreamsResponse,
   ChatWsEventMap,
   ChatWindowDirection,
@@ -27,6 +28,11 @@ interface WsEnvelope<T extends ChatWsEventName = ChatWsEventName> {
 /** 获取聊天流列表。 */
 export async function getChatStreams(): Promise<ChatStreamsResponse> {
   return instance.get(`${CHAT_PREFIX}/streams`)
+}
+
+/** 按媒体哈希获取历史消息中的图片、表情包或语音。 */
+export async function getChatMedia(mediaId: string): Promise<ChatMedia> {
+  return instance.get(`${CHAT_PREFIX}/media/${encodeURIComponent(mediaId)}`)
 }
 
 /** 聊天 WebSocket 客户端。 */

@@ -1,6 +1,6 @@
 """聊天 Router 组件。
 
-提供聊天流列表、全局消息通知 WebSocket 和指定流 WebSocket 会话协议。
+提供聊天流列表、媒体按需拉取、全局消息通知 WebSocket 和指定流 WebSocket 会话协议。
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ import asyncio
 import json
 from typing import TYPE_CHECKING, Any
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import HTTPException, WebSocket, WebSocketDisconnect
 
 from src.app.plugin_system.api.log_api import get_logger
 from src.core.components.base.router import BaseRouter
@@ -53,6 +53,14 @@ class ChatRouter(BaseRouter):
             """获取聊天流列表。"""
             chat_manager = get_chat_manager()
             return BaseResponse.ok(await chat_manager.list_streams())
+
+        @self.app.get("/media/{media_id}", response_model=BaseResponse, dependencies=[VerifiedDep])
+        async def get_media(media_id: str) -> BaseResponse:
+            """按媒体哈希获取历史消息中的图片、表情包或语音。"""
+            media = await get_chat_manager().get_media(media_id)
+            if media is None:
+                raise HTTPException(status_code=404, detail="媒体不存在或已被清理")
+            return BaseResponse.ok(media)
 
         @self.app.websocket("/ws/notifications")
         async def websocket_notifications(websocket: WebSocket) -> None:
