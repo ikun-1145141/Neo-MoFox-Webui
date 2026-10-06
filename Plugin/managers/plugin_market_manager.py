@@ -11,7 +11,6 @@ import socket
 import sys
 import tempfile
 import time
-import zipfile
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -40,6 +39,12 @@ from src.core.config.core_config import get_core_config
 from src.kernel.concurrency import get_task_manager
 
 from ..storage.settings import SettingsStorage
+from ..utils.plugin_package import (
+    MAX_PACKAGE_SIZE_MB,
+    PluginPackageError,
+    validate_plugin_id,
+    validate_plugin_package,
+)
 from ..utils.plugin_market_types import (
     CompatibilityInfo,
     InstallPlan,
@@ -62,7 +67,6 @@ from ..utils.plugin_market_types import (
 
 logger = get_logger("plugin_market_manager")
 
-_PLUGIN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 _DEPENDENCY_PATTERN = re.compile(
     r"^(?P<name>[A-Za-z0-9_.-]+)(?P<spec>\s*(?:===|==|!=|~=|>=|<=|>|<).+)?$"
 )
@@ -74,7 +78,6 @@ _REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 _REQUEST_TIMEOUT_SECONDS = 30
 _PAGE_SIZE = 50
 _CACHE_SECONDS = 30
-_MAX_PACKAGE_SIZE_MB = 50
 _TRUST_ENV = False
 
 
@@ -680,7 +683,7 @@ class PluginMarketManager:
             raise PluginMarketError("安装器只接受 .mfp 或 .zip 插件包")
         root = self._plugins_root()
         root.mkdir(parents=True, exist_ok=True)
-        max_bytes = _MAX_PACKAGE_SIZE_MB * 1024 * 1024
+        max_bytes = MAX_PACKAGE_SIZE_MB * 1024 * 1024
         temporary = await self._download_file(
             version.asset_download_url,
             root,
@@ -792,6 +795,8 @@ class PluginMarketManager:
     def _validate_package(path: Path, max_uncompressed_bytes: int) -> dict[str, Any]:
         """验证 ZIP 安全边界、唯一清单和入口文件后返回清单对象。
 
+        实际校验由 ``Plugin.utils.plugin_package`` 提供，与本地导入共用同一套规则。
+
         Args:
             path: 已通过下载哈希校验的插件包路径。
             max_uncompressed_bytes: 允许的 ZIP 条目累计解压大小。
@@ -803,44 +808,9 @@ class PluginMarketManager:
             PluginMarketError: 压缩包路径、符号链接、体积、清单或入口校验失败。
         """
         try:
-            with zipfile.ZipFile(path) as archive:
-                entries = archive.infolist()
-                if not entries:
-                    raise PluginMarketError("插件压缩包为空")
-                total = 0
-                manifest_paths: list[str] = []
-                normalized_names: set[str] = set()
-                for entry in entries:
-                    # 只检查包结构，不解压文件；路径、符号链接和累计体积均在写入前拒绝。
-                    normalized = entry.filename.replace("\\", "/").rstrip("/")
-                    entry_path = Path(normalized)
-                    if entry_path.is_absolute() or ".." in entry_path.parts:
-                        raise PluginMarketError("插件压缩包包含非法路径")
-                    if not normalized:
-                        continue
-                    normalized_names.add(normalized)
-                    if not entry.is_dir():
-                        total += entry.file_size
-                        if total > max_uncompressed_bytes:
-                            raise PluginMarketError("插件包解压后超过大小限制")
-                        mode = entry.external_attr >> 16
-                        if mode and (mode & 0o170000) == 0o120000:
-                            raise PluginMarketError("插件压缩包不能包含符号链接")
-                        if normalized.endswith("manifest.json") and len(entry_path.parts) <= 2:
-                            manifest_paths.append(normalized)
-                if len(manifest_paths) != 1:
-                    raise PluginMarketError("插件包必须包含唯一的根级或一级 manifest.json")
-                manifest = json.loads(archive.read(manifest_paths[0]).decode("utf-8"))
-                if not isinstance(manifest, dict):
-                    raise PluginMarketError("manifest.json 必须是 JSON 对象")
-                entry_point = str(manifest.get("entry_point") or "plugin.py")
-                parent = manifest_paths[0].rsplit("/", 1)[0] if "/" in manifest_paths[0] else ""
-                entry_path = f"{parent}/{entry_point}".lstrip("/")
-                if entry_path not in normalized_names:
-                    raise PluginMarketError("插件入口文件不存在")
-                return manifest
-        except (zipfile.BadZipFile, UnicodeDecodeError, json.JSONDecodeError) as error:
-            raise PluginMarketError(f"插件包格式无效: {error}") from error
+            return validate_plugin_package(path, max_uncompressed_bytes)
+        except PluginPackageError as error:
+            raise PluginMarketError(str(error)) from error
 
     async def _get_json(
         self,
@@ -1106,8 +1076,10 @@ class PluginMarketManager:
     @staticmethod
     def _validate_plugin_id(plugin_id: str) -> None:
         """拒绝不符合市场路径安全字符集的插件标识。"""
-        if not _PLUGIN_ID_PATTERN.fullmatch(plugin_id):
-            raise PluginMarketError(f"插件 ID 格式无效: {plugin_id}")
+        try:
+            validate_plugin_id(plugin_id)
+        except PluginPackageError as error:
+            raise PluginMarketError(str(error)) from error
 
     @staticmethod
     def _now() -> str:

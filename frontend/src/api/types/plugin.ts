@@ -104,3 +104,37 @@ export interface PluginUnloadResult {
   /** 错误信息 */
   error_message?: string
 }
+
+/**
+ * 插件包导入结果
+ */
+export interface PluginImportResult {
+  /** 是否导入成功（conflict 为 true 时表示等待用户确认覆盖） */
+  success: boolean
+  /** 是否检测到同名插件，等待用户确认是否覆盖 */
+  conflict: boolean
+  /** 插件名称（取自包内 manifest） */
+  plugin_name: string
+  /** 插件版本 */
+  plugin_version: string
+  /** 落盘后的插件包路径（冲突或失败时为空） */
+  plugin_path: string | null
+  /** 已存在的同名插件版本 */
+  existing_version: string | null
+  /** 已存在的同名插件当前是否正在运行 */
+  existing_loaded: boolean
+  /** 依赖该插件的已加载插件列表 */
+  dependents: string[]
+  /** 是否覆盖了已存在的插件包 */
+  replaced: boolean
+  /** 是否已完成热加载 */
+  loaded: boolean
+  /** 是否需要重启 Neo-MoFox 才能生效 */
+  restart_required: boolean
+  /** 不阻断导入的提示信息 */
+  warnings: string[]
+  /** 导入时间（ISO 8601 格式） */
+  import_time: string
+  /** 错误信息或热加载失败原因 */
+  error_message: string | null
+}

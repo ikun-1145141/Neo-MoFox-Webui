@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import AppShell from '../components/common/AppShell.vue'
 import PageHeader from '../components/common/PageHeader.vue'
 import Icon from '../components/common/Icon.vue'
+import PluginImportDialog from '../components/plugin-manager/PluginImportDialog.vue'
 import { getPluginList, loadPlugin } from '../api/modules/plugin'
 import type { PluginSummary } from '../api/types/plugin'
 import { useDialogStore } from '../utils/dialog'
@@ -65,6 +66,14 @@ const handleLoad = async (plugin: PluginSummary) => {
   } finally {
     isLoadingPlugin.value = false
   }
+}
+
+// 导入插件包
+const showImportDialog = ref(false)
+const handleImported = async () => {
+  showImportDialog.value = false
+  await fetchPlugins()
+  filterPlugins()
 }
 
 // 搜索过滤
@@ -175,6 +184,14 @@ const handleSearch = () => {
           <div class="plugin-count" v-else>
             {{ tr('plugins.pluginCount', { count: plugins.length }) }}
           </div>
+          <button
+            class="action-btn action-btn-primary import-btn"
+            type="button"
+            @click="showImportDialog = true"
+          >
+            <Icon icon="material-symbols:upload-file-outline-rounded" width="18" height="18" />
+            {{ t('plugins.import.button') }}
+          </button>
         </div>
       </div>
 
@@ -323,6 +340,12 @@ const handleSearch = () => {
     </div>
       </div>
     </div>
+
+    <PluginImportDialog
+      v-if="showImportDialog"
+      @close="showImportDialog = false"
+      @imported="handleImported"
+    />
   </AppShell>
 </template>
 
@@ -407,6 +430,10 @@ const handleSearch = () => {
   padding: 0.5rem 1rem;
   background: var(--md-sys-color-surface-container);
   border-radius: 16px;
+}
+
+.import-btn {
+  margin-left: auto;
 }
 
 /* ====== 加载和空状态 ====== */

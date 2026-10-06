@@ -9,6 +9,7 @@ import type {
   PluginLoadResult,
   PluginUnloadResult,
   PluginComponentInfo,
+  PluginImportResult,
 } from '../types/plugin'
 import { API_WEBUI_PREFIX } from '../config'
 
@@ -66,4 +67,29 @@ export function loadPlugin(pluginPath: string): Promise<PluginLoadResult> {
  */
 export function unloadPlugin(pluginName: string): Promise<PluginUnloadResult> {
   return http.post(`${BASE}/plugin/${encodeURIComponent(pluginName)}/unload`, {})
+}
+
+/**
+ * POST /api/plugin/import - 上传 .zip / .mfp 插件包并尝试热加载
+ * @param file 插件包文件
+ * @param overwrite 检测到同名插件时是否直接覆盖
+ * @param onProgress 上传进度回调（0-100）
+ */
+export function importPluginPackage(
+  file: File,
+  overwrite = false,
+  onProgress?: (percent: number) => void
+): Promise<PluginImportResult> {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('overwrite', String(overwrite))
+  return http.post(`${BASE}/plugin/import`, form, {
+    // 上传 + 校验 + 热加载可能远超全局 15s 超时
+    timeout: 300000,
+    onUploadProgress: (event) => {
+      if (onProgress && event.total) {
+        onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)))
+      }
+    },
+  })
 }

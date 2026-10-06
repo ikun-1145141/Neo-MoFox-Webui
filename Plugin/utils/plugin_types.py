@@ -121,6 +121,42 @@ class PluginUnloadResult(BaseModel):
     error_message: str | None = Field(default=None, description="错误信息")
 
 
+class PluginImportResult(BaseModel):
+    """插件包导入结果。
+
+    Attributes:
+        success: 是否导入成功（conflict 为 True 时表示需要用户确认覆盖）
+        conflict: 是否检测到同名插件，等待用户确认是否覆盖
+        plugin_name: 插件名称（取自包内 manifest）
+        plugin_version: 插件版本
+        plugin_path: 落盘后的插件包路径（冲突或失败时为空）
+        existing_version: 已存在的同名插件版本
+        existing_loaded: 已存在的同名插件当前是否正在运行
+        dependents: 依赖该插件的已加载插件列表
+        replaced: 是否覆盖了已存在的插件包
+        loaded: 是否已完成热加载
+        restart_required: 是否需要重启 Neo-MoFox 才能生效
+        warnings: 不阻断导入的提示信息
+        import_time: 导入时间（ISO 8601 格式）
+        error_message: 错误信息或热加载失败原因
+    """
+
+    success: bool = Field(..., description="是否导入成功")
+    conflict: bool = Field(default=False, description="是否检测到同名插件待用户确认")
+    plugin_name: str = Field(..., description="插件名称")
+    plugin_version: str = Field(default="", description="插件版本")
+    plugin_path: str | None = Field(default=None, description="落盘后的插件包路径")
+    existing_version: str | None = Field(default=None, description="已存在的同名插件版本")
+    existing_loaded: bool = Field(default=False, description="已存在的同名插件是否正在运行")
+    dependents: list[str] = Field(default_factory=list, description="依赖该插件的已加载插件列表")
+    replaced: bool = Field(default=False, description="是否覆盖了已存在的插件包")
+    loaded: bool = Field(default=False, description="是否已完成热加载")
+    restart_required: bool = Field(default=False, description="是否需要重启 Neo-MoFox 才能生效")
+    warnings: list[str] = Field(default_factory=list, description="不阻断导入的提示信息")
+    import_time: str = Field(..., description="导入时间（ISO 8601 格式）")
+    error_message: str | None = Field(default=None, description="错误信息")
+
+
 __all__ = [
     "PluginComponentInfo",
     "PluginSummary",
@@ -128,4 +164,5 @@ __all__ = [
     "PluginReloadResult",
     "PluginLoadResult",
     "PluginUnloadResult",
+    "PluginImportResult",
 ]
