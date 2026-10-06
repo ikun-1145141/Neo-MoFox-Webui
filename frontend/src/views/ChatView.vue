@@ -342,7 +342,7 @@ function segmentsToText(segments: ChatMessageSegment[]): string {
     const label = t(MEDIA_LABEL_KEYS[segment.type] || 'chat.message.unsupported')
     return segment.text ? `${label} ${segment.text}` : label
   })
-  return ' '.join(''.join(parts).split())
+  return parts.join('').replace(/\s+/g, ' ').trim()
 }
 
 /** 消息正文文本。 */
