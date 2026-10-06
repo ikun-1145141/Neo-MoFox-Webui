@@ -169,7 +169,7 @@ const handleSearch = () => {
         <!-- 搜索栏 -->
         <div class="search-bar">
           <div class="search-input-wrapper">
-            <Icon icon="material-symbols:search-rounded" width="20" height="20" class="search-icon" />
+            <Icon icon="material-symbols:search-rounded" width="18" height="18" class="search-icon" />
             <input
               v-model="searchQuery"
               @input="handleSearch"
@@ -178,20 +178,22 @@ const handleSearch = () => {
               class="search-input"
             />
           </div>
+          <button
+            class="action-btn action-btn-primary import-btn"
+            type="button"
+            :title="t('plugins.import.button')"
+            :aria-label="t('plugins.import.button')"
+            @click="showImportDialog = true"
+          >
+            <Icon icon="material-symbols:upload-file-outline-rounded" width="18" height="18" />
+            <span class="import-btn-text">{{ t('plugins.import.button') }}</span>
+          </button>
           <div class="plugin-count" v-if="filteredPlugins.length !== plugins.length">
             {{ tr('plugins.pluginCount', { count: filteredPlugins.length }) }}
           </div>
           <div class="plugin-count" v-else>
             {{ tr('plugins.pluginCount', { count: plugins.length }) }}
           </div>
-          <button
-            class="action-btn action-btn-primary import-btn"
-            type="button"
-            @click="showImportDialog = true"
-          >
-            <Icon icon="material-symbols:upload-file-outline-rounded" width="18" height="18" />
-            {{ t('plugins.import.button') }}
-          </button>
         </div>
       </div>
 
@@ -380,15 +382,15 @@ const handleSearch = () => {
 .search-bar {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   margin-bottom: 1.5rem;
   flex-wrap: wrap;
 }
 
 .search-input-wrapper {
   position: relative;
-  flex: 1;
-  min-width: 250px;
+  flex: 0 1 320px;
+  min-width: 0;
 }
 
 .search-icon {
@@ -402,13 +404,14 @@ const handleSearch = () => {
 
 .search-input {
   width: 100%;
-  padding: 0.75rem 0.75rem 0.75rem 2.75rem;
+  height: 40px;
+  padding: 0 0.875rem 0 2.25rem;
   border: 1px solid var(--md-sys-color-outline-variant);
-  border-radius: 28px;
+  border-radius: 20px;
   background: var(--md-sys-color-surface-container-low);
   color: var(--md-sys-color-on-surface);
   font-family: 'Inter', system-ui, sans-serif;
-  font-size: 0.94rem;
+  font-size: 0.88rem;
   transition: all 0.2s;
 }
 
@@ -424,6 +427,7 @@ const handleSearch = () => {
 }
 
 .plugin-count {
+  margin-left: auto;
   font-size: 0.88rem;
   font-weight: 500;
   color: var(--md-sys-color-on-surface-variant);
@@ -433,7 +437,8 @@ const handleSearch = () => {
 }
 
 .import-btn {
-  margin-left: auto;
+  flex-shrink: 0;
+  height: 40px;
 }
 
 /* ====== 加载和空状态 ====== */
@@ -799,13 +804,33 @@ const handleSearch = () => {
   }
   
   .search-bar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.75rem; /* 减小间距 */
+    gap: 0.5rem;
+    margin-bottom: 1rem;
   }
-  
+
+  /* 搜索框与导入按钮同一行，搜索框占满剩余宽度 */
   .search-input-wrapper {
-    min-width: auto;
+    flex: 1 1 0;
+  }
+
+  /* 窄屏导入按钮只保留图标 */
+  .import-btn {
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .import-btn-text {
+    display: none;
+  }
+
+  /* 插件数量单独换到下一行 */
+  .plugin-count {
+    flex-basis: 100%;
+    margin-left: 0;
+    padding: 0;
+    background: none;
+    font-size: 0.8rem;
   }
 }
 </style>

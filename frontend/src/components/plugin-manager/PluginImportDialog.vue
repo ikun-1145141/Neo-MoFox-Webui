@@ -477,4 +477,46 @@ async function handleImport() {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* ===== 手机适配：底部弹出 ===== */
+@media (max-width: 640px) {
+  .import-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .import-container {
+    max-width: none;
+    max-height: 90dvh;
+    overflow-y: auto;
+    border-radius: 20px 20px 0 0;
+    border-bottom: none;
+    padding: 1.25rem 1rem calc(1rem + env(safe-area-inset-bottom));
+    gap: 1rem;
+  }
+
+  .import-title {
+    font-size: 1.125rem;
+  }
+
+  /* 手机上点选为主，缩小拖拽区 */
+  .drop-zone {
+    padding: 1.25rem 0.75rem;
+  }
+
+  .drop-hint {
+    font-size: 0.88rem;
+  }
+
+  .import-actions {
+    flex-direction: column-reverse;
+  }
+
+  .text-btn,
+  .primary-btn {
+    justify-content: center;
+    width: 100%;
+    min-height: 44px;
+  }
+}
 </style>
