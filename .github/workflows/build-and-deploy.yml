@@ -166,11 +166,14 @@ jobs:
               awk -F '\t' '$1 != "github-actions[bot]" { print substr($0, index($0, "\t") + 1) }'
           }
 
-          # 优先以上一个发布标签为起点，收集自上个版本以来的全部提交；取不到标签时回退为最近 24 小时
-          LAST_TAG=$(git describe --tags --abbrev=0 --match='v*' 2>/dev/null || true)
-          if [ -n "${LAST_TAG}" ]; then
-            RANGE_DESC="自上一个版本 ${LAST_TAG} 以来"
-            COMMITS=$(collect_commits "${LAST_TAG}..HEAD")
+          # 以 GitHub 上一个 Release 的发布时间为起点，收集自上个版本以来的全部提交；取不到时回退为最近 24 小时
+          # 注意：mpdt 的发布标签指向其独立生成的提交，不在 main 祖先链上，故不能依赖 git tag 范围
+          PREV_DATE=$(GH_TOKEN="${{ github.token }}" gh api \
+            "repos/${GITHUB_REPOSITORY}/releases?per_page=10" \
+            --jq '[.[] | select(.draft != true and .published_at != null)][0].published_at' 2>/dev/null || true)
+          if [ -n "${PREV_DATE}" ]; then
+            RANGE_DESC="自上一个发布（$(date -u -d "${PREV_DATE}" '+%Y-%m-%d %H:%M UTC')）以来"
+            COMMITS=$(collect_commits "--since=${PREV_DATE}")
           else
             SINCE_TIME=$(date -u -d '24 hours ago' '+%Y-%m-%dT%H:%M:%SZ')
             RANGE_DESC="最近 24 小时内"
