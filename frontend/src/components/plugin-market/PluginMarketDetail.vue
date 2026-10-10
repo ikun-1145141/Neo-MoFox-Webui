@@ -1530,12 +1530,12 @@ button:disabled {
 
 @media (max-width: 560px) {
   .detail-toolbar {
-    padding-left: 0.75rem;
-    padding-right: 0.75rem;
+    min-height: 50px;
+    padding: 0.4rem 0.75rem;
   }
 
   .detail-scroll {
-    padding: 1rem;
+    padding: 0.75rem;
   }
 
   .overview-body {
@@ -1543,19 +1543,19 @@ button:disabled {
   }
 
   .overview-head {
-    grid-template-columns: 64px minmax(0, 1fr);
+    grid-template-columns: 56px minmax(0, 1fr);
     gap: 12px;
   }
 
   .plugin-icon {
-    width: 64px;
-    height: 64px;
-    font-size: 1.4rem;
+    width: 56px;
+    height: 56px;
+    font-size: 1.3rem;
   }
 
   .documentation-frame {
-    height: 65vh;
-    min-height: 420px;
+    height: 60dvh;
+    min-height: 320px;
   }
 
   .title-row {

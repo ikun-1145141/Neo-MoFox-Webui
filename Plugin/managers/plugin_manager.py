@@ -6,10 +6,14 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
+
+from fastapi import UploadFile
 
 from src.app.plugin_system.api.config_api import get_config  # type: ignore
 from src.app.plugin_system.api.log_api import get_logger  # type: ignore
@@ -26,13 +30,27 @@ from src.app.plugin_system.api.plugin_api import (  # type: ignore
 )
 from src.app.plugin_system.api.adapter_api import is_adapter_active  # type: ignore
 from src.app.plugin_system.api.router_api import get_mounted_router  # type: ignore
+from src.core.components.loader import (  # type: ignore
+    PluginLoader,
+    _split_plugin_dependency_ref,
+    load_manifest as load_plugin_manifest,
+)
 from src.core.components.registry import get_global_registry  # type: ignore
 from src.core.components.types import ComponentType, parse_signature  # type: ignore
 from src.core.config.core_config import get_core_config  # type: ignore
 
+from ..utils.plugin_package import (
+    MAX_PACKAGE_SIZE_MB,
+    PACKAGE_SUFFIXES,
+    PluginPackageError,
+    PluginPackageTooLargeError,
+    validate_plugin_id,
+    validate_plugin_package,
+)
 from ..utils.plugin_types import (
     PluginComponentInfo,
     PluginDetail,
+    PluginImportResult,
     PluginLoadResult,
     PluginReloadResult,
     PluginSummary,
@@ -40,6 +58,16 @@ from ..utils.plugin_types import (
 )
 
 logger = get_logger("plugin_manager")
+
+# 上传流式读取的分块大小
+_UPLOAD_CHUNK_BYTES = 1024 * 1024
+# 暂存目录名，以 "." 开头，插件发现逻辑会跳过
+_STAGING_DIR_NAME = ".import-staging"
+# 未显式传入受保护插件名时的兜底值
+_DEFAULT_PROTECTED_PLUGIN = "neo-mofox-webui"
+
+# 写入类操作（导入/覆盖）共用的串行锁
+_import_lock = asyncio.Lock()
 
 
 class PluginManagementManager:
@@ -519,6 +547,296 @@ class PluginManagementManager:
                 unload_time=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 error_message=str(e),
             )
+
+    async def import_plugin_package(
+        self,
+        file: UploadFile,
+        overwrite: bool = False,
+        protected_name: str = _DEFAULT_PROTECTED_PLUGIN,
+    ) -> PluginImportResult:
+        """从上传的 .zip / .mfp 插件包导入插件。
+
+        流程为：流式落盘到暂存区 → 包结构安全校验 → 兼容性预检 → 同名冲突处理
+        → 原子替换到插件根目录 → 热加载。覆盖正在运行的插件时先卸载再替换。
+
+        Args:
+            file: 上传的插件包文件
+            overwrite: 检测到同名插件时是否直接覆盖
+            protected_name: 禁止被覆盖的插件名（默认 WebUI 自身）
+
+        Returns:
+            导入结果；检测到同名冲突且 overwrite 为 False 时返回 conflict=True，
+            不修改任何文件
+        """
+        import_time = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        plugins_root = Path(get_core_config().bot.plugins_dir).resolve()
+        suffix = self._normalize_package_suffix(file.filename)
+        staged: Path | None = None
+
+        async with _import_lock:
+            try:
+                plugins_root.mkdir(parents=True, exist_ok=True)
+                staging_dir = plugins_root / _STAGING_DIR_NAME
+                staging_dir.mkdir(parents=True, exist_ok=True)
+                staged = staging_dir / f"{uuid4().hex}{suffix}"
+
+                await self._stream_upload_to_file(file, staged)
+                manifest_data = await asyncio.to_thread(
+                    validate_plugin_package,
+                    staged,
+                    MAX_PACKAGE_SIZE_MB * 1024 * 1024,
+                )
+
+                plugin_name = str(manifest_data.get("name") or "").strip()
+                validate_plugin_id(plugin_name)
+                if plugin_name == protected_name:
+                    raise PluginPackageError(
+                        f"不能通过导入覆盖当前提供该接口的插件 {protected_name}"
+                    )
+
+                manifest = await load_plugin_manifest(str(staged))
+                if manifest is None:
+                    raise PluginPackageError("插件清单解析失败")
+
+                compatible, reason = PluginLoader()._check_version_compatibility(manifest)
+                if not compatible:
+                    raise PluginPackageError(f"插件与当前 Neo-MoFox 不兼容: {reason}")
+
+                warnings = self._collect_import_warnings(manifest)
+                existing = await self._find_local_plugin(plugin_name)
+
+                if existing is not None:
+                    existing_path: Path = existing["path"]
+                    if not existing_path.is_file() or existing_path.parent != plugins_root:
+                        raise PluginPackageError(
+                            "已存在的同名插件不是插件目录根级的 .zip/.mfp 包，"
+                            "必须由管理员手动管理"
+                        )
+                    if not overwrite:
+                        return PluginImportResult(
+                            success=False,
+                            conflict=True,
+                            plugin_name=plugin_name,
+                            plugin_version=manifest.version,
+                            existing_version=existing["version"],
+                            existing_loaded=existing["loaded"],
+                            dependents=self._find_dependent_plugins(plugin_name),
+                            import_time=import_time,
+                        )
+
+                destination = (plugins_root / f"{plugin_name}{suffix}").resolve()
+                if destination.parent != plugins_root:
+                    raise PluginPackageError("插件安装路径无效")
+                # 目标文件名被另一个插件的包占用时拒绝，避免误覆盖无关插件
+                if destination.exists() and (
+                    existing is None or existing["path"] != destination
+                ):
+                    raise PluginPackageError(
+                        f"插件目录中已存在文件 {destination.name}，但不属于插件 {plugin_name}"
+                    )
+
+                if existing is not None and existing["loaded"]:
+                    if not await unload_plugin(plugin_name):
+                        raise PluginPackageError(
+                            f"覆盖前卸载插件 {plugin_name} 失败，已取消导入"
+                        )
+
+                await asyncio.to_thread(os.replace, staged, destination)
+                staged = None
+
+                # 后缀变化时必须删除旧包，否则下次启动会出现两个同名插件
+                if existing is not None and existing["path"] != destination:
+                    delete_error = self._delete_plugin_files(
+                        plugin_name, str(existing["path"])
+                    )
+                    if delete_error is not None:
+                        warnings.append(f"旧插件包未能删除: {delete_error}")
+
+                loaded, load_message = await self._hot_load_imported(
+                    plugin_name, str(destination)
+                )
+
+                logger.info(
+                    f"插件包导入完成: plugin={plugin_name}, version={manifest.version}, "
+                    f"path={destination}, replaced={existing is not None}, loaded={loaded}"
+                )
+                return PluginImportResult(
+                    success=True,
+                    plugin_name=plugin_name,
+                    plugin_version=manifest.version,
+                    plugin_path=str(destination),
+                    existing_version=existing["version"] if existing else None,
+                    existing_loaded=existing["loaded"] if existing else False,
+                    replaced=existing is not None,
+                    loaded=loaded,
+                    restart_required=not loaded,
+                    warnings=warnings,
+                    import_time=import_time,
+                    error_message=None if loaded else load_message,
+                )
+            finally:
+                if staged is not None:
+                    await asyncio.to_thread(staged.unlink, missing_ok=True)
+
+    @staticmethod
+    def _normalize_package_suffix(filename: str | None) -> str:
+        """校验上传文件名后缀，返回规范化后的后缀。
+
+        Args:
+            filename: 上传时的原始文件名。
+
+        Returns:
+            小写的 ``.zip`` 或 ``.mfp``。
+
+        Raises:
+            PluginPackageError: 文件名为空或后缀不在白名单内。
+        """
+        name = (filename or "").strip()
+        suffix = Path(name).suffix.lower() if name else ""
+        if suffix not in PACKAGE_SUFFIXES:
+            raise PluginPackageError("仅支持 .zip 或 .mfp 格式的插件包")
+        return suffix
+
+    async def _stream_upload_to_file(self, file: UploadFile, target: Path) -> None:
+        """按分块流式写入上传内容，超限立即中止。
+
+        不使用 ``await file.read()`` 整体读入内存，避免大包占用过多内存。
+
+        Args:
+            file: 上传的插件包文件。
+            target: 暂存文件路径。
+
+        Raises:
+            PluginPackageError: 内容为空或超过体积上限。
+        """
+        max_bytes = MAX_PACKAGE_SIZE_MB * 1024 * 1024
+        written = 0
+
+        def _open() -> Any:
+            return target.open("wb")
+
+        handle = await asyncio.to_thread(_open)
+        try:
+            while True:
+                chunk = await file.read(_UPLOAD_CHUNK_BYTES)
+                if not chunk:
+                    break
+                written += len(chunk)
+                if written > max_bytes:
+                    raise PluginPackageTooLargeError(
+                        f"插件包不能超过 {MAX_PACKAGE_SIZE_MB}MB"
+                    )
+                await asyncio.to_thread(handle.write, chunk)
+        finally:
+            await asyncio.to_thread(handle.close)
+
+        if written == 0:
+            raise PluginPackageError("上传的插件包为空")
+
+    async def _hot_load_imported(
+        self, plugin_name: str, plugin_path: str
+    ) -> tuple[bool, str]:
+        """导入落盘后尝试加载插件包。
+
+        已加载的同名插件已在写入前卸载，因此这里统一走 ``load_plugin``。
+
+        Args:
+            plugin_name: 插件名称。
+            plugin_path: 已落盘的插件包绝对路径。
+
+        Returns:
+            (是否加载成功, 失败原因)。
+        """
+        try:
+            if await load_plugin(plugin_path):
+                return True, ""
+            return False, "加载操作返回失败"
+        except Exception as error:
+            logger.warning(
+                f"导入的插件热加载失败，需重启生效: plugin={plugin_name}, error={error}",
+                exc_info=True,
+            )
+            return False, str(error)
+
+    def _collect_import_warnings(self, manifest: Any) -> list[str]:
+        """收集不阻断导入的提示信息。
+
+        Args:
+            manifest: 包内清单对象。
+
+        Returns:
+            提示信息列表。
+        """
+        warnings: list[str] = []
+        if manifest.python_dependencies:
+            warnings.append(
+                "该插件声明了 Python 依赖，导入流程不会自动安装，"
+                "若加载失败请安装依赖后重启 Neo-MoFox"
+            )
+        loaded = set(list_loaded_plugins())
+        missing = [
+            str(item)
+            for item in manifest.dependencies.get("plugins", [])
+            if _split_plugin_dependency_ref(item)[0] not in loaded
+        ]
+        if missing:
+            warnings.append("以下依赖插件当前未加载: " + ", ".join(missing))
+        return warnings
+
+    async def _find_local_plugin(self, plugin_name: str) -> dict[str, Any] | None:
+        """查找插件目录中指定名称的已有插件。
+
+        先查已加载插件，再扫描未加载的插件包与插件目录。
+
+        Args:
+            plugin_name: 插件名称。
+
+        Returns:
+            包含 ``path`` / ``version`` / ``loaded`` 的字典，未找到返回 None。
+        """
+        if is_plugin_loaded(plugin_name):
+            plugin_path = get_plugin_path(plugin_name)
+            manifest = get_manifest(plugin_name)
+            if plugin_path:
+                return {
+                    "path": Path(plugin_path).resolve(),
+                    "version": getattr(manifest, "version", None),
+                    "loaded": True,
+                }
+
+        plugins_root = Path(get_core_config().bot.plugins_dir).resolve()
+        for discovered in await PluginLoader().discover_plugins(str(plugins_root)):
+            manifest = await load_plugin_manifest(discovered)
+            if manifest is None or manifest.name != plugin_name:
+                continue
+            return {
+                "path": Path(discovered).resolve(),
+                "version": manifest.version,
+                "loaded": False,
+            }
+        return None
+
+    def _find_dependent_plugins(self, plugin_name: str) -> list[str]:
+        """列出依赖指定插件的已加载插件。
+
+        Args:
+            plugin_name: 被依赖的插件名称。
+
+        Returns:
+            依赖方插件名称列表。
+        """
+        dependents: list[str] = []
+        for other in list_loaded_plugins():
+            if other == plugin_name:
+                continue
+            manifest = get_manifest(other)
+            if manifest is None:
+                continue
+            for dependency in manifest.dependencies.get("plugins", []):
+                if _split_plugin_dependency_ref(dependency)[0] == plugin_name:
+                    dependents.append(other)
+                    break
+        return sorted(set(dependents))
 
     def _delete_plugin_files(self, plugin_name: str, plugin_path: str | None) -> str | None:
         """删除插件目录或压缩包文件。
