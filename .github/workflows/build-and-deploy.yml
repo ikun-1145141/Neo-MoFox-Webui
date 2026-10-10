@@ -90,6 +90,9 @@ jobs:
         if: steps.recent_changes.outputs.has_changes == 'true'
         id: bump
         run: |
+          # 剥离版本号中可能遗留的预发布后缀（如 -dev / -alpha），确保始终发布正式 Release
+          sed -i -E 's/^(\s*"version":\s*"[0-9]+\.[0-9]+\.[0-9]+)[-_.].*"/\1"/' Plugin/manifest.json
+
           OLD_VERSION=$(python - <<'PY'
           import json
           from pathlib import Path
@@ -152,20 +155,73 @@ jobs:
         id: release_notes
         run: |
           NOTES_FILE="/tmp/webui-plugin-release-notes.md"
-          SINCE_TIME=$(date -u -d '24 hours ago' '+%Y-%m-%dT%H:%M:%SZ')
+          OLD_VERSION="${{ steps.bump.outputs.old_version }}"
+          NEW_VERSION="${{ steps.bump.outputs.new_version }}"
+          BUILD_DATE=$(date -u '+%Y-%m-%d %H:%M UTC')
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          REPO_URL="https://github.com/${{ github.repository }}"
 
-          {
-            echo "自动构建提交：${GITHUB_SHA}"
-            echo ""
-            echo "## 最近 24 小时内的提交"
-            echo ""
-            git log --since="${SINCE_TIME}" --format='%an%x09- %h %s（%an）' |
+          collect_commits() {
+            git log "$1" --format='%an%x09- %h %s（%an）' |
               awk -F '\t' '$1 != "github-actions[bot]" { print substr($0, index($0, "\t") + 1) }'
-          } > "${NOTES_FILE}"
+          }
 
-          if ! grep -q '^- ' "${NOTES_FILE}"; then
-            echo "- 最近 24 小时内没有找到提交。" >> "${NOTES_FILE}"
+          # 优先以上一个发布标签为起点，收集自上个版本以来的全部提交；取不到标签时回退为最近 24 小时
+          LAST_TAG=$(git describe --tags --abbrev=0 --match='v*' 2>/dev/null || true)
+          if [ -n "${LAST_TAG}" ]; then
+            RANGE_DESC="自上一个版本 ${LAST_TAG} 以来"
+            COMMITS=$(collect_commits "${LAST_TAG}..HEAD")
+          else
+            SINCE_TIME=$(date -u -d '24 hours ago' '+%Y-%m-%dT%H:%M:%SZ')
+            RANGE_DESC="最近 24 小时内"
+            COMMITS=$(collect_commits "--since=${SINCE_TIME}")
           fi
+
+          if [ -z "${COMMITS}" ]; then
+            COMMITS="- 本次发布没有可列出的新提交。"
+          fi
+
+          # 按提交类型分类（feat / fix / 其他）
+          FEAT_COMMITS=$(printf '%s\n' "${COMMITS}" | grep -iE '^- [0-9a-f]+ (feat|特性)' || true)
+          FIX_COMMITS=$(printf '%s\n' "${COMMITS}" | grep -iE '^- [0-9a-f]+ (fix|修复|hotfix)' || true)
+          OTHER_COMMITS=$(printf '%s\n' "${COMMITS}" | grep -ivE '^- [0-9a-f]+ (feat|特性|fix|修复|hotfix)' || true)
+          [ -z "${FEAT_COMMITS}" ] && FEAT_COMMITS="- 本次无新增功能。"
+          [ -z "${FIX_COMMITS}" ] && FIX_COMMITS="- 本次无问题修复。"
+          [ -z "${OTHER_COMMITS}" ] && OTHER_COMMITS="- 本次无其他变更。"
+
+          cat > "${NOTES_FILE}" <<EOF
+          ## 🚀 Neo-MoFox WebUI v${NEW_VERSION}
+
+          > ✅ 正式版（Release） ｜ 🕐 构建时间：${BUILD_DATE} ｜ 📌 构建提交：[\`${SHORT_SHA}\`](${REPO_URL}/commit/${GITHUB_SHA})
+
+          ### 📦 版本变更
+
+          | 项目 | 版本 |
+          | --- | --- |
+          | 旧版本 | \`${OLD_VERSION}\` |
+          | 新版本 | \`${NEW_VERSION}\` |
+
+          ### ✨ 新增功能
+
+          ${FEAT_COMMITS}
+
+          ### 🐛 问题修复
+
+          ${FIX_COMMITS}
+
+          ### 🔧 其他变更
+
+          ${OTHER_COMMITS}
+
+          ### 📥 安装与更新
+
+          - 在 MoFox 插件市场中搜索 **Neo-MoFox WebUI**，一键安装或更新至最新版本
+          - 或前往 [Releases 页面](${REPO_URL}/releases) 手动下载更新包
+
+          ### 📋 完整提交记录（${RANGE_DESC}）
+
+          ${COMMITS}
+          EOF
 
           echo "notes_file=${NOTES_FILE}" >> "$GITHUB_OUTPUT"
           cat "${NOTES_FILE}"
@@ -185,13 +241,12 @@ jobs:
         run: |
           echo "## 📦 WebUI 插件发布摘要" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **仓库地址**：https://github.com/ikun-1145141/Neo-MoFox-Webui/" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **发布页面**：https://github.com/${{ github.repository }}/releases" >> "$GITHUB_STEP_SUMMARY"
           echo "- **源插件目录**：\`Plugin\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **发布插件目录**：\`/tmp/webui-plugin-release\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **旧版本**：\`${{ steps.bump.outputs.old_version }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **新版本**：\`${{ steps.bump.outputs.new_version }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **触发提交**：\`${GITHUB_SHA:0:7}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **状态**：✅ 已发布插件市场更新包" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **状态**：✅ 已发布正式版（Release）插件市场更新包" >> "$GITHUB_STEP_SUMMARY"
 
       - name: 生成跳过摘要
         if: steps.recent_changes.outputs.has_changes == 'false'

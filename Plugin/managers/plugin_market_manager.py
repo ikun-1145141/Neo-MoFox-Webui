@@ -910,7 +910,7 @@ class PluginMarketManager:
                 auto_decompress=False,
                 headers={
                     "Accept-Encoding": "identity",
-                    "User-Agent": "Neo-MoFox-WebUI-Plugin-Market/1.0.18-dev",
+                    "User-Agent": "Neo-MoFox-WebUI-Plugin-Market/1.0.24",
                 },
             ) as session:
                 for redirect_count in range(_MAX_REDIRECTS + 1):
