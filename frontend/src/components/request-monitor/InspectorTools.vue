@@ -37,7 +37,10 @@ function argumentText(call: JsonValue): string | null {
     <h3>{{ t('requestMonitor.toolDefinitions') }} · {{ record.rendered.tools.length }}</h3>
     <p v-if="!record.rendered.tools.length" class="rm-empty">{{ t('requestMonitor.noTools') }}</p>
     <details v-for="tool in record.rendered.tools.slice(0, definitionLimit)" :key="tool.index" class="rm-block" @toggle="toggle(`definition:${tool.index}`, $event)">
-      <summary><strong class="rm-mono">{{ tool.name }}</strong> <span class="rm-muted">{{ tool.kind }}</span></summary>
+      <summary class="rm-tool-summary">
+        <span class="rm-tool-name rm-mono">{{ tool.name }}</span>
+        <span class="rm-tool-kind-pill">{{ tool.kind }}</span>
+      </summary>
       <template v-if="opened.has(`definition:${tool.index}`)">
         <p class="rm-note">{{ tool.description || '—' }}</p>
         <p v-if="tool.required.length" class="rm-muted rm-note">{{ t('requestMonitor.required') }}: {{ tool.required.join(', ') }}</p>

@@ -9,6 +9,7 @@ import { useDialogStore } from '../utils/dialog'
 import { useToastStore } from '../utils/toast'
 import { useI18n } from '../utils/i18n'
 import '../styles/request-monitor.css'
+
 const { t } = useI18n()
 const dialog = useDialogStore()
 const toast = useToastStore()
@@ -36,21 +37,25 @@ const {
   resume,
   clear,
 } = useRequestMonitor()
+
 const exporting = ref(false)
 const downloadUrl = ref('')
 const downloadName = ref('')
 const downloadLink = ref<HTMLAnchorElement | null>(null)
 let disposed = false
 let revokeTimer: ReturnType<typeof setTimeout> | null = null
+
 function revokeDownload() {
   if (downloadUrl.value) URL.revokeObjectURL(downloadUrl.value)
   downloadUrl.value = ''
 }
+
 onUnmounted(() => {
   disposed = true
   if (revokeTimer) clearTimeout(revokeTimer)
   revokeDownload()
 })
+
 async function clearRecords() {
   if (
     !(await dialog.confirm(
@@ -70,6 +75,7 @@ async function clearRecords() {
     /* API interceptor reports the error. */
   }
 }
+
 async function copyJson(text: string) {
   try {
     await navigator.clipboard.writeText(text)
@@ -78,6 +84,7 @@ async function copyJson(text: string) {
     toast.show(t('requestMonitor.copyFailed'), 'error')
   }
 }
+
 async function exportDetail(value: unknown, scope: string) {
   if (!detail.value || exporting.value) return
   exporting.value = true
@@ -102,30 +109,50 @@ async function exportDetail(value: unknown, scope: string) {
   }
 }
 </script>
+
 <template>
   <AppShell no-padding>
     <section class="rm-page">
+      <!-- 页面顶栏：使用与主程序各页面对齐的毛玻璃与胶囊工具栏 -->
       <header class="rm-header">
-        <div class="rm-title">
-          <h1>{{ t('requestMonitor.title') }}</h1>
-          <p>{{ t('requestMonitor.subtitle') }}</p>
+        <div class="rm-header-left">
+          <div class="rm-title-wrapper">
+            <h1 class="rm-main-title">{{ t('requestMonitor.title') }}</h1>
+            <span class="rm-subtitle">{{ t('requestMonitor.subtitle') }}</span>
+          </div>
+
+          <div class="rm-badge-group">
+            <span class="rm-status-chip" :class="{ 'is-paused': paused }">
+              <span class="rm-status-dot"></span>
+              {{ t(paused ? 'requestMonitor.paused' : 'requestMonitor.live') }}
+            </span>
+            <span class="rm-metric-chip">
+              <Icon icon="material-symbols:database-outline" width="14" height="14" />
+              <span>{{ snapshot?.stats.total ?? 0 }} / {{ snapshot?.capacity ?? 200 }}</span>
+            </span>
+            <span class="rm-metric-chip rm-hide-mobile" v-if="lastUpdated">
+              <Icon icon="material-symbols:schedule-outline" width="14" height="14" />
+              <span>{{ new Date(lastUpdated).toLocaleTimeString() }}</span>
+            </span>
+          </div>
         </div>
-        <div class="rm-actions">
-          <span class="rm-live" :class="{ 'is-paused': paused }"
-            ><i></i
-            >{{
-              t(paused ? 'requestMonitor.paused' : 'requestMonitor.live')
-            }}</span
-          ><button
-            class="rm-button"
+
+        <div class="rm-header-actions">
+          <button
+            class="rm-btn rm-btn-tonal"
             :disabled="clearing"
             @click="paused ? resume() : pause()"
           >
-            {{
-              t(paused ? 'requestMonitor.resume' : 'requestMonitor.pause')
-            }}</button
-          ><button
-            class="rm-button"
+            <Icon
+              :icon="paused ? 'material-symbols:play-arrow-rounded' : 'material-symbols:pause-rounded'"
+              width="18"
+              height="18"
+            />
+            <span class="rm-btn-text">{{ t(paused ? 'requestMonitor.resume' : 'requestMonitor.pause') }}</span>
+          </button>
+
+          <button
+            class="rm-btn rm-btn-tonal"
             :disabled="refreshing || clearing"
             @click="refreshNow()"
           >
@@ -133,37 +160,36 @@ async function exportDetail(value: unknown, scope: string) {
               icon="material-symbols:refresh-rounded"
               width="18"
               height="18"
-            />{{ t('requestMonitor.refresh') }}</button
-          ><button
-            class="rm-button rm-danger"
+              :class="{ 'rm-spin': refreshing }"
+            />
+            <span class="rm-btn-text">{{ t('requestMonitor.refresh') }}</span>
+          </button>
+
+          <button
+            class="rm-btn rm-btn-danger-tonal"
             :disabled="!snapshot?.records.length || clearing"
             @click="clearRecords()"
           >
-            {{ t('requestMonitor.clear') }}
+            <Icon icon="material-symbols:delete-sweep-outline-rounded" width="18" height="18" />
+            <span class="rm-btn-text">{{ t('requestMonitor.clear') }}</span>
           </button>
         </div>
       </header>
-      <div class="rm-buffer-bar">
-        <span
-          >{{ t('requestMonitor.buffer') }}
-          <strong
-            >{{ snapshot?.stats.total ?? 0 }} /
-            {{ snapshot?.capacity ?? 200 }}</strong
-          ></span
-        ><span class="rm-last-updated"
-          >{{ t('requestMonitor.updated') }}
-          {{
-            lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : '—'
-          }}</span
-        >
+
+      <!-- 异常提示条 -->
+      <div v-if="failed" class="rm-banner rm-banner-error" role="alert">
+        <Icon icon="material-symbols:error-outline-rounded" width="18" height="18" />
+        <div>
+          <strong>{{ t(authFailed ? 'requestMonitor.authFailed' : 'requestMonitor.refreshFailed') }}</strong>
+          <span v-if="failureMessage"> ({{ failureMessage }})</span>
+        </div>
       </div>
-      <p v-if="failed" class="rm-banner rm-error" role="alert">
-        {{ t(authFailed ? 'requestMonitor.authFailed' : 'requestMonitor.refreshFailed') }}
-        <span v-if="failureMessage"> {{ failureMessage }}</span>
-      </p>
-      <p v-if="notice" class="rm-banner rm-info" role="status">
-        {{ t(`requestMonitor.${notice}`) }}
-      </p>
+      <div v-else-if="notice" class="rm-banner rm-banner-info" role="status">
+        <Icon icon="material-symbols:info-outline-rounded" width="18" height="18" />
+        <span>{{ t(`requestMonitor.${notice}`) }}</span>
+      </div>
+
+      <!-- 核心工作区：桌面左右分栏，移动端平滑上下分栏 -->
       <div class="rm-workspace">
         <InspectorRecordList
           v-model:search="search"
@@ -174,15 +200,17 @@ async function exportDetail(value: unknown, scope: string) {
           :selected-id="selectedId"
           :loading="refreshing && !snapshot"
           @select="selectRecord"
-        /><InspectorRecordDetail
+        />
+        <InspectorRecordDetail
           :record="detail"
-          :filtered-out="selectedId !== null && !records.some(record => record.id === selectedId)"
           :loading="detailLoading"
           :exporting="exporting"
+          :filtered-out="selectedId !== null && !records.some(record => record.id === selectedId)"
           @copy="copyJson"
           @export="exportDetail"
         />
       </div>
+
       <a
         ref="downloadLink"
         class="rm-sr-only"
@@ -190,8 +218,9 @@ async function exportDetail(value: unknown, scope: string) {
         :download="downloadName"
         aria-hidden="true"
         tabindex="-1"
-        >{{ t('requestMonitor.export') }}</a
       >
+        {{ t('requestMonitor.export') }}
+      </a>
     </section>
   </AppShell>
 </template>

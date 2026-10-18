@@ -8,7 +8,7 @@ const props = defineProps<{ record: InspectorRecordDetail }>()
 const emit = defineEmits<{ copy: [text: string]; export: [value: unknown, scope: string] }>()
 const { t } = useI18n()
 const source = ref<'params' | 'raw_response' | 'raw_events' | 'metadata' | 'record'>('params')
-const mode = ref('tree')
+const mode = ref('json')
 const sources = { params: 'rawRequest', raw_response: 'rawResponse', raw_events: 'rawEvents', metadata: 'metadata', record: 'fullRecord' }
 const value = computed(() => source.value === 'record' ? props.record : props.record[source.value])
 // API details consist exclusively of JSON data; no provider-specific conversion.
@@ -18,15 +18,25 @@ const formatted = computed(() => mode.value === 'json' ? JSON.stringify(value.va
 const key = computed(() => `${props.record.instance_id}:${props.record.id}:${source.value}`)
 </script>
 <template>
-  <div class="rm-section-heading rm-wrap">
-    <select v-model="source" class="rm-input rm-raw-source" :aria-label="t('requestMonitor.rawSource')">
-      <option v-for="(label, name) in sources" :key="name" :value="name">{{ t(`requestMonitor.${label}`) }}</option>
-    </select>
-    <div class="rm-inline-actions">
-      <button class="rm-button" :aria-pressed="mode === 'tree'" @click="mode = 'tree'">{{ t('requestMonitor.tree') }}</button>
-      <button class="rm-button" :aria-pressed="mode === 'json'" @click="mode = 'json'">JSON</button>
-      <button class="rm-button" @click="emit('copy', JSON.stringify(value, null, 2))">{{ t('requestMonitor.copy') }}</button>
-      <button class="rm-button" @click="emit('export', value, source)">{{ t('requestMonitor.downloadJson') }}</button>
+  <div class="rm-mode-toolbar">
+    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+      <select v-model="source" class="rm-select" :aria-label="t('requestMonitor.rawSource')">
+        <option v-for="(label, name) in sources" :key="name" :value="name">{{ t(`requestMonitor.${label}`) }}</option>
+      </select>
+      <div class="rm-segmented-control">
+        <button class="rm-seg-btn" :class="{ active: mode === 'json' }" :aria-pressed="mode === 'json'" @click="mode = 'json'">JSON</button>
+        <button class="rm-seg-btn" :class="{ active: mode === 'tree' }" :aria-pressed="mode === 'tree'" @click="mode = 'tree'">{{ t('requestMonitor.tree') }}</button>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <button class="rm-btn rm-btn-tonal" @click="emit('copy', JSON.stringify(value, null, 2))">
+        <Icon icon="material-symbols:content-copy-rounded" width="15" height="15" />
+        <span>{{ t('requestMonitor.copy') }}</span>
+      </button>
+      <button class="rm-btn rm-btn-tonal" @click="emit('export', value, source)">
+        <Icon icon="material-symbols:download-rounded" width="15" height="15" />
+        <span>{{ t('requestMonitor.downloadJson') }}</span>
+      </button>
     </div>
   </div>
   <p class="rm-muted rm-note">{{ t('requestMonitor.rawHint') }}</p>

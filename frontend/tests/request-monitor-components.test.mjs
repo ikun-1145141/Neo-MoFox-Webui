@@ -118,10 +118,10 @@ test('real JSON tree expands, copies paths and copies complete subtrees, not pre
   const copied = []
   const data = { 'a/b~': { payload: 'long'.repeat(2000) } }
   const { host, props } = mount(t, 'InspectorJsonTree', { value: data, scope: 'a:1', pathPrefix: '/params', onCopy: x => copied.push(x) })
-  await click(buttons(host).find(n => n.props['aria-label'] === 'requestMonitor.expand a/b~'))
-  await click(buttons(host).find(n => n.props['aria-label'] === 'requestMonitor.copyPath payload'))
+  await click(buttons(host).find(n => n.props['aria-label']?.includes('requestMonitor.expand a/b~')))
+  await click(buttons(host).find(n => n.props['aria-label']?.includes('requestMonitor.copyPath payload')))
   assert.equal(copied.at(-1), '/params/a~1b~0/payload')
-  await click(buttons(host).find(n => n.props['aria-label'] === 'requestMonitor.copyNode a/b~'))
+  await click(buttons(host).find(n => n.props['aria-label']?.includes('requestMonitor.copyNode a/b~')))
   assert.equal(JSON.parse(copied.at(-1)).payload.length, 8000)
   props.value = { 'a/b~': { payload: 'updated' } }; await vue.nextTick()
   assert.ok(text(host).includes('updated'), 'same record update retains expansion')
@@ -131,11 +131,11 @@ test('real JSON tree expands, copies paths and copies complete subtrees, not pre
 
 test('real tree pagination reaches the last array page and can go back', async t => {
   const { host } = mount(t, 'InspectorJsonTree', { value: Array.from({ length: 250 }, (_, i) => i), scope: 'array' })
-  await click(buttons(host).find(n => text(n) === 'requestMonitor.moreChildren'))
+  await click(buttons(host).find(n => text(n).includes('requestMonitor.moreChildren')))
   assert.ok(descendants(host).some(n => n.props['data-json-path'] === '/100'))
-  await click(buttons(host).find(n => text(n) === 'requestMonitor.moreChildren'))
+  await click(buttons(host).find(n => text(n).includes('requestMonitor.moreChildren')))
   assert.ok(descendants(host).some(n => n.props['data-json-path'] === '/249'))
-  await click(buttons(host).find(n => text(n) === 'requestMonitor.previousPage'))
+  await click(buttons(host).find(n => text(n).includes('requestMonitor.previousPage')))
   assert.ok(descendants(host).some(n => n.props['data-json-path'] === '/100'))
 })
 
@@ -146,7 +146,7 @@ test('long response text is previewed safely while copy keeps the full content',
   assert.equal(descendants(host).filter(n => n.tag === 'img').length, 0)
   await click(buttons(host).find(n => text(n) === 'requestMonitor.copyText'))
   assert.equal(copied[0], payload)
-  await click(buttons(host).find(n => text(n).startsWith('requestMonitor.moreText')))
+  await click(buttons(host).find(n => text(n).includes('requestMonitor.moreText')))
   props.text = payload + 'append'; await vue.nextTick()
   assert.equal(descendants(host).find(n => n.tag === 'pre').text.length, utils.TEXT_PAGE_SIZE * 2)
 })
@@ -158,7 +158,7 @@ test('four equal tabs retain state and only the active panel receives streaming 
   assert.deepEqual(tabs().map(text), ['requestMonitor.request', 'requestMonitor.response', 'requestMonitor.tools', 'requestMonitor.raw'])
   assert.equal(tabs()[0].props['aria-selected'], true)
   assert.ok(!text(host).includes('requestMonitor.redacted'))
-  await click(buttons(host).find(n => n.props['aria-label'] === 'requestMonitor.expand extra_body'))
+  await click(buttons(host).find(n => text(n).includes('requestMonitor.tree'))); await vue.nextTick(); await click(buttons(host).find(n => n.props['aria-label']?.includes('requestMonitor.expand extra_body')))
   await click(tabs()[1])
   props.record = record({ version: 2, params: { ...first.params, model: 'changed' }, response: { ...first.response, message: 'stream delta' } })
   await vue.nextTick()
@@ -168,9 +168,9 @@ test('four equal tabs retain state and only the active panel receives streaming 
   assert.ok(!text(requestPanel).includes('changed'), 'inactive request panel is frozen')
   await click(tabs()[0])
   assert.ok(text(requestPanel).includes('changed'))
-  assert.ok(buttons(host).some(n => n.props['aria-label'] === 'requestMonitor.collapse extra_body'))
+  assert.ok(buttons(host).some(n => n.props['aria-label']?.includes('requestMonitor.collapse extra_body')))
   props.record = record({ id: 2, instance_id: 'other' }); await vue.nextTick()
-  assert.ok(!buttons(host).some(n => n.props['aria-label'] === 'requestMonitor.collapse extra_body'))
+  assert.ok(!buttons(host).some(n => n.props['aria-label']?.includes('requestMonitor.collapse extra_body')))
 })
 
 test('embedding and rerank response templates keep dimensions and unknown result fields', t => {

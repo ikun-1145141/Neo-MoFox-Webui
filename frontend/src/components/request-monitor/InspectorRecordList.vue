@@ -33,12 +33,12 @@ const statuses: InspectorStatus[] = [
 <template>
   <aside class="rm-list-panel" :aria-label="t('requestMonitor.records')">
     <div class="rm-list-toolbar">
-      <div class="rm-section-heading">
-        <h2>{{ t('requestMonitor.records') }}</h2>
-        <span class="rm-count">{{ records.length }}</span>
+      <div class="rm-toolbar-top">
+        <h2 class="rm-toolbar-title">{{ t('requestMonitor.records') }}</h2>
+        <span class="rm-count-pill">{{ records.length }}</span>
       </div>
       <input
-        class="rm-input"
+        class="rm-search-input"
         type="search"
         :value="search"
         :placeholder="t('requestMonitor.search')"
@@ -49,7 +49,7 @@ const statuses: InspectorStatus[] = [
       />
       <div class="rm-filter-row">
         <select
-          class="rm-input"
+          class="rm-select"
           :value="status"
           :aria-label="t('requestMonitor.filterStatus')"
           @change="
@@ -67,7 +67,7 @@ const statuses: InspectorStatus[] = [
           </option>
         </select>
         <select
-          class="rm-input"
+          class="rm-select"
           :value="model"
           :aria-label="t('requestMonitor.filterModel')"
           @change="
@@ -99,7 +99,7 @@ const statuses: InspectorStatus[] = [
       >
         <span class="rm-record-top"
           ><span class="rm-mono">#{{ record.id }}</span
-          ><span class="rm-status" :class="`rm-status-${record.status}`">{{
+          ><span class="rm-status-badge" :class="`rm-status-${record.status}`">{{
             t(`requestMonitor.status.${record.status}`)
           }}</span></span
         >

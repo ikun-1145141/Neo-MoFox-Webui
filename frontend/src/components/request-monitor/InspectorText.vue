@@ -13,9 +13,9 @@ const preview = computed(() => props.text.slice(0, limit.value))
 <template>
   <div class="rm-text-view">
     <pre class="rm-content">{{ preview }}</pre>
-    <div class="rm-inline-actions">
-      <button v-if="text.length > limit" class="rm-button" @click="limit += TEXT_PAGE_SIZE">{{ t('requestMonitor.moreText') }} ({{ Math.min(limit, text.length) }}/{{ text.length }})</button>
-      <button class="rm-button rm-small" @click="emit('copy', text)">{{ t('requestMonitor.copyText') }}</button>
+    <div class="rm-text-actions">
+      <button v-if="text.length > limit" class="rm-btn rm-btn-tonal rm-text-expand-btn" @click="limit += TEXT_PAGE_SIZE">{{ t('requestMonitor.moreText') }} ({{ Math.min(limit, text.length) }}/{{ text.length }})</button>
+      <button class="rm-btn rm-btn-tonal" @click="emit('copy', text)">{{ t('requestMonitor.copyText') }}</button>
     </div>
   </div>
 </template>
