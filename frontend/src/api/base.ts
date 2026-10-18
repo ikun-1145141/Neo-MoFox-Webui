@@ -5,6 +5,13 @@ import type { BaseResponse } from './types/base'
 import { useToastStore } from '../utils/toast'
 import { healthCheck } from './modules/settings'
 
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    /** Expected statuses handled visibly inline by the caller; never suppress authentication. */
+    handledErrorStatuses?: number[]
+  }
+}
+
 const instance: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: API_TIMEOUT,
@@ -107,7 +114,9 @@ instance.interceptors.response.use(
   (response) => {
     const res = response.data as BaseResponse
     if (res.code !== 200) {
-      console.error('API Error:', res)
+      console.error('API Error code:', res.code)
+      if (![401, 403].includes(res.code) && response.config.handledErrorStatuses?.includes(res.code))
+        return Promise.reject(res)
       useToastStore().show(res.message ?? '操作失败', 'error')
       return Promise.reject(res)
     }
@@ -140,6 +149,7 @@ instance.interceptors.response.use(
     // 1. 开发环境下登录接口的网络错误
     // 2. 健康检查接口的错误（重启期间的预期行为）
     const shouldSkipToast =
+      (status !== 401 && status !== 403 && error?.config?.handledErrorStatuses?.includes(status)) ||
       (import.meta.env.DEV && requestUrl.includes('/api/auth/login') && error?.code === 'ERR_NETWORK') ||
       (requestUrl.includes('/api/webui/health') && getIsRestarting())
 

@@ -1,52 +1,67 @@
-"""LLM 请求体检视器管理器。
-
-承接 WebUI 请求体检视器路由的业务逻辑，统一调用工具层并返回可供前端
-展示的归一化数据。
-"""
+"""Validate the host's native inspection snapshots at the WebUI API boundary."""
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 
-from ..utils.request_inspector import RequestInspectorHelper, get_request_inspector_helper
+try:
+    from src.kernel.llm import get_inspector as _host_get_inspector
+except ImportError:
+    _host_get_inspector = None
+
+if TYPE_CHECKING:
+    from src.kernel.llm.request_inspector import RequestInspector
+from ..utils.request_inspector_types import (
+    InspectorClearResult,
+    InspectorRecordDetail,
+    InspectorRecordsSnapshot,
+)
+
+
+class InspectorUnavailableError(RuntimeError):
+    """The host lacks the public native snapshot contract; never fall back."""
+
+
+def _get_inspector() -> RequestInspector:
+    """Resolve lazily so an older host can still serve an authenticated upgrade error."""
+    try:
+        if _host_get_inspector is None:
+            raise InspectorUnavailableError("Native request inspector unavailable")
+        inspector = _host_get_inspector()
+    except (ImportError, AttributeError) as exc:
+        raise InspectorUnavailableError("Native request inspector unavailable") from exc
+    if not all(
+        callable(getattr(inspector, method, None))
+        for method in ("snapshot", "get_record", "clear_snapshot")
+    ):
+        raise InspectorUnavailableError("Native request inspector unavailable")
+    return inspector
 
 
 class RequestInspectorManager:
-    """LLM 请求体检视器管理器。"""
+    """Expose native public APIs; no private buffer access or duplicate collection."""
 
-    def __init__(self) -> None:
-        """初始化请求体检视器管理器。"""
-        self.inspector_helper: RequestInspectorHelper = get_request_inspector_helper()
+    def list_records(self) -> InspectorRecordsSnapshot:
+        """Return an atomic metadata-only snapshot of the retained buffer."""
+        return InspectorRecordsSnapshot.model_validate(_get_inspector().snapshot())
 
-    def list_requests(self) -> list[dict[str, Any]]:
-        """获取捕获请求摘要列表。"""
-        return self.inspector_helper.list_requests()
+    def get_record(self, record_id: int) -> InspectorRecordDetail | None:
+        """Return validated detail, or None if cleared or evicted."""
+        record = _get_inspector().get_record(record_id)
+        return (
+            InspectorRecordDetail.model_validate(record) if record is not None else None
+        )
 
-    def get_request(self, request_id: int) -> dict[str, Any] | None:
-        """获取指定捕获请求详情。
-
-        Args:
-            request_id: 捕获请求 ID。
-
-        Returns:
-            请求详情；不存在时返回 None。
-        """
-        return self.inspector_helper.get_request(request_id)
-
-    def clear_requests(self) -> dict[str, Any]:
-        """清空捕获请求列表。"""
-        return self.inspector_helper.clear_requests()
-
-    async def get_analytics(self) -> dict[str, Any]:
-        """获取综合统计指标。"""
-        return await self.inspector_helper.get_analytics()
+    def clear_records(self) -> InspectorClearResult:
+        """Forget snapshots without cancelling the underlying model requests."""
+        return InspectorClearResult.model_validate(_get_inspector().clear_snapshot())
 
 
 _request_inspector_manager: RequestInspectorManager | None = None
 
 
 def get_request_inspector_manager() -> RequestInspectorManager:
-    """获取请求体检视器管理器单例。"""
+    """Return the stateless WebUI transport manager."""
     global _request_inspector_manager
     if _request_inspector_manager is None:
         _request_inspector_manager = RequestInspectorManager()
