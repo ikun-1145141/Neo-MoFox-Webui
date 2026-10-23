@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import { nextTick, ref, watch } from 'vue'
 import { useI18n } from '../../utils/i18n'
 import type {
   InspectorRecordSummary,
   InspectorStatus,
 } from '../../api/types/request-inspector'
 const { t } = useI18n()
-defineProps<{
+const props = defineProps<{
   records: InspectorRecordSummary[]
   selectedId: number | null
   models: string[]
@@ -13,6 +14,7 @@ defineProps<{
   status: InspectorStatus | ''
   model: string
   loading: boolean
+  active?: boolean
 }>()
 const emit = defineEmits<{
   select: [id: number]
@@ -20,6 +22,15 @@ const emit = defineEmits<{
   'update:status': [value: InspectorStatus | '']
   'update:model': [value: string]
 }>()
+const recordsElement = ref<HTMLElement | null>(null)
+let savedScroll = 0
+let scrollGeneration = 0
+watch(() => props.active, async (active, previous) => {
+  const generation = ++scrollGeneration
+  if (previous !== false && recordsElement.value) savedScroll = recordsElement.value.scrollTop
+  await nextTick()
+  if (generation === scrollGeneration && active !== false && recordsElement.value) recordsElement.value.scrollTop = savedScroll
+})
 const statuses: InspectorStatus[] = [
   'pending',
   'running',
@@ -84,7 +95,7 @@ const statuses: InspectorStatus[] = [
         </select>
       </div>
     </div>
-    <div class="rm-records" :aria-busy="loading">
+    <div ref="recordsElement" class="rm-records" :aria-busy="loading">
       <p v-if="!records.length" class="rm-empty">
         {{ t(loading ? 'requestMonitor.loading' : 'requestMonitor.noRecords') }}
       </p>

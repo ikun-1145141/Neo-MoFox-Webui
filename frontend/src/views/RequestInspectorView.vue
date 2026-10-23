@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onUnmounted, ref } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import AppShell from '../components/common/AppShell.vue'
 import Icon from '../components/common/Icon.vue'
 import InspectorRecordList from '../components/request-monitor/InspectorRecordList.vue'
@@ -38,6 +38,21 @@ const {
   clear,
 } = useRequestMonitor()
 
+// Presentation only: automatic selection never opens the mobile detail page.
+const compact = ref(false)
+const mobileDetail = ref(false)
+let media: MediaQueryList | null = null
+function updateLayout() { compact.value = media?.matches ?? false }
+onMounted(() => {
+  media = window.matchMedia('(max-width: 899px)')
+  updateLayout()
+  media.addEventListener('change', updateLayout)
+})
+watch(selectedId, id => { if (id === null) mobileDetail.value = false }, { flush: 'sync' })
+function openRecord(id: number) {
+  mobileDetail.value = true
+  if (id !== selectedId.value || !detail.value) void selectRecord(id)
+}
 const exporting = ref(false)
 const downloadUrl = ref('')
 const downloadName = ref('')
@@ -52,6 +67,7 @@ function revokeDownload() {
 
 onUnmounted(() => {
   disposed = true
+  media?.removeEventListener('change', updateLayout)
   if (revokeTimer) clearTimeout(revokeTimer)
   revokeDownload()
 })
@@ -112,7 +128,7 @@ async function exportDetail(value: unknown, scope: string) {
 
 <template>
   <AppShell no-padding>
-    <section class="rm-page">
+    <section class="rm-page" :class="{ 'rm-show-detail': mobileDetail }">
       <!-- 页面顶栏：使用与主程序各页面对齐的毛玻璃与胶囊工具栏 -->
       <header class="rm-header">
         <div class="rm-header-left">
@@ -130,7 +146,7 @@ async function exportDetail(value: unknown, scope: string) {
               <Icon icon="material-symbols:database-outline" width="14" height="14" />
               <span>{{ snapshot?.stats.total ?? 0 }} / {{ snapshot?.capacity ?? 200 }}</span>
             </span>
-            <span class="rm-metric-chip rm-hide-mobile" v-if="lastUpdated">
+            <span class="rm-metric-chip rm-last-updated" v-if="lastUpdated">
               <Icon icon="material-symbols:schedule-outline" width="14" height="14" />
               <span>{{ new Date(lastUpdated).toLocaleTimeString() }}</span>
             </span>
@@ -140,6 +156,8 @@ async function exportDetail(value: unknown, scope: string) {
         <div class="rm-header-actions">
           <button
             class="rm-btn rm-btn-tonal"
+            :aria-label="t(paused ? 'requestMonitor.resume' : 'requestMonitor.pause')"
+            :title="t(paused ? 'requestMonitor.resume' : 'requestMonitor.pause')"
             :disabled="clearing"
             @click="paused ? resume() : pause()"
           >
@@ -153,6 +171,8 @@ async function exportDetail(value: unknown, scope: string) {
 
           <button
             class="rm-btn rm-btn-tonal"
+            :aria-label="t('requestMonitor.refresh')"
+            :title="t('requestMonitor.refresh')"
             :disabled="refreshing || clearing"
             @click="refreshNow()"
           >
@@ -167,6 +187,8 @@ async function exportDetail(value: unknown, scope: string) {
 
           <button
             class="rm-btn rm-btn-danger-tonal"
+            :aria-label="t('requestMonitor.clear')"
+            :title="t('requestMonitor.clear')"
             :disabled="!snapshot?.records.length || clearing"
             @click="clearRecords()"
           >
@@ -189,7 +211,7 @@ async function exportDetail(value: unknown, scope: string) {
         <span>{{ t(`requestMonitor.${notice}`) }}</span>
       </div>
 
-      <!-- 核心工作区：桌面左右分栏，移动端平滑上下分栏 -->
+      <!-- 核心工作区：桌面左右分栏，移动端列表/详情单屏切换 -->
       <div class="rm-workspace">
         <InspectorRecordList
           v-model:search="search"
@@ -198,11 +220,15 @@ async function exportDetail(value: unknown, scope: string) {
           :records="records"
           :models="models"
           :selected-id="selectedId"
+          :active="!compact || !mobileDetail"
           :loading="refreshing && !snapshot"
-          @select="selectRecord"
+          @select="openRecord"
         />
         <InspectorRecordDetail
           :record="detail"
+          :compact="compact"
+          :active="!compact || mobileDetail"
+          @back="mobileDetail = false"
           :loading="detailLoading"
           :exporting="exporting"
           :filtered-out="selectedId !== null && !records.some(record => record.id === selectedId)"

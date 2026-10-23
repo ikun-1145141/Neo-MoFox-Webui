@@ -157,6 +157,29 @@ def seed_display_samples():
                           "stop_reason": "tool_calls"})
 
 
+    # Deterministic mobile stress fixtures. No robot, real credentials or provider I/O.
+    for index in range(30):
+        params = {
+            "model": "ui-mobile-model-" + "long-name-" * 8,
+            "messages": [{"role": "user", "content": "离线手机适配测试。\n" * 1800}],
+            "tools": [{"type": "function", "function": {
+                "name": "offline_tool_" + str(i) + ("_long_name" * 8 if i % 2 else ""),
+                "description": "仅用于离线布局测试，不执行工具。",
+                "parameters": {"type": "object", "properties": {"query": {"type": "string"}}},
+            }} for i in range(29)],
+            "extra_body": {"deep": {"nested": {"values": list(range(250))}}, "long_value": "offline-value" * 3000},
+        }
+        rid = inspector.capture("chat.completions.create", params,
+                                {**metadata, "request_name": "UI fixture / mobile " + str(index) + "_long_request_name" * 5},
+                                native=True, stream=True, logical_request_id="mobile-long-logical-id-" * 8)
+        inspector.start(rid, params)
+        inspector.raw(rid, {"type": "offline.unknown", "text": "离线原始事件" * 100}, event=True)
+        inspector.finish(rid, {"kind": "chat", "message": "手机端长文本返回。\n" * 1600,
+                              "reasoning_content": "仅展示已有推理。\n" * 100,
+                              "tool_calls": [{"id": "offline-call", "name": "offline_tool_0", "args": '{"query":"offline"}'}]},
+                         error=RuntimeError("离线错误详情。" * 300) if index == 28 else None)
+
+
 app = FastAPI(lifespan=lifespan)
 app.mount("/webui/api/request-inspector", router.app)
 

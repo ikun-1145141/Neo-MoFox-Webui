@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from '../common/Icon.vue'
 import { computed, ref } from 'vue'
 import type { InspectorRecordDetail, JsonValue } from '../../api/types/request-inspector'
 import InspectorJsonTree from './InspectorJsonTree.vue'
@@ -19,7 +20,7 @@ const key = computed(() => `${props.record.instance_id}:${props.record.id}:${sou
 </script>
 <template>
   <div class="rm-mode-toolbar">
-    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+    <div class="rm-toolbar-group">
       <select v-model="source" class="rm-select" :aria-label="t('requestMonitor.rawSource')">
         <option v-for="(label, name) in sources" :key="name" :value="name">{{ t(`requestMonitor.${label}`) }}</option>
       </select>
@@ -28,7 +29,7 @@ const key = computed(() => `${props.record.instance_id}:${props.record.id}:${sou
         <button class="rm-seg-btn" :class="{ active: mode === 'tree' }" :aria-pressed="mode === 'tree'" @click="mode = 'tree'">{{ t('requestMonitor.tree') }}</button>
       </div>
     </div>
-    <div style="display: flex; align-items: center; gap: 8px;">
+    <div class="rm-toolbar-group">
       <button class="rm-btn rm-btn-tonal" @click="emit('copy', JSON.stringify(value, null, 2))">
         <Icon icon="material-symbols:content-copy-rounded" width="15" height="15" />
         <span>{{ t('requestMonitor.copy') }}</span>
