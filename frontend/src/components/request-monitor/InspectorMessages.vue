@@ -6,6 +6,7 @@ import type { InspectorMessageView } from '../../api/types/request-inspector'
 const props = defineProps<{
   messages: InspectorMessageView[]
   recordKey: string
+  title?: string
 }>()
 const emit = defineEmits<{ copy: [text: string] }>()
 const { t } = useI18n()
@@ -33,7 +34,7 @@ watch(
 <template>
   <div class="rm-section-heading">
     <h3>
-      {{ t('requestMonitor.messages') }}
+      {{ title || t('requestMonitor.messages') }}
       <span class="rm-muted">{{ messages.length }}</span>
     </h3>
     <select

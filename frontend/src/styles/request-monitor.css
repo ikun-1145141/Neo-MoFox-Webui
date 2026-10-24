@@ -803,6 +803,20 @@ details.rm-block > .rm-tool-summary {
   text-overflow: ellipsis;
   color: var(--md-sys-color-on-surface);
 }
+.rm-tree-val.val-string {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: visible;
+  text-overflow: clip;
+}
+.rm-tree-text {
+  min-width: 0;
+  margin: 6px 0 8px 30px;
+  padding: 10px 12px;
+  border: 1px solid var(--rm-line);
+  border-radius: 8px;
+  background: var(--md-sys-color-surface-container-lowest);
+}
 .rm-tree-actions {
   display: flex;
   flex: none;

@@ -371,3 +371,96 @@ test('clicking a different mobile request fetches only that detail and does not 
   assert.deepEqual(calls, [2])
   assert.equal(monitorMounts, 1)
 })
+
+
+test('expanded JSON strings use a multiline text block and reveal the complete value in pages', async t => {
+  const copied = []
+  const payload = 'first-page\n' + '中'.repeat(9000) + '<last-page>'
+  const { host, props } = mount(t, 'InspectorJsonTree', { value: { description: payload }, scope: 'long-string', onCopy: x => copied.push(x) })
+  assert.equal(descendants(host).filter(n => n.tag === 'pre').length, 0)
+  const more = () => buttons(host).find(n => text(n).includes('requestMonitor.moreText'))
+  await click(more())
+  const preview = () => descendants(host).find(n => n.tag === 'pre')
+  assert.equal(preview().props.class, 'rm-content')
+  assert.equal(preview().parent.props.class, 'rm-tree-text')
+  assert.equal(preview().text, utils.previewJson(payload, 160 + utils.TEXT_PAGE_SIZE))
+  props.value = { description: payload + 'stream-tail' }; await vue.nextTick()
+  assert.equal(preview().text, utils.previewJson(payload + 'stream-tail', 160 + utils.TEXT_PAGE_SIZE))
+  while (more()) await click(more())
+  assert.equal(preview().text, JSON.stringify(payload + 'stream-tail'))
+  assert.ok(preview().text.includes('<last-page>stream-tail'))
+  await click(buttons(host).find(n => n.props['aria-label'] === 'requestMonitor.copyNode description'))
+  assert.equal(JSON.parse(copied.at(-1)), payload + 'stream-tail')
+  props.scope = 'another-record'; await vue.nextTick()
+  assert.equal(preview(), undefined, 'new scope resets expanded text')
+})
+
+test('medium JSON strings expand fully without a remaining artificial ellipsis', async t => {
+  const payload = '工具说明'.repeat(70)
+  const { host } = mount(t, 'InspectorJsonTree', { value: payload, scope: 'medium-string' })
+  await click(buttons(host).find(n => text(n).includes('requestMonitor.moreText')))
+  assert.equal(descendants(host).find(n => n.tag === 'pre').text, JSON.stringify(payload))
+  assert.ok(!buttons(host).some(n => text(n).includes('requestMonitor.moreText')))
+})
+
+test('null, empty and whitespace chat bodies show the tool-only state instead of a blank text card', async t => {
+  for (const message of [null, '', '  \n  ']) {
+    const r = record({ status: 'succeeded' })
+    r.response = { ...r.response, message, reasoning_content: '', tool_calls: [{ name: 'reply', args: '{"content":"hello"}' }], stop_reason: 'tool_calls' }
+    let opened = false
+    const { host } = mount(t, 'InspectorResponse', { record: r, onTools: () => { opened = true } })
+    assert.ok(text(host).includes('requestMonitor.toolOnlyResponse'))
+    assert.ok(!text(host).includes('requestMonitor.responseText'))
+    assert.ok(!text(host).includes('requestMonitor.reasoning'))
+    assert.equal(descendants(host).filter(n => n.tag === 'pre').length, 1, 'tool arguments are visible, not an empty body')
+    assert.ok(text(host).includes('reply'))
+    assert.ok(text(host).includes('{"content":"hello"}'))
+    await click(buttons(host).find(n => text(n) === 'requestMonitor.viewToolCalls'))
+    assert.equal(opened, true)
+  }
+})
+
+test('empty streaming responses become visible on append without losing reasoning or partial failure output', async t => {
+  const first = record(); first.response = { ...first.response, message: '', reasoning_content: null }
+  const { host, props } = mount(t, 'InspectorResponse', { record: first })
+  assert.ok(text(host).includes('requestMonitor.waitingContent'))
+  assert.ok(!text(host).includes('requestMonitor.copyText'))
+  props.record = { ...first, version: 2, response: { ...first.response, message: 'normal text', reasoning_content: 'thinking' } }; await vue.nextTick()
+  assert.ok(text(host).includes('normal text'))
+  assert.ok(text(host).includes('thinking'))
+  props.record = { ...props.record, status: 'failed' }; await vue.nextTick()
+  assert.ok(text(host).includes('normal text'))
+  props.record = { ...first, status: 'succeeded' }; await vue.nextTick()
+  assert.ok(text(host).includes('requestMonitor.noResponseText'))
+  assert.ok(!text(host).includes('requestMonitor.waitingContent'))
+})
+
+test('tool-only response action switches to the existing Tools panel', async t => {
+  const r = record({ status: 'succeeded' })
+  r.response = { ...r.response, message: '', tool_calls: [{ name: 'reply', args: '{"content":"hello"}' }] }
+  const { host } = mount(t, 'InspectorRecordDetail', { record: r, loading: false, exporting: false })
+  await click(descendants(host).find(n => n.props.id === 'rm-tab-response'))
+  await click(buttons(host).find(n => text(n) === 'requestMonitor.viewToolCalls'))
+  assert.equal(descendants(host).find(n => n.props.id === 'rm-tab-tools').props['aria-selected'], true)
+  assert.ok(text(host).includes('reply'))
+})
+
+
+test('tool definitions and returned argument strings share the working multiline expansion', async t => {
+  const description = 'tool-description-'.repeat(400) + 'definition-end'
+  const args = JSON.stringify({ content: 'tool-message-'.repeat(800) + 'arguments-end' })
+  const r = record()
+  r.rendered.tools = [{ index: 0, name: 'reply', kind: 'function', description, required: [], properties: [], raw_json: JSON.stringify({ type: 'function', function: { name: 'reply', description } }) }]
+  r.response.tool_calls = [{ id: 'call-1', name: 'reply', args }]
+  const { host } = mount(t, 'InspectorTools', { record: r })
+  const details = descendants(host).filter(n => n.tag === 'details')
+  for (const detail of details) { detail.props.onToggle({ target: { open: true } }); await vue.nextTick() }
+  await click(buttons(host).find(n => n.props['aria-label'] === 'requestMonitor.expand function'))
+  const moreIn = node => descendants(node).find(n => n.tag === 'button' && text(n).includes('requestMonitor.moreText'))
+  for (const detail of details) {
+    while (moreIn(detail)) await click(moreIn(detail))
+  }
+  const previews = descendants(host).filter(n => n.tag === 'pre').map(n => n.text)
+  assert.ok(previews.includes(JSON.stringify(description)), 'full definition is displayed')
+  assert.ok(previews.includes(JSON.stringify(args)), 'full original argument string is displayed')
+})

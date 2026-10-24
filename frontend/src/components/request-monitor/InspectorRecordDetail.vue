@@ -145,7 +145,7 @@ function moveTab(event: KeyboardEvent) {
               <div v-show="requestMode === 'messages'"><InspectorMessages :messages="panels[name]!.rendered.messages" :record-key="recordKey" @copy="emit('copy', $event)" /></div>
               <details class="rm-block rm-metadata-block"><summary>{{ t('requestMonitor.metadata') }}</summary><InspectorJsonTree :value="panels[name]!.metadata" :scope="`${recordKey}:metadata`" path-prefix="/metadata" @copy="emit('copy', $event)" /></details>
             </template>
-            <InspectorResponse v-else-if="name === 'response'" :record="panels[name]!" @copy="emit('copy', $event)" />
+            <InspectorResponse v-else-if="name === 'response'" :record="panels[name]!" @copy="emit('copy', $event)" @tools="tab = 'tools'" />
             <InspectorTools v-else-if="name === 'tools'" :record="panels[name]!" @copy="emit('copy', $event)" />
             <InspectorRawJson v-else :record="panels[name]!" @copy="emit('copy', $event)" @export="(value, scope) => emit('export', value, scope)" />
           </div>

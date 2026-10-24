@@ -82,7 +82,7 @@ function copy(row: JsonRow) { emit('copy', JSON.stringify(row.value, null, 2)) }
           </span>
 
           <!-- 缩略值 -->
-          <span class="rm-tree-val" :class="`val-${row.type}`">
+          <span v-if="row.type !== 'string' || state.get(row.path)?.textLength === undefined" class="rm-tree-val" :class="`val-${row.type}`">
             {{ previewJson(row.value, state.get(row.path)?.textLength ?? 160) }}
           </span>
 
@@ -109,13 +109,16 @@ function copy(row: JsonRow) { emit('copy', JSON.stringify(row.value, null, 2)) }
           </div>
         </div>
 
+        <div v-if="row.type === 'string' && state.get(row.path)?.textLength !== undefined" class="rm-tree-text">
+          <pre class="rm-content">{{ previewJson(row.value, state.get(row.path)?.textLength ?? 160) }}</pre>
+        </div>
         <button
           v-if="row.type === 'string' && row.size > (state.get(row.path)?.textLength ?? 160)"
           class="rm-tree-btn rm-tree-expand-text"
-          @click="update(row.path, { textLength: (state.get(row.path)?.textLength ?? 160) + TEXT_PAGE_SIZE })"
+          @click="update(row.path, { textLength: Math.min(row.size, (state.get(row.path)?.textLength ?? 160) + TEXT_PAGE_SIZE) })"
         >
           <Icon icon="material-symbols:unfold-more-rounded" width="14" height="14" />
-          {{ t('requestMonitor.moreText') }}
+          {{ t('requestMonitor.moreText') }} ({{ Math.min(state.get(row.path)?.textLength ?? 160, row.size) }}/{{ row.size }})
         </button>
       </template>
     </div>

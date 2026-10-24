@@ -179,6 +179,25 @@ def seed_display_samples():
                               "tool_calls": [{"id": "offline-call", "name": "offline_tool_0", "args": '{"query":"offline"}'}]},
                          error=RuntimeError("离线错误详情。" * 300) if index == 28 else None)
 
+    # Regression fixture for tool-only responses and expanded JSON strings.
+    description = "离线工具说明，展开后必须显示所有文本。\n" * 350 + "工具说明末尾"
+    params = {
+        "model": "ui-tool-only",
+        "messages": [{"role": "user", "content": "离线测试：无普通正文，仅返回工具调用。"}],
+        "tools": [{"type": "function", "function": {
+            "name": "offline_reply", "description": description,
+            "parameters": {"type": "object", "properties": {"content": {"type": "string"}}},
+        }}],
+        "extra_body": {"long_text": "结构树长字符串。\n" * 1000 + "结构树末尾"},
+    }
+    rid = inspector.capture("chat.completions.create", params,
+                            {**metadata, "request_name": "UI fixture / empty body and expanded tools"}, native=True, stream=True)
+    inspector.start(rid, params)
+    inspector.finish(rid, {"kind": "chat", "message": "", "reasoning_content": "",
+                          "tool_calls": [{"id": "offline-tool-only", "name": "offline_reply",
+                                          "args": '{"content":"' + "离线工具调用正文。" * 1200 + '工具参数末尾"}'}],
+                          "usage": {"prompt_tokens": 123, "completion_tokens": 42}, "stop_reason": "tool_calls"})
+
 
 app = FastAPI(lifespan=lifespan)
 app.mount("/webui/api/request-inspector", router.app)
