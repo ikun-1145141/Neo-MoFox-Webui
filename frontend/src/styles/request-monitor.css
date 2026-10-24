@@ -266,16 +266,24 @@
   cursor: pointer;
   border: 1px solid var(--rm-line);
   border-radius: 12px;
-  background: var(--md-sys-color-surface);
-  transition: background .15s, border-color .15s;
-}
-.rm-record:hover {
-  border-color: var(--md-sys-color-primary);
+  --rm-record-background: var(--md-sys-color-surface);
+  background: var(--rm-record-background);
+  transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
 }
 .rm-record.selected {
-  background: color-mix(in srgb, var(--md-sys-color-primary) 8%, var(--md-sys-color-surface));
+  --rm-record-background: color-mix(in srgb, var(--md-sys-color-primary) 8%, var(--md-sys-color-surface));
   border-color: var(--md-sys-color-primary);
   box-shadow: inset 3px 0 var(--md-sys-color-primary);
+}
+@media (hover: hover) and (pointer: fine) {
+  .rm-record:hover {
+    transform: translateY(-3px);
+    background: color-mix(in srgb, #000 7%, var(--rm-record-background));
+    box-shadow: 0 6px 16px rgb(0 0 0 / .14);
+  }
+  .rm-record.selected:hover {
+    box-shadow: inset 3px 0 var(--md-sys-color-primary), 0 6px 16px rgb(0 0 0 / .14);
+  }
 }
 .rm-record-top {
   font-size: .7rem;
@@ -721,19 +729,24 @@ details.rm-block > .rm-tool-summary {
 }
 .rm-tree-item {
   position: relative;
-  min-width: max-content;
-  padding-left: calc(var(--rm-depth, 0) * 16px);
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  padding-left: min(calc(var(--rm-depth, 0) * 16px), 25%);
 }
 .rm-tree-item::before {
   content: '';
   position: absolute;
-  left: calc(var(--rm-depth, 0) * 16px - 6px);
+  left: calc(min(calc(var(--rm-depth, 0) * 16px), 25%) - 6px);
   top: 0;
   bottom: 0;
   border-left: 1px dashed var(--rm-line);
 }
 .rm-tree-row {
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
   align-items: center;
   gap: 6px;
   min-height: 32px;
@@ -810,7 +823,9 @@ details.rm-block > .rm-tool-summary {
   text-overflow: clip;
 }
 .rm-tree-text {
+  box-sizing: border-box;
   min-width: 0;
+  max-width: calc(100% - 30px);
   margin: 6px 0 8px 30px;
   padding: 10px 12px;
   border: 1px solid var(--rm-line);
@@ -843,6 +858,9 @@ details.rm-block > .rm-tool-summary {
   font-size: .7rem;
 }
 .rm-tree-expand-text {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
   margin: 6px 0;
 }
 .rm-tree-limit-hint {
