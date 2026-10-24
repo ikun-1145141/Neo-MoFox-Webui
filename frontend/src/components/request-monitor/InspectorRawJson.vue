@@ -12,9 +12,9 @@ const source = ref<'params' | 'raw_response' | 'raw_events' | 'metadata' | 'reco
 const mode = ref('json')
 const sources = { params: 'rawRequest', raw_response: 'rawResponse', raw_events: 'rawEvents', metadata: 'metadata', record: 'fullRecord' }
 const value = computed(() => source.value === 'record' ? props.record : props.record[source.value])
-// API details consist exclusively of JSON data; no provider-specific conversion.
+// 接口详情仅包含 JSON 数据，不进行供应商专用格式转换。
 const treeValue = computed(() => value.value as unknown as JsonValue)
-// Not evaluated while the text view is closed, even for an actively streaming record.
+// 文本视图关闭时不计算格式化内容，流式记录更新时也不例外。
 const formatted = computed(() => mode.value === 'json' ? JSON.stringify(value.value, null, 2) : '')
 const key = computed(() => `${props.record.instance_id}:${props.record.id}:${source.value}`)
 </script>

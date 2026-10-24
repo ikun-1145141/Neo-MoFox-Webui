@@ -38,7 +38,7 @@ const {
   clear,
 } = useRequestMonitor()
 
-// Presentation only: automatic selection never opens the mobile detail page.
+// 仅控制展示：自动选中记录时，不跳转到手机详情页。
 const compact = ref(false)
 const mobileDetail = ref(false)
 let media: MediaQueryList | null = null
@@ -88,7 +88,7 @@ async function clearRecords() {
     if (disposed) return
     toast.show(t('requestMonitor.clearSuccess'), 'success')
   } catch {
-    /* API interceptor reports the error. */
+    /* 接口拦截器负责显示错误提示。 */
   }
 }
 

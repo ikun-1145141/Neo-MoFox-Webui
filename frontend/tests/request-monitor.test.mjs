@@ -1,4 +1,4 @@
-/** Real Vue state and real API source, fake transport/timers; no test framework dependency. */
+/** 使用真实 Vue 状态和接口源码，以模拟传输和计时器控制测试，不依赖额外测试框架。 */
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'

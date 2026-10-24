@@ -6,7 +6,7 @@ const props = defineProps<{ text: string }>()
 const emit = defineEmits<{ copy: [text: string] }>()
 const { t } = useI18n()
 const limit = ref(TEXT_PAGE_SIZE)
-// Appended streaming text retains the user's expanded range.
+// 流式文本追加时，保留用户已经展开的范围。
 watch(() => props.text, (next, old) => { if (!next.startsWith(old)) limit.value = TEXT_PAGE_SIZE })
 const preview = computed(() => props.text.slice(0, limit.value))
 </script>

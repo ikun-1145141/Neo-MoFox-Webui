@@ -1,4 +1,4 @@
-/** Display-only JSON utilities. Never interpret provider protocols or merge request fields. */
+/** 仅用于展示的 JSON 工具，不解析供应商协议，也不合并请求字段。 */
 import type { JsonValue } from '../api/types/request-inspector'
 
 export const JSON_PAGE_SIZE = 100
@@ -19,7 +19,7 @@ export interface JsonRow {
 }
 export type JsonTreeState = Map<string, JsonNodeState>
 
-/** An unambiguous JSON Pointer, including empty keys, slash and tilde. */
+/** 生成无歧义的 JSON Pointer 路径，正确处理空键、斜杠和波浪号。 */
 export function childPointer(parent: string, key: string): string {
   return `${parent}/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`
 }
@@ -36,7 +36,7 @@ export function previewJson(value: JsonValue, limit = 160): string {
   if (value !== null && typeof value === 'object') return Array.isArray(value) ? '[…]' : '{…}'
   return JSON.stringify(value)
 }
-/** Iterative, lazy traversal: never descend into collapsed nodes or build all array entries. */
+/** 使用迭代式惰性遍历，不进入折叠节点，也不一次构建整个数组。 */
 export function visibleJsonRows(value: JsonValue, state: JsonTreeState, maxRows = JSON_ROW_LIMIT) {
   const rows: JsonRow[] = []
   const stack: { value: JsonValue; path: string; key: string; depth: number; more?: boolean; size?: number; shown?: number; offset?: number }[] = [
@@ -68,7 +68,7 @@ export function visibleJsonRows(value: JsonValue, state: JsonTreeState, maxRows 
   return { rows, limited: stack.length > 0 }
 }
 
-/** Resolve only own JSON keys; never walk prototypes or evaluate a path as code. */
+/** 只读取 JSON 对象自身的键，不访问原型链，也不将路径作为代码执行。 */
 export function hasJsonPath(value: JsonValue, pointer: string): boolean {
   if (pointer === '') return true
   let current = value

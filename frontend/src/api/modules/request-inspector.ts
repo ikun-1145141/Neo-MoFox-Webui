@@ -1,4 +1,4 @@
-/** Authenticated native records API. No old-path compatibility or client-side collection. */
+/** 需要身份认证的原生记录接口，不兼容旧路径，也不在客户端重复采集。 */
 import instance from '../base'
 import { API_WEBUI_PREFIX } from '../config'
 import type {

@@ -21,7 +21,7 @@ function block(type: string, label: string, text: string | null): InspectorMessa
 function field(call: JsonValue, name: string): JsonValue | undefined {
   return call !== null && typeof call === 'object' && !Array.isArray(call) && Object.hasOwn(call, name) ? call[name] : undefined
 }
-// Render only the public normalized response, without guessing provider protocols or tool semantics.
+// 只展示公共接口中的标准化响应，不猜测供应商协议或工具参数的业务含义。
 const messages = computed<InspectorMessageView[]>(() => {
   const response = props.record.response
   const result: InspectorMessageView[] = []

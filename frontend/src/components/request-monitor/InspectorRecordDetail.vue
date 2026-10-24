@@ -25,12 +25,12 @@ function rememberPanel(name: string, element: unknown) {
 }
 function saveScroll(name: string, mobile: boolean, event: Event) {
   if (props.active === false || mobile !== !!props.compact) return
-  // CSS changes its scroll owner before Vue receives the media-query callback.
+  // 在 Vue 收到媒体查询回调之前，CSS 已经改变了实际负责滚动的容器。
   if (typeof window !== 'undefined' && mobile !== window.matchMedia('(max-width: 899px)').matches) return
   scrollPositions.set((mobile ? 'mobile:' : 'desktop:') + name, (event.currentTarget as HTMLElement).scrollTop)
 }
-// Save on scroll, not after a media query has already changed the DOM's scroll owner.
-// Desktop and mobile have different header/content extents, so retain both positions.
+// 滚动发生时立即保存位置，不等到媒体查询已经改变滚动容器之后再保存。
+// 桌面与手机的头部和内容高度不同，需要分别保留滚动位置。
 watch([tab, () => props.compact, () => props.active], async ([name, compact, active], [oldName, oldCompact, oldActive]) => {
   const generation = ++scrollGeneration
   if (oldCompact === compact && oldActive !== false && active !== false) {
@@ -44,7 +44,7 @@ watch([tab, () => props.compact, () => props.active], async ([name, compact, act
 })
 const panels = shallowReactive<Record<string, InspectorRecordDetail | null>>({})
 const recordKey = computed(() => props.record ? `${props.record.instance_id}:${props.record.id}` : '')
-// Keep at most four visited panels. Inactive panels retain DOM/scroll/state, not live updates.
+// 最多保留四个已访问面板；非活动面板保留节点、滚动和展开状态，但不实时更新数据。
 watch(recordKey, () => {
   scrollGeneration++
   scrollPositions.clear()

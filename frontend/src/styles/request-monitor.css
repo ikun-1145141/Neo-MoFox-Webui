@@ -1,4 +1,4 @@
-/* Request monitor: one layout system, shared 900px AppShell breakpoint. */
+/* 请求监视器使用统一布局，并与 AppShell 共用 900px 响应式断点。 */
 .rm-page {
   --rm-line: color-mix(in srgb, var(--md-sys-color-outline-variant) 45%, transparent);
   --rm-muted: var(--md-sys-color-on-surface-variant);
@@ -715,7 +715,7 @@ details.rm-block > .rm-tool-summary {
   overflow-wrap: anywhere;
   word-break: normal;
 }
-/* Keep long/deep JSON scroll local instead of widening the page. */
+/* 将长内容和深层结构的滚动限制在 JSON 区域内，避免撑宽整页。 */
 .rm-tree-container {
   min-width: 0;
   max-width: 100%;

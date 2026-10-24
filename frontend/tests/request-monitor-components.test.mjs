@@ -1,4 +1,4 @@
-/** Real SFC templates + Vue memory renderer; no provider, DOM package or extra test framework. */
+/** 使用真实单文件组件模板和 Vue 内存渲染器，不接入供应商、不引入 DOM 库或额外测试框架。 */
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -221,7 +221,7 @@ test('shared Axios interceptor only suppresses explicitly inline-handled errors,
   assert.equal(messages.length, 2)
 })
 
-// Presentation tests exercise the real page template, without network or storage.
+// 展示测试使用真实页面模板，不访问网络或持久化存储。
 function mobilePage(t) {
   const listeners = new Set()
   const media = { matches: true, addEventListener: (_, fn) => listeners.add(fn), removeEventListener: (_, fn) => listeners.delete(fn) }

@@ -157,7 +157,7 @@ def seed_display_samples():
                           "stop_reason": "tool_calls"})
 
 
-    # Deterministic mobile stress fixtures. No robot, real credentials or provider I/O.
+    # 使用可复现的手机布局压力样例，不启动机器人、不使用真实凭据或访问供应商。
     for index in range(30):
         params = {
             "model": "ui-mobile-model-" + "long-name-" * 8,
@@ -179,7 +179,7 @@ def seed_display_samples():
                               "tool_calls": [{"id": "offline-call", "name": "offline_tool_0", "args": '{"query":"offline"}'}]},
                          error=RuntimeError("离线错误详情。" * 300) if index == 28 else None)
 
-    # Regression fixture for tool-only responses and expanded JSON strings.
+    # 仅返回工具调用及展开 JSON 长字符串的回归样例。
     description = "离线工具说明，展开后必须显示所有文本。\n" * 350 + "工具说明末尾"
     params = {
         "model": "ui-tool-only",

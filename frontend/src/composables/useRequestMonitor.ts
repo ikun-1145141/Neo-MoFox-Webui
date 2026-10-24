@@ -1,4 +1,4 @@
-/** Serial polling and stale-response protection for the native request monitor. */
+/** 原生请求监视器的串行轮询与过期响应保护。 */
 import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue'
 import {
   listInspectorRecords,
@@ -36,7 +36,7 @@ const cancelled = (error: unknown) => {
   )
 }
 
-/** Factory separated from Vue lifecycle so races and timers can be tested deterministically. */
+/** 将状态管理工厂与 Vue 生命周期分离，便于使用受控测试验证竞态和计时器。 */
 export function createRequestMonitor(ports: MonitorPorts = defaults) {
   const snapshot = shallowRef<InspectorRecordsSnapshot | null>(null)
   const detail = shallowRef<InspectorRecordDetail | null>(null)
@@ -126,7 +126,7 @@ export function createRequestMonitor(ports: MonitorPorts = defaults) {
   }
   function reportFailure(error: unknown) {
     if (cancelled(error)) return
-    // The shared Axios interceptor owns the single global Toast.
+    // 全局提示统一由共享的 Axios 拦截器负责，避免重复弹出提示。
     const response = (error as { response?: { status?: number; data?: { message?: unknown } } })?.response
     authFailed.value = response?.status === 401 || response?.status === 403
     failureMessage.value = typeof response?.data?.message === 'string' ? response.data.message : ''
@@ -234,7 +234,7 @@ export function createRequestMonitor(ports: MonitorPorts = defaults) {
     stopTimer()
     const epoch = generation
     const running = performRefresh().finally(() => {
-      // An aborted request may resolve after a new refresh has already started.
+      // 已取消的请求仍可能在新一轮刷新开始后才返回。
       if (job !== running || epoch !== generation) return
       job = null
       schedule()
@@ -340,7 +340,7 @@ export function createRequestMonitor(ports: MonitorPorts = defaults) {
   }
 }
 
-/** Bind the testable monitor to page visibility and component lifetime. */
+/** 将可独立测试的监视器绑定到页面可见性和组件生命周期。 */
 export function useRequestMonitor() {
   const monitor = createRequestMonitor()
   const onVisibility = () => monitor.setVisible(!document.hidden)

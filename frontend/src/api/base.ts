@@ -7,7 +7,7 @@ import { healthCheck } from './modules/settings'
 
 declare module 'axios' {
   interface AxiosRequestConfig {
-    /** Expected statuses handled visibly inline by the caller; never suppress authentication. */
+    /** 由调用方在页面内明确处理的预期状态码；不得屏蔽身份认证错误。 */
     handledErrorStatuses?: number[]
   }
 }

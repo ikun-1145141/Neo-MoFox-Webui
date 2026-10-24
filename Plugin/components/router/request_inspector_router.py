@@ -38,7 +38,7 @@ def _failure(
     elif isinstance(error, ValidationError):
         category = "invalid_contract"
         message = "请求监视器数据格式不兼容，请确认主程序与 WebUI 已配套升级"
-    # Even error locations / class names may contain dynamic input. Log only constants.
+    # 错误位置和异常类名也可能包含动态输入，因此日志只记录固定信息。
     logger.error(f"Request inspector operation={operation} category={category}")
     response.status_code = 500
     return BaseResponse.error(code=500, message=message)
