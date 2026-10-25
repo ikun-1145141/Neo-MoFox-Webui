@@ -2,7 +2,7 @@
 
 > 5 分钟内为你的 Neo-MoFox 插件添加一个声明式 XML UI 页面。
 >
-> 本教程聚焦 **前端 XML 编写** 与 **页面注册** 两步。后端 Router/Service/Storage 等组件的开发请先阅读：[**👉 后端组件编写规范**](https://docs.mofox-sama.com/docs/development/plugin_develop/components/router.html)。
+> 本教程聚焦 **前端 XML 编写** 与 **页面注册** 两步。后端 Router/Service/Storage 等组件的开发请先阅读：[**👉 后端组件编写规范**](https://docs.mofox.chat/docs/development/plugin_develop/components/router.html)。
 
 ---
 
@@ -265,7 +265,7 @@ XML 里 `<` 和 `>` 必须转义为 `<` 和 `>`：
 | `response-to` | 把响应数据自动写到变量池的这条路径 |
 | `auto-fetch` | `"true"` 时页面加载即触发 |
 
-> URL 里的 `/router/my_router/...` 对应后端 Router 组件中 `self.app.get("...")` 注册的路径。如何写 Router、Service 等后端组件请看：[**👉 后端组件编写规范**](https://docs.mofox-sama.com/docs/development/plugin_develop/components/router.html)。
+> URL 里的 `/router/my_router/...` 对应后端 Router 组件中 `self.app.get("...")` 注册的路径。如何写 Router、Service 等后端组件请看：[**👉 后端组件编写规范**](https://docs.mofox.chat/docs/development/plugin_develop/components/router.html)。
 
 ### 自动状态变量
 
@@ -421,7 +421,7 @@ XSD 中的 [`GlobalAttrs`](../Plugin/utils/plugin_ui/schemas/plugin_ui_v3_1.xsd:
 
 ## 写完前端，下一步去哪？
 
-- 前端组件需要后端配合？请阅读：[**👉 后端组件编写规范**](https://docs.mofox-sama.com/docs/development/plugin_develop/components/router.html)
+- 前端组件需要后端配合？请阅读：[**👉 后端组件编写规范**](https://docs.mofox.chat/docs/development/plugin_develop/components/router.html)
 - 想看完整可运行示例：[`examples/demo_ui_plugin/`](../examples/demo_ui_plugin/plugin.py:1)
 - 想了解整体架构：[`docs/Neo-MoFox-WebUI-Plugin-Extension-Design.md`](Neo-MoFox-WebUI-Plugin-Extension-Design.md:1)
 

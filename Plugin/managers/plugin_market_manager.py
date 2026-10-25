@@ -72,6 +72,7 @@ _REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 
 # 插件市场技术性边界常量（不暴露到插件配置或 UI 设置）
 _REQUEST_TIMEOUT_SECONDS = 30
+_MAX_RESPONSE_HEADER_BYTES = 32 * 1024
 _PAGE_SIZE = 50
 _CACHE_SECONDS = 30
 _MAX_PACKAGE_SIZE_MB = 50
@@ -908,6 +909,10 @@ class PluginMarketManager:
                 timeout=timeout,
                 trust_env=_TRUST_ENV,
                 auto_decompress=False,
+                # GitHub Release 的 CSP 响应头可能超过 aiohttp 默认的 8190 字节；
+                # 适度提高上限，同时保留有界的响应头解析。
+                max_line_size=_MAX_RESPONSE_HEADER_BYTES,
+                max_field_size=_MAX_RESPONSE_HEADER_BYTES,
                 headers={
                     "Accept-Encoding": "identity",
                     "User-Agent": "Neo-MoFox-WebUI-Plugin-Market/1.0.24",
