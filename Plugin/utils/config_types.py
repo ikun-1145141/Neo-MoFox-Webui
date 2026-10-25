@@ -187,12 +187,16 @@ class RemoteModelOption(BaseModel):
 # ===== 模型测试相关结构 =====
 
 
+ModelTestType = Literal["vlm", "embedding", "stream", "non_stream", "tools"]
+
+
 class ModelTestProvider(BaseModel):
     """单次连通性测试使用的供应商快照，不持久化。"""
 
     name: str = Field(..., description="供应商名称")
     base_url: str = Field(..., description="当前 API 基础地址")
     api_key: str | list[str] = Field(..., repr=False, description="当前 API 密钥或密钥列表")
+    client_type: str = Field(default="openai", description="当前供应商协议")
 
 
 class ModelTestModel(BaseModel):
@@ -201,6 +205,7 @@ class ModelTestModel(BaseModel):
     name: str = Field(..., description="模型名称")
     model_identifier: str = Field(..., description="实际模型标识符")
     api_provider: str = Field(..., description="所属供应商名称")
+    extra_params: dict[str, Any] = Field(default_factory=dict, repr=False, description="本次测试的额外参数")
 
 
 class ModelTestRequest(BaseModel):
@@ -218,7 +223,8 @@ class ModelTestRequest(BaseModel):
     provider_name: str = Field(..., description="提供商名称")
     model_name: str = Field(..., description="模型名称")
     test_prompt: str = Field(default="你好", description="测试提示词")
-    timeout: int = Field(default=15, gt=0, description="超时时间（秒）")
+    timeout: int = Field(default=30, gt=0, description="超时时间（秒）")
+    test_type: ModelTestType = Field(default="non_stream", description="本次测试项")
     provider: ModelTestProvider | None = Field(
         default=None, repr=False, description="供应商快照，仅用于本次测试"
     )
@@ -245,6 +251,12 @@ class ModelTestResult(BaseModel):
     error_message: str | None = Field(default=None, description="错误信息")
     model_identifier: str = Field(..., description="模型标识符")
     provider_base_url: str = Field(..., description="提供商 URL")
+
+    test_type: ModelTestType = Field(default="non_stream", description="测试项")
+    status: Literal["succeeded", "failed", "unsupported", "cancelled"] = Field(default="failed", description="测试状态")
+    summary: str | None = Field(default=None, description="结果摘要")
+    first_token_ms: float | None = Field(default=None, description="首个文本片段耗时（毫秒）")
+    details: dict[str, Any] = Field(default_factory=dict, description="测试结果详情")
 
 
 class McpTestRequest(BaseModel):

@@ -176,9 +176,8 @@
                     <span>{{ model.name || t('modelConfigEditor.models.name') }}</span>
                   </div>
                   <div class="card-actions">
-                    <button type="button" class="icon-btn" @click="testModel(model, String(idx))" :disabled="testingModels.has(String(idx))" :title="t('modelConfigEditor.actions.test')">
-                      <Icon v-if="!testingModels.has(String(idx))" icon="material-symbols:play-arrow-rounded" :size="20" />
-                      <Icon v-else icon="material-symbols:progress-activity" :size="20" class="spinning" />
+                    <button type="button" class="icon-btn" @click="openModelTest(model)" :title="t('modelConfigEditor.actions.test')" :aria-label="t('modelTestDialog.open', { name: model.name || model.model_identifier })">
+                      <Icon icon="material-symbols:play-arrow-rounded" :size="20" />
                     </button>
                     <button type="button" class="icon-btn" @click="editModel(idx)" :title="t('modelConfigEditor.actions.edit')">
                       <Icon icon="material-symbols:edit-outline-rounded" :size="20" />
@@ -213,20 +212,7 @@
                     </div>
                   </div>
 
-                  <!-- 测试结果 -->
-                  <div v-if="testResults.models.has(String(idx))" class="test-result" :class="testResults.models.get(String(idx))!.success ? 'success' : 'error'">
-                    <Icon :icon="testResults.models.get(String(idx))!.success ? 'material-symbols:check-circle-outline-rounded' : 'material-symbols:error-outline-rounded'" :size="18" />
-                    <div class="result-content">
-                      <p class="result-message">
-                        {{ testResults.models.get(String(idx))!.success 
-                          ? t('modelConfigEditor.test.success') + `! ${t('modelConfigEditor.test.latency')}: ${testResults.models.get(String(idx))!.latency_ms?.toFixed(0)} ms` 
-                          : t('modelConfigEditor.test.failed') + `: ${testResults.models.get(String(idx))!.error_message}` }}
-                      </p>
-                      <p v-if="testResults.models.get(String(idx))!.response_text" class="result-response">
-                        {{ t('modelConfigEditor.test.modelResponse', { response: testResults.models.get(String(idx))!.response_text || '' }) }}
-                      </p>
-                    </div>
-                  </div>
+
                 </div>
               </div>
             </div>
@@ -291,6 +277,13 @@
       </button>
     </div>
 
+    <ModelTestDialog
+      v-if="modelTestDialog"
+      :model="modelTestDialog.model"
+      :provider="modelTestDialog.provider"
+      @close="modelTestDialog = null"
+    />
+
     <!-- 编辑对话框 -->
     <ModelEditDialog
       :is-open="dialog.isOpen"
@@ -309,14 +302,14 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { parse as parseToml } from 'toml'
-import { isAxiosError } from 'axios'
 import { useI18n } from '@/utils/i18n'
 import { useDialogStore } from '@/utils/dialog'
 import Icon from '../common/Icon.vue'
 import TomlEditor from './TomlEditor.vue'
 import ModelEditDialog from './ModelEditDialog.vue'
-import { testModel as apiTestModel, getRawConfig } from '@/api/modules/config'
-import type { SectionSchema, ModelTestResult } from '@/api/types/config'
+import ModelTestDialog from './ModelTestDialog.vue'
+import { getRawConfig } from '@/api/modules/config'
+import type { SectionSchema, ModelTestModel, ModelTestProvider } from '@/api/types/config'
 
 const { t } = useI18n()
 const dialogStore = useDialogStore()
@@ -378,13 +371,11 @@ const errorMessage = ref('')
 
 // 测试状态（使用 string 键以兼容 v-for index）
 const testingProviders = ref(new Set<string>())
-const testingModels = ref(new Set<string>())
+const modelTestDialog = ref<{ model: ModelTestModel; provider: ModelTestProvider | null } | null>(null)
 const testResults = ref<{
   providers: Map<string, { success: boolean; message: string }>
-  models: Map<string, ModelTestResult>
 }>({
   providers: new Map(),
-  models: new Map(),
 })
 
 // 是否有变更
@@ -642,58 +633,22 @@ async function deleteModel(index: string | number) {
   }
 }
 
-async function testModel(model: any, index: string | number) {
-  const idx = String(index)
-  if (testingModels.value.has(idx)) return
-
-  try {
-    testingModels.value.add(idx)
-    testResults.value.models.delete(idx)
-
-    const provider = localData.value.api_providers.find((p: any) => p.name === model.api_provider)
-
-    if (!provider) {
-      testResults.value.models.set(idx, {
-        success: false,
-        error_message: t('modelConfigEditor.test.providerNotFound') + `: ${model.api_provider}`,
-        model_identifier: model.model_identifier,
-        provider_base_url: '',
-      })
-      return
-    }
-
-    const result = await apiTestModel({
-      provider_name: model.api_provider,
-      model_name: model.name,
-      // 只提交本次连通性测试所需的页面快照，不触发保存或热重载。
-      provider: {
-        name: provider.name,
-        base_url: provider.base_url,
-        api_key: Array.isArray(provider.api_key) ? [...provider.api_key] : provider.api_key,
-      },
-      model: {
-        name: model.name,
-        model_identifier: model.model_identifier,
-        api_provider: model.api_provider,
-      },
-      test_prompt: '你好',
-      timeout: 30,
-    })
-
-    testResults.value.models.set(idx, result)
-  } catch (error: unknown) {
-    // Toast 仍由全局拦截器处理；结果卡片优先显示后端的具体错误。
-    const message = isAxiosError(error)
-      ? error.response?.data?.message ?? error.response?.data?.detail ?? error.message
-      : error && typeof error === 'object' && 'message' in error ? error.message : null
-    testResults.value.models.set(idx, {
-      success: false,
-      error_message: typeof message === 'string' ? message : t('modelConfigEditor.test.failed'),
-      model_identifier: model.model_identifier,
-      provider_base_url: '',
-    })
-  } finally {
-    testingModels.value.delete(idx)
+function openModelTest(model: any) {
+  const provider = localData.value.api_providers.find((item: any) => item.name === model.api_provider)
+  // 弹窗仅持有本次页面配置的副本，不保存配置，也不借用旧的运行时配置。
+  modelTestDialog.value = {
+    model: {
+      name: model.name || '',
+      model_identifier: model.model_identifier || '',
+      api_provider: model.api_provider || '',
+      extra_params: JSON.parse(JSON.stringify(model.extra_params || {})),
+    },
+    provider: provider ? {
+      name: provider.name,
+      base_url: provider.base_url || '',
+      api_key: Array.isArray(provider.api_key) ? [...provider.api_key] : provider.api_key || '',
+      client_type: provider.client_type ?? 'openai',
+    } : null,
   }
 }
 

@@ -105,11 +105,15 @@ export interface PatchWriteRequest {
   data: Record<string, unknown>
 }
 
+export type ModelTestType = 'vlm' | 'embedding' | 'stream' | 'non_stream' | 'tools'
+export type ModelTestStatus = 'succeeded' | 'failed' | 'unsupported' | 'cancelled'
+
 /** 单次测试的供应商快照，不保存到配置文件。 */
 export interface ModelTestProvider {
   name: string
   base_url: string
   api_key: string | string[]
+  client_type?: string
 }
 
 /** 单次测试的模型快照，不要求模型已经保存。 */
@@ -117,6 +121,7 @@ export interface ModelTestModel {
   name: string
   model_identifier: string
   api_provider: string
+  extra_params?: Record<string, unknown>
 }
 
 /**
@@ -128,6 +133,7 @@ export interface ModelTestRequest {
   model_name: string
   test_prompt: string
   timeout: number
+  test_type?: ModelTestType
   provider?: ModelTestProvider | null
   model?: ModelTestModel | null
 }
@@ -142,6 +148,11 @@ export interface ModelTestResult {
   error_message?: string
   model_identifier: string
   provider_base_url: string
+  test_type?: ModelTestType
+  status?: ModelTestStatus
+  summary?: string | null
+  first_token_ms?: number | null
+  details?: Record<string, unknown>
 }
 
 export interface McpTestRequest {

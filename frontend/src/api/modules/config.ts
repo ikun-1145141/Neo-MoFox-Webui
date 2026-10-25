@@ -99,10 +99,12 @@ export function reloadModelConfig(): Promise<void> {
  * 测试模型连通性
  * @param request 测试请求
  */
-export function testModel(request: ModelTestRequest): Promise<ModelTestResult> {
+export function testModel(request: ModelTestRequest, signal?: AbortSignal): Promise<ModelTestResult> {
   return http.post(`${BASE}-model/test`, request, {
     // 为后端测试时限预留传输余量，避免默认 15 秒先于模型测试结束。
     timeout: (request.timeout + 5) * 1000,
+    signal,
+    handledErrorStatuses: [400, 422, 499, 500, 502, 503, 504],
   })
 }
 

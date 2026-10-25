@@ -8,13 +8,11 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 import aiohttp
-import openai
 from yarl import URL
 
 from src.app.plugin_system.api.log_api import get_logger
@@ -24,6 +22,7 @@ from ...utils.config_types import (
     ModelTestRequest, ModelTestResult, RemoteModelListRequest, RemoteModelOption,
 )
 from ...utils.response import BaseResponse
+from ...utils.model_capability_test import run_model_capability_test
 
 logger = get_logger("model_config_manager")
 
@@ -275,7 +274,7 @@ class ModelConfigManager:
             try:
                 provider = model_config.get_provider(request.provider_name)
             except KeyError:
-                raise ValueError(f"提供商不存在: {request.provider_name}")
+                raise ValueError("测试的供应商配置不存在")
 
             model = next(
                 (m for m in model_config.models
@@ -284,68 +283,10 @@ class ModelConfigManager:
             )
             if model is None:
                 raise ValueError(
-                    f"模型不存在: {request.model_name} (提供商: {request.provider_name})"
+                    "测试的模型配置不存在或不属于当前供应商"
                 )
 
-        if not provider.base_url.strip():
-            raise ValueError("供应商 API 地址不能为空")
-        if not model.model_identifier.strip():
-            raise ValueError("模型标识符不能为空")
-
-        # 执行测试
-        try:
-            # 测试仅使用首个非空密钥，不改变运行时密钥轮询状态。
-            api_keys = provider.api_key if isinstance(provider.api_key, list) else [provider.api_key]
-            api_key = next((key.strip() for key in api_keys if key.strip()), "")
-            if not api_key:
-                raise ValueError("供应商 API 密钥不能为空")
-
-            # 临时客户端必须关闭；整次测试受同一个超时时限约束。
-            start_time = time.perf_counter()
-            async with asyncio.timeout(request.timeout):
-                async with openai.AsyncOpenAI(
-                    base_url=provider.base_url,
-                    api_key=api_key,
-                    timeout=request.timeout,
-                    max_retries=0,
-                ) as client:
-                    response = await client.chat.completions.create(
-                        model=model.model_identifier,
-                        messages=[{"role": "user", "content": request.test_prompt}],
-                        max_tokens=50,
-                    )
-            end_time = time.perf_counter()
-
-            # 提取响应
-            response_text = response.choices[0].message.content or ""
-            latency_ms = (end_time - start_time) * 1000
-
-            logger.info(f"模型测试成功: {model.name} ({latency_ms:.2f}ms)")
-
-            return ModelTestResult(
-                success=True,
-                response_text=response_text,
-                latency_ms=latency_ms,
-                error_message=None,
-                model_identifier=model.model_identifier,
-                provider_base_url=provider.base_url,
-            )
-
-        except Exception as e:
-            error_message = (
-                f"模型测试超时（{request.timeout} 秒）"
-                if isinstance(e, (TimeoutError, openai.APITimeoutError))
-                else str(e)
-            )
-            logger.error(f"模型测试失败: {error_message}")
-            return ModelTestResult(
-                success=False,
-                response_text=None,
-                latency_ms=None,
-                error_message=error_message,
-                model_identifier=model.model_identifier,
-                provider_base_url=provider.base_url,
-            )
+        return await run_model_capability_test(request, provider, model)
 
     async def list_providers(self) -> list[str]:
         """获取所有提供商名称列表。

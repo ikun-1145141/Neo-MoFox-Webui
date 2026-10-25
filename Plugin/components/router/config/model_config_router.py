@@ -5,9 +5,10 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
-from fastapi import HTTPException, Query
+from fastapi import HTTPException, Query, Request
 
 from src.core.components.base.router import BaseRouter
 from src.core.utils.security import VerifiedDep
@@ -94,24 +95,34 @@ class ModelConfigRouter(BaseRouter):
             response_model=BaseResponse[ModelTestResult],
             dependencies=[VerifiedDep],
         )
-        async def test_model(request: ModelTestRequest) -> BaseResponse[ModelTestResult]:
-            """测试模型连通性。
+        async def test_model(request: ModelTestRequest, connection: Request) -> BaseResponse[ModelTestResult]:
+            """执行单项能力测试，断开连接时关闭当前请求。"""
+            async def wait_for_disconnect() -> None:
+                while not await connection.is_disconnected():
+                    await asyncio.sleep(0.1)
 
-            Args:
-                request: 测试请求
-
-            Returns:
-                测试结果
-            """
+            operation = asyncio.create_task(self.manager.test_model(request))
+            disconnected = asyncio.create_task(wait_for_disconnect())
             try:
-                result = await self.manager.test_model(request)
+                done, _ = await asyncio.wait({operation, disconnected}, return_when=asyncio.FIRST_COMPLETED)
+                if operation not in done:
+                    raise HTTPException(status_code=499, detail="模型测试已取消")
+                result = await operation
                 return BaseResponse.ok(data=result, message="模型测试完成")
-            except ValueError as e:
-                logger.error(f"参数错误: {e}")
-                raise HTTPException(status_code=400, detail=str(e))
-            except Exception as e:
-                logger.error(f"模型测试失败: {e}")
-                raise HTTPException(status_code=500, detail=f"模型测试失败: {str(e)}")
+            except ValueError as exc:
+                logger.warning("模型测试参数无效")
+                raise HTTPException(status_code=400, detail=str(exc)) from None
+            except HTTPException:
+                raise
+            except Exception:
+                logger.error("模型能力测试失败")
+                raise HTTPException(status_code=500, detail="模型测试失败，请稍后重试") from None
+            finally:
+                # 取消未完成的任务并等待资源释放，不让模型请求留在后台继续执行。
+                for task in (operation, disconnected):
+                    if not task.done():
+                        task.cancel()
+                await asyncio.gather(operation, disconnected, return_exceptions=True)
 
         @self.app.get(
             "/providers",
