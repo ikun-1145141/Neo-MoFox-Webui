@@ -1,4 +1,7 @@
-"""Authenticated records transport tests with the real native inspector, no running host."""
+"""请求监视器接口测试。
+
+    使用真实原生检查器校验需要身份认证的记录接口，不启动完整主程序。
+"""
 
 from __future__ import annotations
 import importlib.util
@@ -17,7 +20,15 @@ HOST = Path(os.environ.get("NEO_MOFOX_ROOT", ROOT.parent / "Neo-MoFox")).expandu
 
 
 def load_file(name, path):
-    """Load source without booting the host/plugin entry points."""
+    """加载源码文件，但不启动主程序或插件入口。
+
+        参数：
+            name：加载后使用的模块名称。
+            path：源码文件路径。
+
+        返回：
+            ModuleType：已加载的模块。
+    """
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
@@ -31,7 +42,14 @@ native = load_file(
 
 
 def load_transport(inspector):
-    """Stub framework registration/auth only; keep native collector and transport real."""
+    """仅模拟框架路由注册和认证依赖，保留真实采集器及数据传输逻辑。
+
+        参数：
+            inspector：供接口使用的原生请求检查器。
+
+        返回：
+            tuple：已注册的路由实例、管理器模块和数据模型模块。
+    """
     prefix = "_webui_monitor_plugin"
     modules = {}
     for suffix, directory in {
@@ -84,7 +102,7 @@ def load_transport(inspector):
 
 
 class RequestMonitorTransportTests(unittest.IsolatedAsyncioTestCase):
-    """Verify authentication, envelopes, schema parity and buffer-only semantics."""
+    """验证接口认证、响应封装、数据模型一致性及仅使用内存缓冲区的语义。"""
 
     async def asyncSetUp(self):
         self.inspector = native.RequestInspector()

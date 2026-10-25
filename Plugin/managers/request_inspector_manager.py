@@ -1,4 +1,7 @@
-"""Validate the host's native inspection snapshots at the WebUI API boundary."""
+"""请求监视器管理器。
+
+    校验主程序提供的原生请求快照，并通过 WebUI 公共接口返回数据。
+"""
 
 from __future__ import annotations
 
@@ -19,11 +22,18 @@ from ..utils.request_inspector_types import (
 
 
 class InspectorUnavailableError(RuntimeError):
-    """The host lacks the public native snapshot contract; never fall back."""
+    """主程序未提供请求监视器所需公共接口时抛出的异常。"""
 
 
 def _get_inspector() -> RequestInspector:
-    """Resolve lazily so an older host can still serve an authenticated upgrade error."""
+    """获取主程序的原生请求检查器，并确认其公开接口完整。
+
+        返回：
+            RequestInspector：主程序提供的原生请求检查器。
+
+        异常：
+            InspectorUnavailableError：主程序未提供检查器或缺少所需公共方法。
+    """
     try:
         if _host_get_inspector is None:
             raise InspectorUnavailableError("Native request inspector unavailable")
@@ -39,21 +49,39 @@ def _get_inspector() -> RequestInspector:
 
 
 class RequestInspectorManager:
-    """Expose native public APIs; no private buffer access or duplicate collection."""
+    """请求监视器数据管理器。
+
+        只通过主程序公开接口读取快照，不访问内部缓冲区，也不重复采集请求。
+    """
 
     def list_records(self) -> InspectorRecordsSnapshot:
-        """Return an atomic metadata-only snapshot of the retained buffer."""
+        """读取当前缓冲区的记录摘要和统计快照。
+
+            返回：
+                InspectorRecordsSnapshot：经过接口模型校验的当前缓冲区快照。
+        """
         return InspectorRecordsSnapshot.model_validate(_get_inspector().snapshot())
 
     def get_record(self, record_id: int) -> InspectorRecordDetail | None:
-        """Return validated detail, or None if cleared or evicted."""
+        """按编号读取单条请求记录详情。
+
+            参数：
+                record_id：请求记录编号。
+
+            返回：
+                InspectorRecordDetail | None：经过校验的记录详情；记录已清空或淘汰时返回 None。
+        """
         record = _get_inspector().get_record(record_id)
         return (
             InspectorRecordDetail.model_validate(record) if record is not None else None
         )
 
     def clear_records(self) -> InspectorClearResult:
-        """Forget snapshots without cancelling the underlying model requests."""
+        """清除当前请求快照，但不取消正在执行的模型调用。
+
+            返回：
+                InspectorClearResult：清理数量及更新后的缓冲区版本。
+        """
         return InspectorClearResult.model_validate(_get_inspector().clear_snapshot())
 
 
@@ -61,7 +89,11 @@ _request_inspector_manager: RequestInspectorManager | None = None
 
 
 def get_request_inspector_manager() -> RequestInspectorManager:
-    """Return the stateless WebUI transport manager."""
+    """获取无状态的请求监视器管理器单例。
+
+        返回：
+            RequestInspectorManager：请求监视器数据管理器。
+    """
     global _request_inspector_manager
     if _request_inspector_manager is None:
         _request_inspector_manager = RequestInspectorManager()

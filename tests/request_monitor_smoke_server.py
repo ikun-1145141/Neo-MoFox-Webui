@@ -1,7 +1,7 @@
-"""Local-only smoke fixture: real native clients/collector and WebUI router, fake SDK endpoints.
+"""本地请求监视器演示服务。
 
-Run with a development environment containing pytest, uvicorn and both projects' dependencies.
-The fixture never reads real credentials or contacts an external model provider.
+    使用真实的原生客户端、采集器和路由，并通过模拟 SDK 提供离线样例。
+    运行需要安装 pytest、uvicorn 及主程序和插件依赖。本服务不会读取真实凭据，也不会连接模型供应商。
 """
 
 from __future__ import annotations
@@ -22,7 +22,15 @@ sys.path.insert(0, str(HOST))
 
 
 def load(name, path):
-    """Load test fixtures without booting the application."""
+    """加载指定源码模块，但不启动应用入口。
+
+        参数：
+            name：加载后使用的模块名称。
+            path：源码文件路径。
+
+        返回：
+            ModuleType：已加载的模块。
+    """
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
@@ -42,7 +50,7 @@ router, _, _ = transport.load_transport(inspector)
 
 @asynccontextmanager
 async def lifespan(app):
-    """Seed all five APIs through the real native provider methods."""
+    """在应用启动时使用受控 SDK 为演示服务写入样例记录。"""
     with pytest.MonkeyPatch.context() as patch:
         for protocol in ["openai", "anthropic", "responses"]:
             result = await fakes.invoke(
@@ -107,7 +115,7 @@ async def lifespan(app):
 
 
 def seed_display_samples():
-    """Explicit UI fixtures via public collector APIs, not claimed as provider executions."""
+    """通过公开采集接口生成标明为演示数据的展示样例，不将其伪称为真实供应商调用。"""
     metadata = {"request_name": "UI fixture", "api_provider": "local-fixture"}
     for status in ("captured", "pending", "cancelled"):
         rid = inspector.capture("fixture.display", {"model": "ui-" + status},
@@ -238,7 +246,7 @@ async def settings():
 
 @app.post("/webui/api/webui/settings")
 async def update_settings(body: FixtureSettingsUpdate):
-    """In-memory appearance settings only; never persist user settings in a test."""
+    """仅在内存中更新界面外观设置，不写入持久化存储。"""
     for key in ("theme", "ui"):
         changes = body.updates.get(key)
         if isinstance(changes, dict):
@@ -265,7 +273,7 @@ async def wallpaper():
 
 @app.get("/webui/frontend/{path:path}")
 async def frontend(path: str):
-    """Serve only production-built frontend files within dist, with SPA fallback."""
+    """提供生产构建后的前端静态文件，并支持单页应用路由回退。"""
     dist = (ROOT / "frontend/dist").resolve()
     target = (dist / path).resolve()
     if not target.is_relative_to(dist):

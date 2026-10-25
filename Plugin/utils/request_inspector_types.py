@@ -1,4 +1,7 @@
-"""Typed transport contract for native in-memory request inspection."""
+"""原生内存请求监视器的数据传输模型。
+
+    定义路由响应使用的记录摘要、详情、状态及缓冲区结构。
+"""
 
 from __future__ import annotations
 

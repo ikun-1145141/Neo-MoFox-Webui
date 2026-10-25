@@ -1,16 +1,15 @@
-"""Authenticated native request-monitor records API (paired host/WebUI upgrade)."""
+"""请求监视器原生记录接口。
+
+    提供需要身份认证的请求生命周期记录查询和清理接口。
+"""
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, Literal
-from pydantic import ValidationError
+from typing import TYPE_CHECKING
 from fastapi import Response
 from src.app.plugin_system.api.log_api import get_logger
 from src.core.components.base.router import BaseRouter
 from src.core.utils.security import VerifiedDep
-from ...managers.request_inspector_manager import (
-    InspectorUnavailableError,
-    get_request_inspector_manager,
-)
+from ...managers.request_inspector_manager import get_request_inspector_manager
 from ...utils.response import BaseResponse
 from ...utils.request_inspector_types import (
     InspectorRecordsSnapshot,
@@ -24,28 +23,8 @@ if TYPE_CHECKING:
 logger = get_logger("request_inspector_router")
 
 
-def _failure(
-    response: Response,
-    operation: Literal["list", "detail", "clear"],
-    error: Exception,
-) -> BaseResponse:
-    """Return fixed safe diagnostics: never log exception text, input or traceback."""
-    category = "internal"
-    message = "请求监视器操作失败，请稍后重试"
-    if isinstance(error, InspectorUnavailableError):
-        category = "incompatible_host"
-        message = "请求监视器不可用，请确认主程序与 WebUI 已配套升级"
-    elif isinstance(error, ValidationError):
-        category = "invalid_contract"
-        message = "请求监视器数据格式不兼容，请确认主程序与 WebUI 已配套升级"
-    # 错误位置和异常类名也可能包含动态输入，因此日志只记录固定信息。
-    logger.error(f"Request inspector operation={operation} category={category}")
-    response.status_code = 500
-    return BaseResponse.error(code=500, message=message)
-
-
 class RequestInspectorRouter(BaseRouter):
-    """Publish only native lifecycle snapshots, not historical usage analytics."""
+    """请求监视器原生记录路由，提供请求记录的查询和清理接口。"""
 
     name = "request-inspector"
     description = "WebUI 请求监视器接口"
@@ -54,12 +33,16 @@ class RequestInspectorRouter(BaseRouter):
     dependencies: list[str] = []
 
     def __init__(self, plugin: "BasePlugin") -> None:
-        """Bind the native snapshot manager to this authenticated router."""
+        """初始化路由并绑定请求监视器管理器。
+
+            参数：
+                plugin：所属插件实例。
+        """
         super().__init__(plugin)
         self.inspector_manager = get_request_inspector_manager()
 
     def register_endpoints(self) -> None:
-        """Register new records endpoints; no old-path compatibility aliases."""
+        """注册需要身份认证的请求记录查询和清理接口。"""
 
         @self.app.get(
             "/records",
@@ -69,11 +52,20 @@ class RequestInspectorRouter(BaseRouter):
         async def list_records(
             response: Response,
         ) -> BaseResponse[InspectorRecordsSnapshot]:
-            """Get metadata and statistics over the current in-memory buffer."""
+            """读取当前内存缓冲区的记录摘要和统计信息。
+
+                参数：
+                    response：用于设置 HTTP 状态码的响应对象。
+
+                返回：
+                    BaseResponse[InspectorRecordsSnapshot]：记录快照及当前缓冲区统计。
+            """
             try:
                 return BaseResponse.ok(data=self.inspector_manager.list_records())
-            except Exception as error:
-                return _failure(response, "list", error)
+            except Exception:
+                logger.error("读取请求记录列表失败")
+                response.status_code = 500
+                return BaseResponse.error(code=500, message="请求监视器操作失败，请稍后重试")
 
         @self.app.get(
             "/records/{record_id}",
@@ -83,15 +75,25 @@ class RequestInspectorRouter(BaseRouter):
         async def get_record(
             record_id: int, response: Response
         ) -> BaseResponse[InspectorRecordDetail]:
-            """Get one isolated native detail or a standard 404 envelope."""
+            """读取指定请求记录的详情。
+
+                参数：
+                    record_id：请求记录编号。
+                    response：用于设置 HTTP 状态码的响应对象。
+
+                返回：
+                    BaseResponse[InspectorRecordDetail]：记录详情；记录不存在时返回 404 响应。
+            """
             try:
                 data = self.inspector_manager.get_record(record_id)
                 if data is None:
                     response.status_code = 404
                     return BaseResponse.error(code=404, message="记录已清空或淘汰")
                 return BaseResponse.ok(data=data)
-            except Exception as error:
-                return _failure(response, "detail", error)
+            except Exception:
+                logger.error("读取请求记录详情失败")
+                response.status_code = 500
+                return BaseResponse.error(code=500, message="请求监视器操作失败，请稍后重试")
 
         @self.app.delete(
             "/records",
@@ -101,8 +103,17 @@ class RequestInspectorRouter(BaseRouter):
         async def clear_records(
             response: Response,
         ) -> BaseResponse[InspectorClearResult]:
-            """Clear captured data only; do not cancel any model call."""
+            """清空当前保留的请求记录，不影响正在执行的模型调用。
+
+                参数：
+                    response：用于设置 HTTP 状态码的响应对象。
+
+                返回：
+                    BaseResponse[InspectorClearResult]：清理数量及更新后的缓冲区版本。
+            """
             try:
                 return BaseResponse.ok(data=self.inspector_manager.clear_records())
-            except Exception as error:
-                return _failure(response, "clear", error)
+            except Exception:
+                logger.error("清空请求记录失败")
+                response.status_code = 500
+                return BaseResponse.error(code=500, message="请求监视器操作失败，请稍后重试")
