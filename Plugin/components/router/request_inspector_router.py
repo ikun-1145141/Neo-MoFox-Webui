@@ -35,7 +35,7 @@ class RequestInspectorRouter(BaseRouter):
     def __init__(self, plugin: "BasePlugin") -> None:
         """初始化路由并绑定请求监视器管理器。
 
-            参数：
+            Args:
                 plugin：所属插件实例。
         """
         super().__init__(plugin)
@@ -54,7 +54,7 @@ class RequestInspectorRouter(BaseRouter):
         ) -> BaseResponse[InspectorRecordsSnapshot]:
             """读取当前内存缓冲区的记录摘要和统计信息。
 
-                参数：
+                Args:
                     response：用于设置 HTTP 状态码的响应对象。
 
                 返回：
@@ -77,7 +77,7 @@ class RequestInspectorRouter(BaseRouter):
         ) -> BaseResponse[InspectorRecordDetail]:
             """读取指定请求记录的详情。
 
-                参数：
+                Args:
                     record_id：请求记录编号。
                     response：用于设置 HTTP 状态码的响应对象。
 
@@ -105,7 +105,7 @@ class RequestInspectorRouter(BaseRouter):
         ) -> BaseResponse[InspectorClearResult]:
             """清空当前保留的请求记录，不影响正在执行的模型调用。
 
-                参数：
+                Args:
                     response：用于设置 HTTP 状态码的响应对象。
 
                 返回：
