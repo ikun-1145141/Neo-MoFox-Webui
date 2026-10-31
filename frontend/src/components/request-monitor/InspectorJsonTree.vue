@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import { computed, reactive, watch } from 'vue'
+import { computed, reactive, watch, type PropType } from 'vue'
 import Icon from '../common/Icon.vue'
 import type { JsonValue } from '../../api/types/request-inspector'
-import { JSON_PAGE_SIZE, JSON_ROW_LIMIT, TEXT_PAGE_SIZE, hasJsonPath, previewJson, visibleJsonRows } from '../../utils/request-monitor-json'
+import { JSON_PAGE_SIZE, JSON_ROW_LIMIT, hasJsonPath, previewJson, visibleJsonRows } from '../../utils/request-monitor-json'
 import type { JsonNodeState, JsonRow } from '../../utils/request-monitor-json'
 import { useI18n } from '../../utils/i18n'
 
-const props = withDefaults(defineProps<{ value: JsonValue; scope: string; pathPrefix?: string }>(), { pathPrefix: '' })
+const props = defineProps({
+  // 禁止布尔属性转换，避免根节点的空字符串被转换成 true。
+  value: { type: null as unknown as PropType<JsonValue>, required: true },
+  scope: { type: String, required: true },
+  pathPrefix: { type: String, default: '' },
+})
 const emit = defineEmits<{ copy: [text: string] }>()
 const { t } = useI18n()
 const state = reactive(new Map<string, JsonNodeState>())
@@ -81,9 +86,9 @@ function copy(row: JsonRow) { emit('copy', JSON.stringify(row.value, null, 2)) }
             {{ row.type }}{{ ['object', 'array', 'string'].includes(row.type) ? ` (${row.size})` : '' }}
           </span>
 
-          <!-- 缩略值 -->
-          <span v-if="row.type !== 'string' || state.get(row.path)?.textLength === undefined" class="rm-tree-val" :class="`val-${row.type}`">
-            {{ previewJson(row.value, state.get(row.path)?.textLength ?? 160) }}
+          <!-- 非字符串节点的缩略值 -->
+          <span v-if="row.type !== 'string'" class="rm-tree-val" :class="`val-${row.type}`">
+            {{ previewJson(row.value) }}
           </span>
 
           <!-- 悬浮/操作动作 -->
@@ -109,17 +114,17 @@ function copy(row: JsonRow) { emit('copy', JSON.stringify(row.value, null, 2)) }
           </div>
         </div>
 
-        <div v-if="row.type === 'string' && state.get(row.path)?.textLength !== undefined" class="rm-tree-text">
-          <pre class="rm-content">{{ previewJson(row.value, state.get(row.path)?.textLength ?? 160) }}</pre>
-        </div>
-        <button
-          v-if="row.type === 'string' && row.size > (state.get(row.path)?.textLength ?? 160)"
-          class="rm-tree-btn rm-tree-expand-text"
-          @click="update(row.path, { textLength: Math.min(row.size, (state.get(row.path)?.textLength ?? 160) + TEXT_PAGE_SIZE) })"
-        >
-          <Icon icon="material-symbols:unfold-more-rounded" width="14" height="14" />
-          {{ t('requestMonitor.moreText') }} ({{ Math.min(state.get(row.path)?.textLength ?? 160, row.size) }}/{{ row.size }})
-        </button>
+        <!-- 字符串完整显示在只读文本框内，长内容在框内滚动。 -->
+        <textarea
+          v-if="typeof row.value === 'string'"
+          class="rm-tree-text"
+          :value="row.value"
+          :rows="row.size > 160 || /[\r\n]/.test(row.value) ? 6 : 2"
+          :aria-label="`${t('requestMonitor.tree')} ${pathPrefix + row.path || '$'}`"
+          readonly
+          :spellcheck="false"
+          wrap="soft"
+        ></textarea>
       </template>
     </div>
 

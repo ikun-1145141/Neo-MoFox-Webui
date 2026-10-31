@@ -816,21 +816,27 @@ details.rm-block > .rm-tool-summary {
   text-overflow: ellipsis;
   color: var(--md-sys-color-on-surface);
 }
-.rm-tree-val.val-string {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  overflow: visible;
-  text-overflow: clip;
-}
 .rm-tree-text {
+  display: block;
   box-sizing: border-box;
+  width: calc(100% - 30px);
   min-width: 0;
-  max-width: calc(100% - 30px);
+  max-width: 100%;
+  max-height: 160px;
   margin: 6px 0 8px 30px;
   padding: 10px 12px;
   border: 1px solid var(--rm-line);
   border-radius: 8px;
   background: var(--md-sys-color-surface-container-lowest);
+  color: var(--md-sys-color-on-surface);
+  font: inherit;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  resize: none;
+  overflow: auto;
+  overscroll-behavior-y: auto;
 }
 .rm-tree-actions {
   display: flex;
@@ -856,12 +862,6 @@ details.rm-block > .rm-tool-summary {
 .rm-tree-page-info, .rm-tree-limit-hint {
   color: var(--rm-muted);
   font-size: .7rem;
-}
-.rm-tree-expand-text {
-  max-width: 100%;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  margin: 6px 0;
 }
 .rm-tree-limit-hint {
   display: flex;
@@ -1005,6 +1005,11 @@ details.rm-block > .rm-tool-summary {
   .rm-tree-actions {
     opacity: 1;
   }
+  .rm-tree-text {
+    width: 100%;
+    margin-left: 0;
+    padding: 8px 10px;
+  }
   .rm-action-pill > span:not([aria-hidden]) {
     display: none;
   }
@@ -1016,7 +1021,7 @@ details.rm-block > .rm-tool-summary {
     min-width: 0;
     overflow-wrap: anywhere;
   }
-  .rm-page select, .rm-page input {
+  .rm-page select, .rm-page input, .rm-page .rm-tree-text {
     font-size: 16px;
   }
   .rm-page summary {

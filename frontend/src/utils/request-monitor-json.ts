@@ -4,7 +4,7 @@ import type { JsonValue } from '../api/types/request-inspector'
 export const JSON_PAGE_SIZE = 100
 export const JSON_ROW_LIMIT = 1500
 export const TEXT_PAGE_SIZE = 4096
-export interface JsonNodeState { expanded?: boolean; offset?: number; textLength?: number }
+export interface JsonNodeState { expanded?: boolean; offset?: number }
 export interface JsonRow {
   path: string
   key: string
