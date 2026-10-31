@@ -1,52 +1,65 @@
-"""LLM 请求体检视器管理器。
+"""请求监视器管理器。
 
-承接 WebUI 请求体检视器路由的业务逻辑，统一调用工具层并返回可供前端
-展示的归一化数据。
+校验主程序提供的原生请求快照，并通过 WebUI 公共接口返回数据。
 """
 
 from __future__ import annotations
 
-from typing import Any
+from src.kernel.llm import get_inspector
 
-from ..utils.request_inspector import RequestInspectorHelper, get_request_inspector_helper
+from ..utils.request_inspector_types import (
+    InspectorClearResult,
+    InspectorRecordDetail,
+    InspectorRecordsSnapshot,
+)
 
 
 class RequestInspectorManager:
-    """LLM 请求体检视器管理器。"""
+    """请求监视器数据管理器。
 
-    def __init__(self) -> None:
-        """初始化请求体检视器管理器。"""
-        self.inspector_helper: RequestInspectorHelper = get_request_inspector_helper()
+    只通过主程序公开接口读取快照，不访问内部缓冲区，也不重复采集请求。
+    """
 
-    def list_requests(self) -> list[dict[str, Any]]:
-        """获取捕获请求摘要列表。"""
-        return self.inspector_helper.list_requests()
-
-    def get_request(self, request_id: int) -> dict[str, Any] | None:
-        """获取指定捕获请求详情。
-
-        Args:
-            request_id: 捕获请求 ID。
+    def list_records(self) -> InspectorRecordsSnapshot:
+        """读取当前缓冲区的记录摘要和统计快照。
 
         Returns:
-            请求详情；不存在时返回 None。
+            经过接口模型校验的当前缓冲区快照。
         """
-        return self.inspector_helper.get_request(request_id)
+        return InspectorRecordsSnapshot.model_validate(get_inspector().snapshot())
 
-    def clear_requests(self) -> dict[str, Any]:
-        """清空捕获请求列表。"""
-        return self.inspector_helper.clear_requests()
+    def get_record(self, record_id: int) -> InspectorRecordDetail | None:
+        """按编号读取单条请求记录详情。
 
-    async def get_analytics(self) -> dict[str, Any]:
-        """获取综合统计指标。"""
-        return await self.inspector_helper.get_analytics()
+        Args:
+            record_id: 请求记录编号。
+
+        Returns:
+            经过校验的记录详情；记录已清空或淘汰时返回 None。
+        """
+        record = get_inspector().get_record(record_id)
+        return (
+            InspectorRecordDetail.model_validate(record) if record is not None else None
+        )
+
+    def clear_records(self) -> InspectorClearResult:
+        """清除当前请求快照，但不取消正在执行的模型调用。
+
+        Returns:
+            清理数量及更新后的缓冲区版本。
+        """
+        return InspectorClearResult.model_validate(get_inspector().clear_snapshot())
 
 
 _request_inspector_manager: RequestInspectorManager | None = None
 
 
 def get_request_inspector_manager() -> RequestInspectorManager:
-    """获取请求体检视器管理器单例。"""
+    """获取无状态的请求监视器管理器单例。
+
+    Returns:
+        请求监视器数据管理器。
+    """
     global _request_inspector_manager
     if _request_inspector_manager is None:
         _request_inspector_manager = RequestInspectorManager()
