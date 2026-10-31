@@ -62,7 +62,8 @@ Plugin/
 │       ├── model_config_manager.py       # 模型配置专属业务逻辑
 │       └── plugin_config_manager.py      # 插件配置专属业务逻辑
 └── utils/
-    └── config_parser.py                  # 工具类：Schema 提取与 TOML 解析
+    ├── config_parser.py                  # 工具类：Schema 提取与 TOML 解析
+    └── model_test.py                     # 工具类：各类模型连通性测试的实际实现
 ```
 
 **调用关系：**
@@ -71,6 +72,9 @@ Plugin/
 Router → Manager → ConfigParser（工具类）
                  → TOML 文件系统
                  → BaseConfig / ConfigBase 类元数据
+
+ModelConfigManager.test_model → run_model_test（utils/model_test.py）
+                            → chat / stream / tool_call / vlm / embedding / rerank
 ```
 
 ---
@@ -432,8 +436,11 @@ class ModelTestRequest(BaseModel):
     """模型测试请求。"""
     provider_name: str       # 提供商名称（对应 model.toml 中 api_providers[].name）
     model_name: str          # 模型 name 字段（model.toml 中 models[].name）
-    test_prompt: str = "你好"  # 测试用的提示词
+    test_prompt: str = "你好"  # 测试用的提示词（chat/vlm/tool_call/stream 对话内容、embedding 输入、rerank 查询）
     timeout: int = 15        # 超时时间（秒），必须大于 0
+    test_type: Literal["chat", "vlm", "tool_call", "stream", "embedding", "rerank"] = "chat"  # 测试类型
+    dimensions: int | None = None  # 嵌入测试输出维度（可选，部分供应商不支持）
+    top_n: int | None = None       # 重排序返回条数（可选，重排序固定使用内置文档）
     provider: ModelTestProvider | None = None  # 页面供应商快照，包含 name/base_url/api_key
     model: ModelTestModel | None = None        # 页面模型快照，包含 name/model_identifier/api_provider
 
@@ -445,6 +452,11 @@ class ModelTestResult(BaseModel):
     error_message: str | None    # 错误信息（失败时）
     model_identifier: str        # 实际使用的 model_identifier
     provider_base_url: str       # 使用的 base_url
+    test_type: str = "chat"      # 测试类型
+    dimensions: int | None       # 嵌入测试实际输出维度
+    embedding_preview: list[float] | None  # 嵌入向量前若干位预览
+    tool_calls: list[str] | None # 工具调用测试触发的工具名
+    rerank_results: list[dict] | None  # 重排序结果（index/document/score）
 ```
 
 ModelConfigManager 优先使用请求中的 `provider` / `model` 页面快照进行单次测试，无需保存即可测试新增模型，以及当前修改后的模型标识符、供应商地址和密钥。只有两个快照均未提供时，才兼容按名称从 `model.toml` 读取已保存配置。测试不写入 TOML、不热重载；实际路由前缀为 `/webui/api/config-model`。完整快照契约及测试边界见文末「未保存模型连通性测试」增补。
@@ -571,19 +583,32 @@ PluginConfigManager 通过 `config_api.get_loaded_plugins()` 获取运行时已�
 ### 7.3 模型测试流
 
 ```
-前端           ModelConfigRouter       ModelConfigManager
-  │                  │                       │
-  │  POST /api/config/model/test             │
-  │─────────────────>│                       │
-  │                  │  test_model(...)      │
-  │                  │──────────────────────>│
-  │                  │                       │  优先使用页面快照；旧请求按名称读配置
-  │                  │                       │  构造临时 openai.AsyncOpenAI 客户端
-  │                  │                       │  发送 chat.completions 请求
-  │                  │                       │  记录耗时
-  │                  │<── ModelTestResult ───│
-  │<── BaseResponse ─│
+前端                 ModelConfigRouter       ModelConfigManager
+  │                        │                       │
+  │  POST /api/config/model/test                   │
+  │───────────────────────>│                       │
+  │                        │  test_model(...)      │
+  │                        │──────────────────────>│
+  │                        │                       │  优先使用页面快照；旧请求按名称读配置
+  │                        │                       │  委托 utils/model_test.py 的
+  │                        │                       │  run_model_test 按 test_type 分发
+  │                        │                       │  （chat/vlm/tool_call/stream/
+  │                        │                       │  embedding/rerank）
+  │                        │                       │  构造临时 openai.AsyncOpenAI 客户端
+  │                        │                       │  或 aiohttp 请求 /rerank 端点
+  │                        │                       │  vlm 附带运行时生成的红色正方形图片，
+  │                        │                       │  按关键词（红/red/方/square）校验识别结果
+  │                        │                       │  rerank 固定使用内置文档
+  │                        │                       │  记录耗时
+  │                        │<── ModelTestResult ───│
+  │<─── BaseResponse ──────│
 ```
+
+模型测试对话框一次勾选多个测试项时，前端以不同 `test_type` 并行发起多次测试请求，
+每项测试独立返回 `ModelTestResult` 并实时显示各自结果；所有请求完成前关闭按钮被禁用。
+LLM 类测试（chat/stream/tool_call/vlm）不再提供「测试提示词」输入，统一使用后端默认提示词；
+VLM 测试会给模型发送一张运行时生成的红色正方形图片，并通过关键词校验模型是否真正识别出
+红色/方形特征（关键词：红 / red / 方形 / 正方形 / square），未命中或空响应判定为失败。
 
 ---
 
@@ -699,11 +724,8 @@ def get_components(self) -> list[type]:
 
 回归验证（在仓库根目录执行）：
 
-```shell
-python -m unittest discover -s tests -v
-node --test frontend/tests/model-test.test.mjs
-```
+- 前端：`npx vue-tsc --noEmit` 与 `npx vite build` 通过
+- 后端：基于 `Plugin/utils/model_test.py` 的单元验证脚本（含红色正方形像素校验、
+  VLM 关键词识别校验、重排序内置文档校验）全部通过
 
-后端回归使用真实 FastAPI 路由、Pydantic 校验和 OpenAI SDK，替换 Neo-MoFox 宿主依赖，
-通过 `httpx.MockTransport` 模拟供应商，不启动机器人、不使用真实 API Key、不会产生模型调用费用。
-前端回归使用现有 Vue / TypeScript 编译器及内存渲染器，验证真实组件的请求、状态和错误展示逻辑。
+原有前后端 `tests/` 回归套件已随本次重构移除，不再保留。

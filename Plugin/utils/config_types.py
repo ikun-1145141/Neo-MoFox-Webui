@@ -203,6 +203,11 @@ class ModelTestModel(BaseModel):
     api_provider: str = Field(..., description="所属供应商名称")
 
 
+ModelTestType = Literal[
+    "chat", "vlm", "tool_call", "stream", "embedding", "rerank",
+]
+
+
 class ModelTestRequest(BaseModel):
     """模型测试请求。
 
@@ -211,8 +216,12 @@ class ModelTestRequest(BaseModel):
         model_name: 模型 name 字段
         provider: 当前页面的供应商快照，须与 model 同时提供
         model: 当前页面的模型快照；两者均未提供时兼容从 model.toml 查找
-        test_prompt: 测试用的提示词
+        test_prompt: 测试用的提示词（chat/vlm/tool_call/stream 的对话内容，
+            embedding 的输入文本，rerank 的查询）
         timeout: 超时时间（秒）
+        test_type: 测试类型：chat / vlm / tool_call / stream / embedding / rerank
+        dimensions: 嵌入测试的输出维度（可选，部分供应商不支持）
+        top_n: 重排序测试返回的最终条数（重排序使用内置文档）
     """
 
     provider_name: str = Field(..., description="提供商名称")
@@ -225,6 +234,23 @@ class ModelTestRequest(BaseModel):
     model: ModelTestModel | None = Field(
         default=None, description="模型快照，仅用于本次测试"
     )
+    test_type: ModelTestType = Field(
+        default="chat", description="测试类型：chat/vlm/tool_call/stream/embedding/rerank"
+    )
+    dimensions: int | None = Field(
+        default=None, ge=1, le=65536, description="嵌入输出维度（仅 embedding 测试）"
+    )
+    top_n: int | None = Field(
+        default=None, ge=1, le=100, description="重排序返回条数（仅 rerank 测试）"
+    )
+
+
+class RerankResultItem(BaseModel):
+    """单条重排序结果。"""
+
+    index: int = Field(..., description="候补文档在原列表中的下标")
+    document: str = Field(..., description="文档内容")
+    score: float = Field(..., description="相关性得分")
 
 
 class ModelTestResult(BaseModel):
@@ -237,6 +263,11 @@ class ModelTestResult(BaseModel):
         error_message: 错误信息（失败时）
         model_identifier: 实际使用的 model_identifier
         provider_base_url: 使用的 base_url
+        test_type: 本次测试的类型
+        dimensions: 嵌入测试的实际输出维度
+        embedding_preview: 嵌入测试返回向量的前若干位预览
+        tool_calls: 工具调用测试触发的工具名列表
+        rerank_results: 重排序测试的返回结果
     """
 
     success: bool = Field(..., description="是否成功")
@@ -245,6 +276,13 @@ class ModelTestResult(BaseModel):
     error_message: str | None = Field(default=None, description="错误信息")
     model_identifier: str = Field(..., description="模型标识符")
     provider_base_url: str = Field(..., description="提供商 URL")
+    test_type: ModelTestType = Field(default="chat", description="测试类型")
+    dimensions: int | None = Field(default=None, description="嵌入输出维度")
+    embedding_preview: list[float] | None = Field(default=None, description="嵌入向量预览")
+    tool_calls: list[str] | None = Field(default=None, description="触发的工具名")
+    rerank_results: list[RerankResultItem] | None = Field(
+        default=None, description="重排序结果"
+    )
 
 
 class McpTestRequest(BaseModel):

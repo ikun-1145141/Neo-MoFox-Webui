@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -21,8 +20,10 @@ from src.app.plugin_system.api.log_api import get_logger
 from src.core.config.model_config import ModelConfig, init_model_config
 
 from ...utils.config_types import (
-    ModelTestRequest, ModelTestResult, RemoteModelListRequest, RemoteModelOption,
+    ModelTestRequest, ModelTestResult, RemoteModelListRequest,
+    RemoteModelOption,
 )
+from ...utils.model_test import run_model_test
 from ...utils.response import BaseResponse
 
 logger = get_logger("model_config_manager")
@@ -301,35 +302,8 @@ class ModelConfigManager:
                 raise ValueError("供应商 API 密钥不能为空")
 
             # 临时客户端必须关闭；整次测试受同一个超时时限约束。
-            start_time = time.perf_counter()
             async with asyncio.timeout(request.timeout):
-                async with openai.AsyncOpenAI(
-                    base_url=provider.base_url,
-                    api_key=api_key,
-                    timeout=request.timeout,
-                    max_retries=0,
-                ) as client:
-                    response = await client.chat.completions.create(
-                        model=model.model_identifier,
-                        messages=[{"role": "user", "content": request.test_prompt}],
-                        max_tokens=50,
-                    )
-            end_time = time.perf_counter()
-
-            # 提取响应
-            response_text = response.choices[0].message.content or ""
-            latency_ms = (end_time - start_time) * 1000
-
-            logger.info(f"模型测试成功: {model.name} ({latency_ms:.2f}ms)")
-
-            return ModelTestResult(
-                success=True,
-                response_text=response_text,
-                latency_ms=latency_ms,
-                error_message=None,
-                model_identifier=model.model_identifier,
-                provider_base_url=provider.base_url,
-            )
+                return await run_model_test(request, provider, model, api_key)
 
         except Exception as e:
             error_message = (
@@ -345,6 +319,7 @@ class ModelConfigManager:
                 error_message=error_message,
                 model_identifier=model.model_identifier,
                 provider_base_url=provider.base_url,
+                test_type=request.test_type,
             )
 
     async def list_providers(self) -> list[str]:

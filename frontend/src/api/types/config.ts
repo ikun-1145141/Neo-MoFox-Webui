@@ -119,6 +119,9 @@ export interface ModelTestModel {
   api_provider: string
 }
 
+/** 模型测试类型 */
+export type ModelTestType = 'chat' | 'vlm' | 'tool_call' | 'stream' | 'embedding' | 'rerank'
+
 /**
  * 模型测试请求（对应后端 ModelTestRequest）
  * provider/model 须同时传入；均不传时兼容按名称测试已保存配置。
@@ -130,6 +133,19 @@ export interface ModelTestRequest {
   timeout: number
   provider?: ModelTestProvider | null
   model?: ModelTestModel | null
+  /** 测试类型：chat / vlm / tool_call / stream / embedding / rerank */
+  test_type?: ModelTestType
+  /** 嵌入测试的输出维度（可选，部分供应商不支持） */
+  dimensions?: number | null
+  /** 重排序测试返回条数（可选） */
+  top_n?: number | null
+}
+
+/** 单条重排序结果（对应后端 RerankResultItem） */
+export interface RerankResultItem {
+  index: number
+  document: string
+  score: number
 }
 
 /**
@@ -137,11 +153,16 @@ export interface ModelTestRequest {
  */
 export interface ModelTestResult {
   success: boolean
-  response_text?: string
-  latency_ms?: number
-  error_message?: string
+  response_text?: string | null
+  latency_ms?: number | null
+  error_message?: string | null
   model_identifier: string
   provider_base_url: string
+  test_type?: ModelTestType
+  dimensions?: number | null
+  embedding_preview?: number[] | null
+  tool_calls?: string[] | null
+  rerank_results?: RerankResultItem[] | null
 }
 
 export interface McpTestRequest {

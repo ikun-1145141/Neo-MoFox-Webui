@@ -176,9 +176,8 @@
                     <span>{{ model.name || t('modelConfigEditor.models.name') }}</span>
                   </div>
                   <div class="card-actions">
-                    <button type="button" class="icon-btn" @click="testModel(model, String(idx))" :disabled="testingModels.has(String(idx))" :title="t('modelConfigEditor.actions.test')">
-                      <Icon v-if="!testingModels.has(String(idx))" icon="material-symbols:play-arrow-rounded" :size="20" />
-                      <Icon v-else icon="material-symbols:progress-activity" :size="20" class="spinning" />
+                    <button type="button" class="icon-btn" @click="openModelTestDialog(model, String(idx))" :title="t('modelConfigEditor.actions.test')">
+                      <Icon icon="material-symbols:science-outline-rounded" :size="20" />
                     </button>
                     <button type="button" class="icon-btn" @click="editModel(idx)" :title="t('modelConfigEditor.actions.edit')">
                       <Icon icon="material-symbols:edit-outline-rounded" :size="20" />
@@ -210,21 +209,6 @@
                     <div class="info-item">
                       <span class="label">{{ t('modelConfigEditor.models.contextLength') }}</span>
                       <span class="value">{{ model.max_context }} tokens</span>
-                    </div>
-                  </div>
-
-                  <!-- 测试结果 -->
-                  <div v-if="testResults.models.has(String(idx))" class="test-result" :class="testResults.models.get(String(idx))!.success ? 'success' : 'error'">
-                    <Icon :icon="testResults.models.get(String(idx))!.success ? 'material-symbols:check-circle-outline-rounded' : 'material-symbols:error-outline-rounded'" :size="18" />
-                    <div class="result-content">
-                      <p class="result-message">
-                        {{ testResults.models.get(String(idx))!.success 
-                          ? t('modelConfigEditor.test.success') + `! ${t('modelConfigEditor.test.latency')}: ${testResults.models.get(String(idx))!.latency_ms?.toFixed(0)} ms` 
-                          : t('modelConfigEditor.test.failed') + `: ${testResults.models.get(String(idx))!.error_message}` }}
-                      </p>
-                      <p v-if="testResults.models.get(String(idx))!.response_text" class="result-response">
-                        {{ t('modelConfigEditor.test.modelResponse', { response: testResults.models.get(String(idx))!.response_text || '' }) }}
-                      </p>
                     </div>
                   </div>
                 </div>
@@ -303,20 +287,29 @@
       @close="closeDialog"
       @submit="handleDialogSubmit"
     />
+
+    <!-- 模型测试对话框 -->
+    <ModelTestDialog
+      :is-open="testDialog.isOpen"
+      :model="testDialog.model"
+      :providers="testDialog.providers"
+      :timeout="30"
+      @close="closeModelTestDialog"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { parse as parseToml } from 'toml'
-import { isAxiosError } from 'axios'
 import { useI18n } from '@/utils/i18n'
 import { useDialogStore } from '@/utils/dialog'
 import Icon from '../common/Icon.vue'
 import TomlEditor from './TomlEditor.vue'
 import ModelEditDialog from './ModelEditDialog.vue'
-import { testModel as apiTestModel, getRawConfig } from '@/api/modules/config'
-import type { SectionSchema, ModelTestResult } from '@/api/types/config'
+import ModelTestDialog from './ModelTestDialog.vue'
+import { getRawConfig } from '@/api/modules/config'
+import type { SectionSchema } from '@/api/types/config'
 
 const { t } = useI18n()
 const dialogStore = useDialogStore()
@@ -376,15 +369,23 @@ const originalData = ref<Record<string, any>>({})
 const isSaving = ref(false)
 const errorMessage = ref('')
 
-// 测试状态（使用 string 键以兼容 v-for index）
+// 测试状态（供应商为本地检查；模型测试交由测试弹窗处理）
 const testingProviders = ref(new Set<string>())
-const testingModels = ref(new Set<string>())
 const testResults = ref<{
   providers: Map<string, { success: boolean; message: string }>
-  models: Map<string, ModelTestResult>
 }>({
   providers: new Map(),
-  models: new Map(),
+})
+
+// 测试对话框状态
+const testDialog = ref<{
+  isOpen: boolean
+  model: Record<string, any> | null
+  providers: Record<string, any>[]
+}>({
+  isOpen: false,
+  model: null,
+  providers: [],
 })
 
 // 是否有变更
@@ -642,59 +643,17 @@ async function deleteModel(index: string | number) {
   }
 }
 
-async function testModel(model: any, index: string | number) {
-  const idx = String(index)
-  if (testingModels.value.has(idx)) return
-
-  try {
-    testingModels.value.add(idx)
-    testResults.value.models.delete(idx)
-
-    const provider = localData.value.api_providers.find((p: any) => p.name === model.api_provider)
-
-    if (!provider) {
-      testResults.value.models.set(idx, {
-        success: false,
-        error_message: t('modelConfigEditor.test.providerNotFound') + `: ${model.api_provider}`,
-        model_identifier: model.model_identifier,
-        provider_base_url: '',
-      })
-      return
-    }
-
-    const result = await apiTestModel({
-      provider_name: model.api_provider,
-      model_name: model.name,
-      // 只提交本次连通性测试所需的页面快照，不触发保存或热重载。
-      provider: {
-        name: provider.name,
-        base_url: provider.base_url,
-        api_key: Array.isArray(provider.api_key) ? [...provider.api_key] : provider.api_key,
-      },
-      model: {
-        name: model.name,
-        model_identifier: model.model_identifier,
-        api_provider: model.api_provider,
-      },
-      test_prompt: '你好',
-      timeout: 30,
-    })
-
-    testResults.value.models.set(idx, result)
-  } catch (error: unknown) {
-    // Toast 仍由全局拦截器处理；结果卡片优先显示后端的具体错误。
-    const message = isAxiosError(error)
-      ? error.response?.data?.message ?? error.response?.data?.detail ?? error.message
-      : error && typeof error === 'object' && 'message' in error ? error.message : null
-    testResults.value.models.set(idx, {
-      success: false,
-      error_message: typeof message === 'string' ? message : t('modelConfigEditor.test.failed'),
-      model_identifier: model.model_identifier,
-      provider_base_url: '',
-    })
-  } finally {
-    testingModels.value.delete(idx)
+// 打开模型测试弹窗
+function openModelTestDialog(model: any, _index?: string | number) {
+  testDialog.value = {
+    isOpen: true,
+    model: JSON.parse(JSON.stringify(model)),
+    providers: JSON.parse(JSON.stringify(localData.value.api_providers || [])),
   }
+}
+
+function closeModelTestDialog() {
+  testDialog.value.isOpen = false
 }
 
 // ===== 任务管理 =====
