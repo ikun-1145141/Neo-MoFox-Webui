@@ -619,43 +619,72 @@ onMounted(() => {
 }
 
 @media (max-width: 780px) {
-  .market-header,
-  .market-content {
-    padding-left: 1rem;
-    padding-right: 1rem;
+  /* 窄屏整页滚动，页头随内容滚走，不再固定占据大半屏幕 */
+  .market-page {
+    overflow-y: auto;
   }
 
+  .market-content {
+    flex: none;
+    padding: 0.75rem 1rem 1.5rem;
+    overflow: visible;
+  }
+
+  .market-header {
+    padding: 1rem 1rem 0.75rem;
+    backdrop-filter: none;
+  }
+
+  .header-row :deep(.page-header) {
+    margin-bottom: 0.75rem;
+  }
+
+  .header-row :deep(.page-header-sub) {
+    display: none;
+  }
+
+  /* 搜索独占一行，三个筛选并排一行 */
   .filter-bar {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
   }
 
   .search-field {
     grid-column: 1 / -1;
+    height: 42px;
+  }
+
+  .select-control > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .result-summary {
+    min-height: 0;
+    padding-bottom: 8px;
+  }
+
+  .plugin-grid {
+    gap: 10px;
+  }
+
+  .skeleton-card {
+    height: 170px;
   }
 }
 
 @media (max-width: 480px) {
-  .market-header {
-    padding-top: 1rem;
-  }
-
   .header-row :deep(.page-header-title) {
-    font-size: 1.45rem;
+    font-size: 1.3rem;
   }
 
-  .filter-bar {
-    grid-template-columns: 1fr;
-  }
-
-  .search-field {
-    grid-column: auto;
-  }
-
-  .result-summary {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 3px;
-    padding-bottom: 8px;
+  .icon-button {
+    width: 38px;
+    height: 38px;
   }
 }
 </style>

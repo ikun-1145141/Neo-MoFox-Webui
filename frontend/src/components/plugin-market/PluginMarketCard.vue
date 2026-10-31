@@ -392,6 +392,39 @@ function formatCount(value: number): string {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 560px) {
+  /* 窄屏卡片按内容收缩，同屏显示更多插件 */
+  .market-card {
+    min-height: 0;
+  }
+
+  .market-card:hover {
+    transform: none;
+  }
+
+  .card-main {
+    gap: 10px;
+    padding: 12px 12px 0;
+  }
+
+  .card-header {
+    gap: 10px;
+  }
+
+  .plugin-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .summary {
+    min-height: 0;
+    font-size: 0.82rem;
+    -webkit-line-clamp: 2;
+  }
+
+  .tag-row {
+    min-height: 0;
+  }
+
   .card-details .details-text {
     display: none;
   }
@@ -403,7 +436,7 @@ function formatCount(value: number): string {
 
 @media (max-width: 420px) {
   .card-header {
-    grid-template-columns: 46px minmax(0, 1fr);
+    grid-template-columns: 40px minmax(0, 1fr);
   }
 
   .local-status {

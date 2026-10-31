@@ -7,17 +7,19 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fastapi import HTTPException, Query
+from fastapi import File, Form, HTTPException, Query, UploadFile
 
 from src.app.plugin_system.api.log_api import get_logger  # type: ignore
 from src.core.components.base.router import BaseRouter  # type: ignore
 from src.core.utils.security import VerifiedDep  # type: ignore
 
 from ...managers.plugin_manager import get_plugin_management_manager
+from ...utils.plugin_package import PluginPackageError, PluginPackageTooLargeError
 from ...utils.response import BaseResponse
 from ...utils.plugin_types import (
     PluginComponentInfo,
     PluginDetail,
+    PluginImportResult,
     PluginLoadResult,
     PluginReloadResult,
     PluginSummary,
@@ -67,6 +69,46 @@ class PluginRouter(BaseRouter):
             except Exception as e:
                 logger.error(f"获取插件列表失败: {e}", exc_info=True)
                 raise HTTPException(status_code=500, detail=f"获取插件列表失败: {str(e)}")
+
+        @self.app.post(
+            "/import",
+            response_model=BaseResponse[PluginImportResult],
+            dependencies=[VerifiedDep],
+            summary="导入插件包",
+            description="上传 .zip / .mfp 插件包，校验后写入插件目录并尝试热加载",
+        )
+        async def import_plugin_package(
+            file: UploadFile = File(..., description="插件包文件（.zip / .mfp）"),
+            overwrite: bool = Form(False, description="检测到同名插件时是否直接覆盖"),
+        ) -> BaseResponse[PluginImportResult]:
+            """导入插件包。
+
+            Args:
+                file: 上传的插件包文件
+                overwrite: 是否覆盖同名插件
+            """
+            try:
+                result = await self.plugin_manager.import_plugin_package(
+                    file=file,
+                    overwrite=overwrite,
+                    protected_name=self.plugin.plugin_name,
+                )
+                if result.conflict:
+                    return BaseResponse.ok(data=result, message="已存在同名插件，请确认是否覆盖")
+                if result.restart_required:
+                    message = "插件包已写入，热加载失败，请重启 Neo-MoFox 后生效"
+                else:
+                    message = "插件包导入成功"
+                return BaseResponse.ok(data=result, message=message)
+            except PluginPackageTooLargeError as e:
+                logger.warning(f"导入插件包被拒绝: {e}")
+                raise HTTPException(status_code=413, detail=str(e))
+            except PluginPackageError as e:
+                logger.warning(f"导入插件包被拒绝: {e}")
+                raise HTTPException(status_code=400, detail=str(e))
+            except Exception as e:
+                logger.error(f"导入插件包失败: {e}", exc_info=True)
+                raise HTTPException(status_code=500, detail=f"导入插件包失败: {str(e)}")
 
         @self.app.get(
             "/{plugin_name}",
