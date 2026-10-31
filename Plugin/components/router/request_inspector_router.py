@@ -1,6 +1,6 @@
 """请求监视器原生记录接口。
 
-    提供需要身份认证的请求生命周期记录查询和清理接口。
+提供需要身份认证的请求生命周期记录查询和清理接口。
 """
 
 from __future__ import annotations
@@ -35,8 +35,8 @@ class RequestInspectorRouter(BaseRouter):
     def __init__(self, plugin: "BasePlugin") -> None:
         """初始化路由并绑定请求监视器管理器。
 
-            Args:
-                plugin：所属插件实例。
+        Args:
+            plugin: 所属插件实例。
         """
         super().__init__(plugin)
         self.inspector_manager = get_request_inspector_manager()
@@ -54,11 +54,11 @@ class RequestInspectorRouter(BaseRouter):
         ) -> BaseResponse[InspectorRecordsSnapshot]:
             """读取当前内存缓冲区的记录摘要和统计信息。
 
-                Args:
-                    response：用于设置 HTTP 状态码的响应对象。
+            Args:
+                response: 用于设置 HTTP 状态码的响应对象。
 
-                返回：
-                    BaseResponse[InspectorRecordsSnapshot]：记录快照及当前缓冲区统计。
+            Returns:
+                记录快照及当前缓冲区统计。
             """
             try:
                 return BaseResponse.ok(data=self.inspector_manager.list_records())
@@ -77,12 +77,12 @@ class RequestInspectorRouter(BaseRouter):
         ) -> BaseResponse[InspectorRecordDetail]:
             """读取指定请求记录的详情。
 
-                Args:
-                    record_id：请求记录编号。
-                    response：用于设置 HTTP 状态码的响应对象。
+            Args:
+                record_id: 请求记录编号。
+                response: 用于设置 HTTP 状态码的响应对象。
 
-                返回：
-                    BaseResponse[InspectorRecordDetail]：记录详情；记录不存在时返回 404 响应。
+            Returns:
+                记录详情；记录不存在时返回 404 响应。
             """
             try:
                 data = self.inspector_manager.get_record(record_id)
@@ -105,11 +105,11 @@ class RequestInspectorRouter(BaseRouter):
         ) -> BaseResponse[InspectorClearResult]:
             """清空当前保留的请求记录，不影响正在执行的模型调用。
 
-                Args:
-                    response：用于设置 HTTP 状态码的响应对象。
+            Args:
+                response: 用于设置 HTTP 状态码的响应对象。
 
-                返回：
-                    BaseResponse[InspectorClearResult]：清理数量及更新后的缓冲区版本。
+            Returns:
+                清理数量及更新后的缓冲区版本。
             """
             try:
                 return BaseResponse.ok(data=self.inspector_manager.clear_records())
