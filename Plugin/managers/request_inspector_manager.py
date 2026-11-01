@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from src.kernel.llm import get_inspector
+from src.app.plugin_system.api import request_inspector_api  # type: ignore
 
 from ..utils.request_inspector_types import (
     InspectorClearResult,
@@ -17,7 +17,7 @@ from ..utils.request_inspector_types import (
 class RequestInspectorManager:
     """请求监视器数据管理器。
 
-    只通过主程序公开接口读取快照，不访问内部缓冲区，也不重复采集请求。
+    只通过主程序的请求监视插件 API 读取和清理数据，不访问内核内部状态。
     """
 
     def list_records(self) -> InspectorRecordsSnapshot:
@@ -26,7 +26,8 @@ class RequestInspectorManager:
         Returns:
             经过接口模型校验的当前缓冲区快照。
         """
-        return InspectorRecordsSnapshot.model_validate(get_inspector().snapshot())
+        snapshot = request_inspector_api.get_request_inspector_snapshot()
+        return InspectorRecordsSnapshot.model_validate(snapshot)
 
     def get_record(self, record_id: int) -> InspectorRecordDetail | None:
         """按编号读取单条请求记录详情。
@@ -37,7 +38,7 @@ class RequestInspectorManager:
         Returns:
             经过校验的记录详情；记录已清空或淘汰时返回 None。
         """
-        record = get_inspector().get_record(record_id)
+        record = request_inspector_api.get_request_inspector_request(record_id)
         return (
             InspectorRecordDetail.model_validate(record) if record is not None else None
         )
@@ -48,7 +49,8 @@ class RequestInspectorManager:
         Returns:
             清理数量及更新后的缓冲区版本。
         """
-        return InspectorClearResult.model_validate(get_inspector().clear_snapshot())
+        result = request_inspector_api.clear_request_inspector_requests()
+        return InspectorClearResult.model_validate(result)
 
 
 _request_inspector_manager: RequestInspectorManager | None = None
