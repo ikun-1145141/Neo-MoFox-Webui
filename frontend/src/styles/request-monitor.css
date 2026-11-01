@@ -242,6 +242,10 @@
 .rm-filter-row .rm-select {
   width: 100%;
 }
+.rm-filter-row > .rm-md-select {
+  width: 100%;
+  min-width: 0;
+}
 .rm-records {
   flex: 1;
   min-height: 0;

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from '../../utils/i18n'
+import MdSelect from '../common/MdSelect.vue'
 import type {
   InspectorRecordSummary,
   InspectorStatus,
@@ -40,6 +41,26 @@ const statuses: InspectorStatus[] = [
   'cancelled',
   'captured',
 ]
+const statusOptions = computed(() => [
+  { label: t('requestMonitor.allStatuses'), value: '' },
+  ...statuses.map((value) => ({
+    label: t(`requestMonitor.status.${value}`),
+    value,
+  })),
+])
+const modelOptions = computed(() => {
+  const models = props.model && !props.models.includes(props.model)
+    ? [props.model, ...props.models]
+    : props.models
+
+  return [
+    { label: t('requestMonitor.allModels'), value: '' },
+    ...models.map((value) => ({ label: value, value })),
+  ]
+})
+function updateStatus(value: string | number | null) {
+  emit('update:status', String(value ?? '') as InspectorStatus | '')
+}
 </script>
 <template>
   <aside class="rm-list-panel" :aria-label="t('requestMonitor.records')">
@@ -59,40 +80,22 @@ const statuses: InspectorStatus[] = [
         "
       />
       <div class="rm-filter-row">
-        <select
-          class="rm-select"
-          :value="status"
+        <MdSelect
+          class="rm-md-select"
+          :model-value="status"
+          :options="statusOptions"
+          :placeholder="t('requestMonitor.allStatuses')"
           :aria-label="t('requestMonitor.filterStatus')"
-          @change="
-            emit(
-              'update:status',
-              ($event.target as HTMLSelectElement).value as
-                | InspectorStatus
-                | '',
-            )
-          "
-        >
-          <option value="">{{ t('requestMonitor.allStatuses') }}</option>
-          <option v-for="value in statuses" :key="value" :value="value">
-            {{ t(`requestMonitor.status.${value}`) }}
-          </option>
-        </select>
-        <select
-          class="rm-select"
-          :value="model"
+          @update:model-value="updateStatus"
+        />
+        <MdSelect
+          class="rm-md-select"
+          :model-value="model"
+          :options="modelOptions"
+          :placeholder="t('requestMonitor.allModels')"
           :aria-label="t('requestMonitor.filterModel')"
-          @change="
-            emit('update:model', ($event.target as HTMLSelectElement).value)
-          "
-        >
-          <option value="">{{ t('requestMonitor.allModels') }}</option>
-          <option v-if="model && !models.includes(model)" :value="model">
-            {{ model }}
-          </option>
-          <option v-for="value in models" :key="value" :value="value">
-            {{ value }}
-          </option>
-        </select>
+          @update:model-value="emit('update:model', String($event ?? ''))"
+        />
       </div>
     </div>
     <div ref="recordsElement" class="rm-records" :aria-busy="loading">

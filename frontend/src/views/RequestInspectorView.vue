@@ -94,7 +94,32 @@ async function clearRecords() {
 
 async function copyJson(text: string) {
   try {
-    await navigator.clipboard.writeText(text)
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      try {
+        await navigator.clipboard.writeText(text)
+        toast.show(t('requestMonitor.copySuccess'), 'success')
+        return
+      } catch {
+        // 不支持异步剪贴板或权限被拒时，尝试兼容旧版浏览器的复制方式。
+      }
+    }
+
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.setAttribute('readonly', '')
+    textarea.style.position = 'fixed'
+    textarea.style.top = '0'
+    textarea.style.left = '0'
+    textarea.style.opacity = '0'
+    let copied = false
+    try {
+      document.body.appendChild(textarea)
+      textarea.select()
+      copied = document.execCommand('copy')
+    } finally {
+      textarea.remove()
+    }
+    if (!copied) throw new Error('Clipboard copy failed')
     toast.show(t('requestMonitor.copySuccess'), 'success')
   } catch {
     toast.show(t('requestMonitor.copyFailed'), 'error')

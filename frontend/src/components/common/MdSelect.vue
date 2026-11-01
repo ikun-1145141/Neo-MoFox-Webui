@@ -32,6 +32,7 @@
       @keydown.esc="closeDropdown"
       :tabindex="disabled ? -1 : 0"
       role="combobox"
+      :aria-label="ariaLabel"
       :aria-expanded="isOpen"
       :aria-haspopup="true"
       :aria-disabled="disabled"
@@ -129,6 +130,7 @@ interface Props {
   error?: string
   helperText?: string
   emptyText?: string
+  ariaLabel?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
