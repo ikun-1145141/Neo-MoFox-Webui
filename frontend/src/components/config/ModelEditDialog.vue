@@ -72,6 +72,7 @@
                   type="number"
                   min="0"
                   max="10"
+                  @change="formData.max_retry = clampNumber(formData.max_retry, 0, 10)"
                 />
               </div>
 
@@ -83,6 +84,7 @@
                   type="number"
                   min="1"
                   max="300"
+                  @change="formData.timeout = clampNumber(formData.timeout, 1, 300)"
                 />
               </div>
 
@@ -94,6 +96,7 @@
                   type="number"
                   min="1"
                   max="60"
+                  @change="formData.retry_interval = clampNumber(formData.retry_interval, 1, 60)"
                 />
               </div>
             </div>
@@ -147,6 +150,7 @@
                   type="number"
                   step="0.01"
                   min="0"
+                  @change="formData.price_in = clampNumber(formData.price_in, 0)"
                 />
               </div>
 
@@ -158,6 +162,7 @@
                   type="number"
                   step="0.01"
                   min="0"
+                  @change="formData.cache_hit_price_in = clampNumber(formData.cache_hit_price_in, 0)"
                 />
               </div>
             </div>
@@ -171,6 +176,7 @@
                   type="number"
                   step="0.01"
                   min="0"
+                  @change="formData.price_out = clampNumber(formData.price_out, 0)"
                 />
               </div>
             </div>
@@ -183,6 +189,7 @@
                 type="number"
                 min="1024"
                 step="1024"
+                @change="formData.max_context = clampNumber(formData.max_context, 1024)"
               />
             </div>
 
@@ -347,6 +354,7 @@
                   type="number"
                   min="1"
                   step="1"
+                  @change="formData.max_tokens = clampNumber(formData.max_tokens, 1)"
                 />
               </div>
 
@@ -359,6 +367,7 @@
                   min="0"
                   max="2"
                   step="0.1"
+                  @change="formData.temperature = clampNumber(formData.temperature, 0, 2)"
                 />
               </div>
             </div>
@@ -390,6 +399,7 @@ import ModelIdentifierInput from './ModelIdentifierInput.vue'
 import { listRemoteModels } from '@/api/modules/config'
 import type { RemoteModelListRequest, RemoteModelOption } from '@/api/types/config'
 import { closeAllDropdowns } from '@/utils/useDropdownManager'
+import { clampNumber } from '@/utils/number'
 
 const { t } = useI18n()
 const dialogStore = useDialogStore()

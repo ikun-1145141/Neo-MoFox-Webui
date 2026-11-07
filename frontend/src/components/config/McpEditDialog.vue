@@ -104,6 +104,7 @@
                     min="1"
                     max="300"
                     placeholder="30"
+                    @change="formData.timeout = clampNumber(formData.timeout, 1, 300)"
                   />
                 </div>
               </div>
@@ -157,6 +158,7 @@ import { ref, watch } from 'vue'
 import { useI18n } from '@/utils/i18n'
 import { useDialogStore } from '@/utils/dialog'
 import Icon from '../common/Icon.vue'
+import { clampNumber } from '@/utils/number'
 
 const { t } = useI18n()
 const dialogStore = useDialogStore()

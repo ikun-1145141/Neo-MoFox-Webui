@@ -124,9 +124,11 @@ import {
 } from '@/api/modules/config'
 import { getSettings } from '@/api/modules/settings'
 import type { PluginConfigEntry, EnhancedConfigResponse } from '@/api/types/config'
+import { useToastStore } from '@/utils/toast'
 
 const route = useRoute()
 const { t } = useI18n()
+const toast = useToastStore()
 
 // 插件列表
 const plugins = ref<PluginConfigEntry[]>([])
@@ -221,8 +223,11 @@ async function loadPluginConfig(plugin: PluginConfigEntry) {
 }
 
 // 保存配置
-async function handleSave(data: Record<string, any>) {
-  if (!selectedPlugin.value) return
+async function handleSave(data: Record<string, any>, done?: (ok?: boolean) => void) {
+  if (!selectedPlugin.value) {
+    done?.(false)
+    return
+  }
 
   try {
     const response = await fullWriteConfig(
@@ -232,6 +237,8 @@ async function handleSave(data: Record<string, any>) {
     )
 
     currentPluginConfig.value = response
+    done?.(true)
+    toast.show(t('pluginConfig.saveSuccess'), 'success')
 
     // 根据设置决定是否自动热重载运行时配置
     if (autoReloadAfterSave.value) {
@@ -240,6 +247,7 @@ async function handleSave(data: Record<string, any>) {
   } catch (error: any) {
     // 错误提示由 api/base.ts 响应拦截器统一处理，避免重复弹窗
     console.error('保存插件配置失败:', error)
+    done?.(false)
   }
 }
 

@@ -105,7 +105,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, getCurrentInstance } from 'vue'
 import { parse as parseToml } from 'toml'
 import { useI18n } from '@/utils/i18n'
 import Icon from '../common/Icon.vue'
@@ -116,6 +116,10 @@ import type { SectionSchema } from '@/api/types/config'
 import { useToastStore } from '@/utils/toast'
 
 const { t } = useI18n()
+
+// 在 setup 阶段捕获实例：事件处理器中 getCurrentInstance() 通常返回 null，
+// 而这里需要用 vnode.props 判断父组件是否监听了 save 事件。
+const instance = getCurrentInstance()
 
 // Props
 interface Props {
@@ -136,9 +140,11 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Emits
+// 保存事件会携带一个回调：父组件完成异步保存后必须调用它，
+// 以便编辑器区分保存成功与失败，避免失败时仍然提示“保存成功”。
 const emit = defineEmits<{
   'update:modelValue': [value: Record<string, any>]
-  save: [data: Record<string, any>]
+  save: [data: Record<string, any>, done?: (ok?: boolean) => void]
 }>()
 
 // Toast 提示
@@ -298,40 +304,37 @@ function switchSection(index: number) {
 async function handleSave() {
   if (isSaving.value || !hasChanges.value) return
 
-  try {
-    isSaving.value = true
-    errorMessage.value = ''
+  let dataToSave: Record<string, any>
 
-    // 获取最新数据
-    let dataToSave: Record<string, any>
-
-    if (editMode.value === 'code') {
-      // 代码模式：解析 TOML
-      try {
-        dataToSave = parseToml(codeContent.value)
-      } catch (error: any) {
-        const errorMsg = t('configEditor.errors.tomlFormat', { error: error.message })
-        errorMessage.value = errorMsg
-        toast.show(errorMsg, 'error')
-        return
-      }
-    } else {
-      // 表单模式：直接使用表单数据
-      dataToSave = formData.value
+  if (editMode.value === 'code') {
+    // 代码模式：解析 TOML
+    try {
+      dataToSave = parseToml(codeContent.value)
+    } catch (error: any) {
+      const errorMsg = t('configEditor.errors.tomlFormat', { error: error.message })
+      errorMessage.value = errorMsg
+      toast.show(errorMsg, 'error')
+      return
     }
+  } else {
+    // 表单模式：直接使用表单数据
+    dataToSave = formData.value
+  }
 
-    // 触发保存事件
-    emit('save', dataToSave)
-    emit('update:modelValue', dataToSave)
+  isSaving.value = true
+  errorMessage.value = ''
 
-    // 更新原始数据（深拷贝，确保与 formData 引用独立）
+  try {
+    // 等待父组件真正完成保存请求，失败时不再展示成功提示。
+    const saved = await requestSave(dataToSave)
+    if (!saved) return
+
+    // 仅在保存成功后同步变更基准，失败时保留修改以便用户重试。
     originalData.value = deepClone(dataToSave)
     if (editMode.value === 'code') {
       originalCodeContent.value = codeContent.value
     }
-    
-    // 显示成功提示
-    toast.show(t('configEditor.save.success'), 'success')
+    emit('update:modelValue', dataToSave)
   } catch (error: any) {
     const errorMsg = t('configEditor.save.failed', { error: error.message })
     errorMessage.value = errorMsg
@@ -339,6 +342,39 @@ async function handleSave() {
   } finally {
     isSaving.value = false
   }
+}
+
+/**
+ * 触发父组件的保存事件，并等待其通过 done 回调告知结果。
+ * 老用法（父组件不接收 done）会按成功处理，保持兼容。
+ */
+function requestSave(data: Record<string, any>): Promise<boolean> {
+  const hasListener = typeof instance?.vnode.props?.onSave === 'function'
+
+  if (!hasListener) {
+    return Promise.resolve(true)
+  }
+
+  return new Promise<boolean>((resolve) => {
+    let settled = false
+
+    const finish = (ok = true) => {
+      if (settled) return
+      settled = true
+      resolve(ok)
+    }
+
+    try {
+      emit('save', data, finish)
+    } catch (error) {
+      console.error('[ConfigEditor] 保存处理器异常:', error)
+      finish(false)
+      return
+    }
+
+    // 兜底：父组件若未回调，避免按钮永久停留在“保存中”。
+    window.setTimeout(() => finish(false), 60_000)
+  })
 }
 
 // 监听代码内容变化（尝试实时解析）

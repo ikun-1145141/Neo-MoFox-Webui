@@ -113,6 +113,7 @@
                   max="65536"
                   :disabled="isRunning"
                   :placeholder="t('modelTestDialog.embedding.dimensionPlaceholder')"
+                  @change="embeddingDimensions = clampNumber(embeddingDimensions, 1, 65536)"
                 />
                 <p class="field-hint">{{ t('modelTestDialog.embedding.dimensionHint') }}</p>
               </div>
@@ -160,6 +161,7 @@
                     min="1"
                     max="100"
                     :disabled="isRunning"
+                    @change="rerankTopN = clampNumber(rerankTopN, 1, 100)"
                   />
                 </div>
               </div>
@@ -214,6 +216,7 @@ import TestResultRow from './ModelTestDialogResult.vue'
 import { testModel as apiTestModel } from '@/api/modules/config'
 import type { ModelKind, TestItem, LLMTestKey } from './modelTestDialogTypes'
 import type { ModelTestRequest } from '@/api/types/config'
+import { clampNumber } from '@/utils/number'
 
 const { t } = useI18n()
 

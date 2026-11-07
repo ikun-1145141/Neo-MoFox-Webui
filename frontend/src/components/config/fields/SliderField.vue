@@ -69,7 +69,8 @@ function handleInput(event: Event) {
 
 function handleNumberInput(event: Event) {
   const target = event.target as HTMLInputElement
-  let value = parseFloat(target.value)
+  const parsed = parseFloat(target.value)
+  let value = parsed
   
   if (isNaN(value)) {
     value = 0
@@ -81,6 +82,11 @@ function handleNumberInput(event: Event) {
   
   if (value < min) value = min
   if (value > max) value = max
+
+  // 越界时立即回写输入框，避免界面停留在越界数字。
+  if (value !== parsed) {
+    target.value = String(value)
+  }
   
   emit('update:modelValue', value)
 }

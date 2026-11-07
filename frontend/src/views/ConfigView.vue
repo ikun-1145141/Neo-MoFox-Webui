@@ -56,7 +56,7 @@
           :config-type="'bot'"
           :schema="botConfig?.sections"
           :model-value="botConfig?.data"
-          @save="handleSave('bot', $event)"
+          @save="(data, done) => handleSave('bot', data, done)"
         />
 
         <!-- 模型配置 -->
@@ -172,7 +172,11 @@ async function loadConfig() {
 }
 
 // 保存配置
-async function handleSave(configType: ConfigTab, data: Record<string, any>) {
+async function handleSave(
+  configType: ConfigTab,
+  data: Record<string, any>,
+  done?: (ok?: boolean) => void,
+) {
   console.log(`[ConfigView] handleSave 被调用:`, { configType, dataKeys: Object.keys(data) })
   try {
     const response = await fullWriteConfig(configType, data)
@@ -189,14 +193,17 @@ async function handleSave(configType: ConfigTab, data: Record<string, any>) {
       console.log('[ConfigView] MCP 配置保存成功，已更新 mcpConfig')
     }
 
+    done?.(true)
+    toast.show(t('configView.saveSuccess'), 'success')
 
     // 根据设置决定是否自动热重载运行时配置
     if (autoReloadAfterSave.value) {
       await autoReloadRuntime(configType)
     }
   } catch (error: any) {
+    // 错误提示由 api/base.ts 响应拦截器统一处理，避免重复弹窗
     console.error(`[ConfigView] 保存 ${configType} 配置失败:`, error)
-    toast.show(t('configView.saveFailed', { error: error.message ?? '' }), 'error')
+    done?.(false)
   }
 }
 
