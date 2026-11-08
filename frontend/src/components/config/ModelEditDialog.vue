@@ -10,8 +10,8 @@
 -->
 <template>
   <Teleport to="body">
-    <div v-if="isOpen" class="dialog-overlay" @click="handleOverlayClick">
-      <div class="dialog-container" @click.stop>
+    <div v-if="isOpen" class="dialog-overlay">
+      <div class="dialog-container">
         <div class="dialog-header">
           <h2>{{ title }}</h2>
           <button type="button" class="close-btn" @click="handleClose">
@@ -752,11 +752,6 @@ function removeModel(index: number) {
 // 处理关闭
 function handleClose() {
   emit('close')
-}
-
-// 处理遮罩点击
-function handleOverlayClick() {
-  handleClose()
 }
 
 // 处理提交
