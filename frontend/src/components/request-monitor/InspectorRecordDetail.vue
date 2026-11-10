@@ -16,30 +16,25 @@ const tabs = ['request', 'response', 'tools', 'raw'] as const
 const tab = ref<(typeof tabs)[number]>('request')
 const requestMode = ref('messages')
 const scrollArea = ref<HTMLElement | null>(null)
-const panelElements = new Map<string, HTMLElement>()
 const scrollPositions = new Map<string, number>()
 let scrollGeneration = 0
-function rememberPanel(name: string, element: unknown) {
-  if (element) panelElements.set(name, element as HTMLElement)
-  else panelElements.delete(name)
+function saveScroll(name: string, event: Event) {
+  if (props.active === false) return
+  const compact = !!props.compact
+  // 媒体查询先改变布局时，避免把重排后的滚动位置写入旧屏幕模式。
+  if (typeof window !== 'undefined' && compact !== window.matchMedia('(max-width: 899px)').matches) return
+  scrollPositions.set((compact ? 'mobile:' : 'desktop:') + name, (event.currentTarget as HTMLElement).scrollTop)
 }
-function saveScroll(name: string, mobile: boolean, event: Event) {
-  if (props.active === false || mobile !== !!props.compact) return
-  // 在 Vue 收到媒体查询回调之前，CSS 已经改变了实际负责滚动的容器。
-  if (typeof window !== 'undefined' && mobile !== window.matchMedia('(max-width: 899px)').matches) return
-  scrollPositions.set((mobile ? 'mobile:' : 'desktop:') + name, (event.currentTarget as HTMLElement).scrollTop)
-}
-// 滚动发生时立即保存位置，不等到媒体查询已经改变滚动容器之后再保存。
-// 桌面与手机的头部和内容高度不同，需要分别保留滚动位置。
+// 标题、错误和正文共用外层滚动区域，按标签及屏幕模式分别保存位置。
 watch([tab, () => props.compact, () => props.active], async ([name, compact, active], [oldName, oldCompact, oldActive]) => {
   const generation = ++scrollGeneration
   if (oldCompact === compact && oldActive !== false && active !== false) {
-    const previous = oldCompact ? scrollArea.value : panelElements.get(oldName)
+    const previous = scrollArea.value
     if (previous) scrollPositions.set((oldCompact ? 'mobile:' : 'desktop:') + oldName, previous.scrollTop)
   }
   await nextTick()
   if (generation !== scrollGeneration || active === false) return
-  const target = compact ? scrollArea.value : panelElements.get(name)
+  const target = scrollArea.value
   if (target) target.scrollTop = scrollPositions.get((compact ? 'mobile:' : 'desktop:') + name) ?? 0
 })
 const panels = shallowReactive<Record<string, InspectorRecordDetail | null>>({})
@@ -48,7 +43,6 @@ const recordKey = computed(() => props.record ? `${props.record.instance_id}:${p
 watch(recordKey, () => {
   scrollGeneration++
   scrollPositions.clear()
-  panelElements.clear()
   if (scrollArea.value) scrollArea.value.scrollTop = 0
   for (const name of tabs) panels[name] = null
   tab.value = 'request'
@@ -84,7 +78,7 @@ function moveTab(event: KeyboardEvent) {
       </button>
       <span v-if="loading" class="rm-note" role="status">{{ t('requestMonitor.updating') }}</span>
     </div>
-    <div ref="scrollArea" class="rm-detail-scroll" @scroll="saveScroll(tab, true, $event)">
+    <div ref="scrollArea" class="rm-detail-scroll" @scroll="saveScroll(tab, $event)">
       <div v-if="!record" class="rm-welcome">
         <h2>{{ t(loading ? 'requestMonitor.loading' : 'requestMonitor.selectRecord') }}</h2>
         <p>{{ t('requestMonitor.selectHint') }}</p>
@@ -128,7 +122,7 @@ function moveTab(event: KeyboardEvent) {
           <span v-if="loading && !compact" class="rm-tab-updating rm-muted">{{ t('requestMonitor.updating') }}</span>
         </div>
         <template v-for="name in tabs" :key="`${recordKey}:${name}`">
-          <div v-if="panels[name]" v-show="tab === name" :ref="element => rememberPanel(name, element)" @scroll="saveScroll(name, false, $event)" :id="`rm-panel-${name}`" class="rm-detail-content" role="tabpanel" :aria-labelledby="`rm-tab-${name}`" tabindex="0">
+          <div v-if="panels[name]" v-show="tab === name" :id="`rm-panel-${name}`" class="rm-detail-content" role="tabpanel" :aria-labelledby="`rm-tab-${name}`" tabindex="0">
             <template v-if="name === 'request'">
               <div class="rm-mode-toolbar">
                 <div class="rm-segmented-control">
