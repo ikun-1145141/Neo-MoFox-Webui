@@ -2,6 +2,17 @@
 .rm-page {
   --rm-line: color-mix(in srgb, var(--md-sys-color-outline-variant) 45%, transparent);
   --rm-muted: var(--md-sys-color-on-surface-variant);
+  /* 与聊天页一致：面板先淡化壁纸，文字和输入区域再使用清晰的主题底色。 */
+  --rm-surface: var(--md-sys-color-surface);
+  --rm-surface-container: var(--md-sys-color-surface-container);
+  --rm-surface-low: var(--md-sys-color-surface-container-low);
+  --rm-surface-high: var(--md-sys-color-surface-container-high);
+  --rm-surface-lowest: var(--md-sys-color-surface-container-lowest);
+  --rm-panel-surface: color-mix(in srgb, var(--md-sys-color-surface-container-low) 72%, transparent);
+  --rm-sidebar-surface: color-mix(in srgb, var(--md-sys-color-surface) 75%, transparent);
+  --rm-card-surface: color-mix(in srgb, var(--md-sys-color-surface-container) 88%, transparent);
+  --rm-toolbar-surface: color-mix(in srgb, var(--md-sys-color-surface) 75%, transparent);
+  --rm-toolbar-low: color-mix(in srgb, var(--md-sys-color-surface-container-low) 88%, transparent);
   flex: 1;
   width: 100%;
   min-width: 0;
@@ -9,6 +20,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: transparent;
   color: var(--md-sys-color-on-surface);
 }
 .rm-page *, .rm-page *::before, .rm-page *::after {
@@ -38,7 +50,9 @@
   padding: 12px 20px;
   flex: none;
   border-bottom: 1px solid var(--rm-line);
-  background: var(--md-sys-color-surface);
+  background: var(--rm-toolbar-surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 .rm-header-left, .rm-badge-group, .rm-header-actions {
   display: flex;
@@ -77,7 +91,7 @@
   line-height: 1;
   white-space: nowrap;
   border: 1px solid var(--rm-line);
-  background: var(--md-sys-color-surface-container);
+  background: var(--rm-surface-container);
   color: var(--rm-muted);
 }
 .rm-status-chip {
@@ -86,7 +100,7 @@
   border-color: color-mix(in srgb, var(--md-sys-color-primary) 20%, transparent);
 }
 .rm-status-chip.is-paused {
-  background: var(--md-sys-color-surface-container);
+  background: var(--rm-surface-container);
   color: var(--rm-muted);
   border-color: var(--rm-line);
 }
@@ -106,7 +120,7 @@
   padding: 7px 14px;
   border: 1px solid transparent;
   border-radius: 10px;
-  background: var(--md-sys-color-surface-container);
+  background: var(--rm-surface-container);
   color: var(--md-sys-color-on-surface);
   font-size: .78rem;
   font-weight: 600;
@@ -132,7 +146,7 @@
 }
 .rm-btn:hover:not(:disabled), .rm-button:hover:not(:disabled), .rm-tree-btn:hover:not(:disabled) {
   border-color: var(--rm-line);
-  background: var(--md-sys-color-surface-container-high);
+  background: var(--rm-surface-high);
 }
 .rm-text-actions, .rm-inline-actions, .rm-toolbar-group {
   display: flex;
@@ -186,7 +200,9 @@
   min-width: 0;
   min-height: 0;
   border-right: 1px solid var(--rm-line);
-  background: var(--md-sys-color-surface-container-low);
+  background: var(--rm-sidebar-surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 .rm-list-toolbar {
   display: flex;
@@ -194,7 +210,7 @@
   gap: 10px;
   padding: 16px;
   border-bottom: 1px solid var(--rm-line);
-  background: var(--md-sys-color-surface);
+  background: transparent;
   flex: none;
 }
 .rm-toolbar-top, .rm-record-top, .rm-record-bottom, .rm-section-heading {
@@ -214,7 +230,7 @@
   border-radius: 99px;
   font-size: .72rem;
   font-weight: 600;
-  background: var(--md-sys-color-surface-container-high);
+  background: var(--rm-surface-high);
 }
 .rm-search-input, .rm-select, .rm-input {
   width: 100%;
@@ -224,7 +240,7 @@
   border: 1px solid var(--rm-line);
   border-radius: 10px;
   color: var(--md-sys-color-on-surface);
-  background: var(--md-sys-color-surface);
+  background: var(--rm-surface);
   font-size: .78rem;
 }
 .rm-search-input:focus, .rm-select:focus {
@@ -270,12 +286,12 @@
   cursor: pointer;
   border: 1px solid var(--rm-line);
   border-radius: 12px;
-  --rm-record-background: var(--md-sys-color-surface);
+  --rm-record-background: var(--rm-card-surface);
   background: var(--rm-record-background);
   transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
 }
 .rm-record.selected {
-  --rm-record-background: color-mix(in srgb, var(--md-sys-color-primary) 8%, var(--md-sys-color-surface));
+  --rm-record-background: color-mix(in srgb, var(--md-sys-color-primary) 8%, var(--rm-card-surface));
   border-color: var(--md-sys-color-primary);
   box-shadow: inset 3px 0 var(--md-sys-color-primary);
 }
@@ -303,7 +319,7 @@
   max-width: 100%;
   padding: 2px 7px;
   border-radius: 6px;
-  background: var(--md-sys-color-surface-container);
+  background: var(--rm-surface-container);
   color: var(--rm-muted);
   font-family: ui-monospace, monospace;
   font-size: .73rem;
@@ -331,7 +347,7 @@
   font-size: .68rem;
   line-height: 1.25;
   font-weight: 650;
-  background: var(--md-sys-color-surface-container-high);
+  background: var(--rm-surface-high);
   color: var(--rm-muted);
 }
 .rm-status-succeeded {
@@ -352,15 +368,18 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--md-sys-color-surface);
+  background: var(--rm-panel-surface);
 }
+/* 错误信息和正文共同参与详情滚动，不再互相挤占固定高度。 */
 .rm-detail-scroll {
-  display: flex;
-  flex-direction: column;
+  display: block;
   flex: 1;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
 }
 .rm-mobile-backbar {
   flex: none;
@@ -369,7 +388,9 @@
   justify-content: space-between;
   gap: 8px;
   padding: 6px 12px;
-  background: var(--md-sys-color-surface);
+  background: var(--rm-toolbar-surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--rm-line);
 }
 .rm-back-button {
@@ -425,8 +446,6 @@
   flex: none;
 }
 .rm-record-meta {
-  max-height: 28vh;
-  overflow-y: auto;
   flex: none;
   margin: 12px 24px;
   border: 1px solid var(--rm-line);
@@ -484,7 +503,7 @@
   padding: 3px 8px;
   font-size: .7rem;
   border-radius: 6px;
-  background: var(--md-sys-color-surface-container);
+  background: var(--rm-surface-container);
   color: var(--rm-muted);
 }
 .rm-integrity > .rm-warning {
@@ -497,8 +516,6 @@
   border-radius: 8px;
 }
 .rm-record-error {
-  max-height: 25vh;
-  overflow-y: auto;
   flex: none;
   margin: 0 24px 12px;
   padding: 12px;
@@ -515,7 +532,7 @@
   flex: none;
   padding: 0 16px;
   border-bottom: 1px solid var(--rm-line);
-  background: var(--md-sys-color-surface-container-low);
+  background: var(--rm-toolbar-low);
 }
 .rm-tab-btn {
   min-width: 0;
@@ -541,13 +558,9 @@
   pointer-events: none;
 }
 .rm-detail-content {
-  flex: 1;
-  min-height: 0;
   min-width: 0;
   padding: 18px 24px 28px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
+  overflow: visible;
 }
 .rm-mode-toolbar {
   display: flex;
@@ -564,7 +577,7 @@
   padding: 3px;
   gap: 2px;
   border-radius: 10px;
-  background: var(--md-sys-color-surface-container);
+  background: var(--rm-surface-container);
 }
 .rm-seg-btn {
   border: 0;
@@ -577,7 +590,7 @@
   cursor: pointer;
 }
 .rm-seg-btn.active {
-  background: var(--md-sys-color-surface-container-lowest);
+  background: var(--rm-surface-lowest);
   color: var(--md-sys-color-on-surface);
   box-shadow: 0 1px 3px #0001;
   font-weight: 650;
@@ -609,7 +622,7 @@
   padding: 14px;
   border: 1px solid var(--rm-line);
   border-radius: 12px;
-  background: var(--md-sys-color-surface-container-lowest);
+  background: var(--rm-card-surface);
 }
 .rm-block h3, .rm-tool-section h3, .rm-section-heading h3 {
   font-size: .9rem;
@@ -634,7 +647,7 @@ details.rm-block > summary {
   font-weight: 600;
   list-style: none;
   cursor: pointer;
-  background: var(--md-sys-color-surface-container-low);
+  background: var(--rm-surface-low);
   overflow-wrap: anywhere;
 }
 details.rm-block > summary::after {
@@ -659,7 +672,7 @@ details.rm-block > .rm-tree-container, details.rm-block > .rm-note {
   margin: 10px;
   border-left: 3px solid var(--md-sys-color-primary);
   border-radius: 8px;
-  background: var(--md-sys-color-surface-container-low);
+  background: var(--rm-surface-low);
 }
 .rm-role {
   flex: none;
@@ -707,7 +720,7 @@ details.rm-block > .rm-tool-summary {
   padding: 14px;
   border: 1px solid var(--rm-line);
   border-radius: 10px;
-  background: var(--md-sys-color-surface-container-lowest);
+  background: var(--rm-surface-lowest);
 }
 .rm-content {
   margin: 0;
@@ -727,7 +740,7 @@ details.rm-block > .rm-tool-summary {
   border: 1px solid var(--rm-line);
   border-radius: 10px;
   padding: 8px;
-  background: var(--md-sys-color-surface-container-lowest);
+  background: var(--rm-surface-lowest);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: .75rem;
 }
@@ -758,7 +771,7 @@ details.rm-block > .rm-tool-summary {
   border-radius: 6px;
 }
 .rm-tree-row:hover, .rm-tree-row:focus-within {
-  background: var(--md-sys-color-surface-container-low);
+  background: var(--rm-surface-low);
 }
 .rm-tree-toggle, .rm-tree-bullet {
   width: 24px;
@@ -797,7 +810,7 @@ details.rm-block > .rm-tool-summary {
   padding: 2px 5px;
   border-radius: 5px;
   font-size: .65rem;
-  background: var(--md-sys-color-surface-container);
+  background: var(--rm-surface-container);
   color: var(--rm-muted);
 }
 .rm-tree-type-pill.type-string {
@@ -831,7 +844,7 @@ details.rm-block > .rm-tool-summary {
   padding: 10px 12px;
   border: 1px solid var(--rm-line);
   border-radius: 8px;
-  background: var(--md-sys-color-surface-container-lowest);
+  background: var(--rm-surface-lowest);
   color: var(--md-sys-color-on-surface);
   font: inherit;
   line-height: 1.6;
@@ -885,8 +898,7 @@ details.rm-block > .rm-tool-summary {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  flex: 1;
-  min-height: 200px;
+  min-height: 100%;
   padding: 24px;
   text-align: center;
   font-size: .8rem;
@@ -946,12 +958,6 @@ details.rm-block > .rm-tool-summary {
   .rm-show-detail .rm-detail-panel {
     display: flex;
   }
-  .rm-detail-scroll {
-    display: block;
-    overflow-y: auto;
-    overflow-x: hidden;
-    -webkit-overflow-scrolling: touch;
-  }
   .rm-detail-header {
     padding: 14px 16px;
     flex-wrap: wrap;
@@ -970,18 +976,10 @@ details.rm-block > .rm-tool-summary {
     padding: 0 8px;
   }
   .rm-detail-content {
-    min-height: 0;
     padding: 14px 16px 24px;
-    overflow: visible;
   }
   .rm-record-meta {
     margin: 12px 16px;
-    max-height: none;
-    overflow: visible;
-  }
-  .rm-record-error {
-    max-height: none;
-    overflow: visible;
   }
   .rm-integrity {
     padding: 0 16px 10px;
