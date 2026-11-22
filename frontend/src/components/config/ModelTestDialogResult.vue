@@ -1,219 +1,51 @@
-<!--
-  @file ModelTestDialogResult.vue
-  @description 单个模型测试项的结果展示（等待/运行中/成功/失败）
--->
-
-<template>
-  <div class="test-result" :class="`status-${test.status}`">
-    <template v-if="test.status === 'idle'">
-      <Icon icon="material-symbols:schedule-outline-rounded" :size="18" />
-      <span>{{ t('modelTestDialog.status.idle') }}</span>
-    </template>
-
-    <template v-else-if="test.status === 'running'">
-      <Icon icon="material-symbols:progress-activity" :size="18" class="spinning" />
-      <span>{{ t('modelTestDialog.status.running') }}</span>
-    </template>
-
-    <template v-else-if="test.status === 'success' && test.result">
-      <Icon icon="material-symbols:check-circle-outline-rounded" :size="18" />
-      <div class="result-content">
-        <p class="result-line">
-          <span class="status-label">{{ t('modelTestDialog.status.success') }}</span>
-          <span v-if="hasLatency(test.result)" class="latency">
-            {{ t('modelTestDialog.result.latency', { ms: String(test.result.latency_ms!.toFixed(0)) }) }}
-          </span>
-        </p>
-
-        <p v-if="test.result.response_text" class="result-detail">
-          {{ truncate(test.result.response_text, 120) }}
-        </p>
-
-        <p v-if="test.key === 'embedding' && test.result.dimensions" class="result-detail">
-          {{ t('modelTestDialog.result.dimensions', { dim: String(test.result.dimensions) }) }}
-          <template v-if="test.result.embedding_preview?.length">
-            · {{ t('modelTestDialog.result.embeddingPreview') }}
-            <code>{{ formatPreview(test.result.embedding_preview) }}</code>
-          </template>
-        </p>
-
-        <template v-if="test.key === 'rerank'">
-          <p class="result-detail">
-            {{ t('modelTestDialog.result.rerankCount', { count: String(test.result.rerank_results?.length || 0) }) }}
-          </p>
-          <ol v-if="test.result.rerank_results?.length" class="rerank-list">
-            <li v-for="(item, idx) in test.result.rerank_results.slice(0, 3)" :key="idx">
-              <span class="score">{{ (item.score * 100).toFixed(1) }}%</span>
-              <span class="doc">{{ truncate(item.document, 60) }}</span>
-            </li>
-          </ol>
-        </template>
-
-        <p v-if="test.key === 'tool_call' && test.result.tool_calls?.length" class="result-detail">
-          {{ t('modelTestDialog.result.toolCalls') }}: <code>{{ test.result.tool_calls.join(', ') }}</code>
-        </p>
-      </div>
-    </template>
-
-    <template v-else>
-      <Icon icon="material-symbols:error-outline-rounded" :size="18" />
-      <div class="result-content">
-        <p class="result-line">
-          <span class="status-label">{{ t('modelTestDialog.status.fail') }}</span>
-          <span v-if="test.result && hasLatency(test.result)" class="latency">
-            {{ t('modelTestDialog.result.latency', { ms: String(test.result.latency_ms!.toFixed(0)) }) }}
-          </span>
-        </p>
-        <p class="result-detail">{{ test.error || test.result?.error_message || t('modelTestDialog.status.fail') }}</p>
-      </div>
-    </template>
-  </div>
-</template>
-
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from '@/utils/i18n'
 import Icon from '../common/Icon.vue'
 import type { TestItem } from './modelTestDialogTypes'
-import type { ModelTestResult } from '@/api/types/config'
 
+const props = defineProps<{ test: TestItem }>()
 const { t } = useI18n()
-
-defineProps<{
-  test: TestItem
-  isRunning: boolean
-}>()
-
-function hasLatency(result: ModelTestResult): boolean {
-  return result.latency_ms !== undefined && result.latency_ms !== null
-}
-
-function truncate(text: string, max: number): string {
-  if (text.length <= max) return text
-  return text.slice(0, max) + '…'
-}
-
-function formatPreview(values: number[]): string {
-  return values.map(v => v.toFixed(4)).join(', ')
-}
+const tr = (key: string, params?: Record<string, string>) => t(`modelTestDialog.${key}`, params)
+const result = computed(() => props.test.result)
 </script>
 
+<template>
+  <div class="inline-result" role="group" :aria-label="tr('outputTitle')">
+    <p v-if="test.status === 'fail'" class="error-line"><strong>{{ tr('result.error') }}</strong>
+      <span class="verbatim">{{ test.error || tr('errors.failed') }}</span></p>
+    <div v-if="result?.response_text" class="part"><strong>{{ tr('result.response') }}</strong>
+      <p class="verbatim">{{ result.response_text }}</p></div>
+    <div v-if="result?.tool_calls?.length" class="part"><strong>{{ tr('result.toolCalls') }}</strong>
+      <ul class="tools"><li v-for="(name, index) in result.tool_calls" :key="index"><code>{{ name }}</code></li></ul></div>
+    <div v-if="test.key === 'embedding' && result?.dimensions != null" class="part">
+      <strong>{{ tr('result.dimensions', { dim: String(result.dimensions) }) }}</strong>
+      <p v-if="result.embedding_preview?.length" class="vector">{{ tr('result.embeddingPreview') }} <code>[{{ result.embedding_preview.join(', ') }}]</code></p>
+    </div>
+    <div v-if="test.key === 'rerank' && result?.rerank_results" class="part">
+      <strong>{{ tr('result.rerankCount', { count: String(result.rerank_results.length) }) }}</strong>
+      <ol v-if="result.rerank_results.length" class="ranks"><li v-for="(item, index) in result.rerank_results" :key="index">
+        <span class="score">{{ tr('result.score', { score: String(item.score) }) }}</span><p class="verbatim">{{ item.document }}</p></li></ol>
+    </div>
+    <p v-if="result?.latency_ms != null" class="latency"><Icon icon="timer-outline-rounded" :width="14" :height="14" />{{ tr('result.latency', { ms: String(Math.round(result.latency_ms)) }) }}</p>
+  </div>
+</template>
+
 <style scoped>
-.test-result {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  line-height: 1.5;
-  background: var(--md-sys-color-surface-container-high);
-  color: var(--md-sys-color-on-surface-variant);
-}
-
-.test-result.status-success {
-  background: var(--md-sys-color-tertiary-container);
-  color: var(--md-sys-color-on-tertiary-container);
-}
-
-.test-result.status-fail {
-  background: var(--md-sys-color-error-container);
-  color: var(--md-sys-color-on-error-container);
-}
-
-.status-success .status-label {
-  color: var(--md-sys-color-on-tertiary-container);
-}
-
-.status-fail .status-label {
-  color: var(--md-sys-color-on-error-container);
-}
-
-.status-success .latency,
-.status-fail .latency {
-  font-weight: 400;
-  font-size: 12px;
-  opacity: 0.75;
-}
-
-.status-success .result-detail,
-.status-fail .result-detail {
-  color: inherit;
-}
-
-.result-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.result-line {
-  margin: 0 0 4px 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  color: inherit;
-}
-
-.latency {
-  font-weight: 400;
-  font-size: 12px;
-  color: var(--md-sys-color-on-surface-variant);
-  opacity: 0.75;
-}
-
-.result-detail {
-  margin: 0;
-  color: var(--md-sys-color-on-surface-variant);
-  word-break: break-word;
-  white-space: pre-wrap;
-}
-
-.result-detail code {
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: var(--md-sys-color-surface-container);
-  font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-
-.rerank-list {
-  margin: 6px 0 0 0;
-  padding-left: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.rerank-list li {
-  display: flex;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--md-sys-color-on-surface-variant);
-}
-
-.rerank-list .score {
-  font-weight: 600;
-  color: var(--md-sys-color-primary);
-  flex-shrink: 0;
-}
-
-.rerank-list .doc {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-
-.spinning {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
+.inline-result { min-width: 0; display: grid; gap: 8px; margin: 0 14px; padding: 10px 0 12px; border-block-start: 1px solid var(--mt-line); font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
+.inline-result:empty { display: none; }
+.inline-result :is(p, ul, ol) { margin: 0; }
+.part, .error-line { min-width: 0; display: grid; gap: 2px; }
+.inline-result strong, .score, .latency { color: var(--md-sys-color-on-surface-variant); font-size: 12px; }
+.inline-result strong { font-weight: 600; }
+.verbatim { white-space: pre-wrap; }
+.error-line { border-inline-start: 2px solid var(--md-sys-color-error); padding-inline-start: 9px; }
+.error-line strong { color: var(--md-sys-color-error); }
+.latency { display: flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; }
+.tools { list-style: none; display: flex; flex-wrap: wrap; gap: 5px; padding: 0; }
+.tools li { min-width: 0; padding: 2px 6px; border-radius: var(--md-sys-shape-corner-extra-small); background: var(--md-sys-color-surface-container-low); }
+.vector code, .tools code { font: 12px/1.55 ui-monospace, Consolas, monospace; }
+.ranks { padding-inline-start: 22px; }
+.ranks li + li { margin-top: 6px; }
+.ranks li::marker { color: var(--md-sys-color-on-surface-variant); font-size: 12px; }
 </style>

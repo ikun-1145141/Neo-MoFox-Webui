@@ -1,24 +1,20 @@
-/**
- * 模型测试对话框共享类型
- * @file modelTestDialogTypes.ts
- */
-
-import type { ModelTestResult } from '@/api/types/config'
-
-export type TestStatus = 'idle' | 'running' | 'success' | 'fail'
+import type { ModelTestResult, ModelTestType } from '@/api/types/config'
 
 export type ModelKind = 'llm' | 'embedding' | 'rerank'
-
-export type LLMTestKey = 'chat' | 'stream' | 'tool_call' | 'vlm'
+export type TestStatus = 'idle' | 'running' | 'success' | 'fail'
 
 export interface TestItem {
-  /** 测试项键名，LLM 集群中同时作为 test_type 使用 */
-  key: string
-  label: string
-  desc: string
+  key: ModelTestType
+  /** Relative to the modelTestDialog translation namespace. */
+  message: string
   icon: string
   checked: boolean
   status: TestStatus
   result: ModelTestResult | null
   error: string
+}
+
+export const statusIcons: Record<TestStatus, string> = {
+  idle: 'schedule-rounded', running: 'progress-activity',
+  success: 'check-circle-rounded', fail: 'error-outline-rounded',
 }

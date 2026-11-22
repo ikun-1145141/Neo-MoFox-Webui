@@ -309,7 +309,7 @@ import TomlEditor from './TomlEditor.vue'
 import ModelEditDialog from './ModelEditDialog.vue'
 import ModelTestDialog from './ModelTestDialog.vue'
 import { getRawConfig } from '@/api/modules/config'
-import type { SectionSchema } from '@/api/types/config'
+import type { ModelTestModel, ModelTestProvider, SectionSchema } from '@/api/types/config'
 
 const { t } = useI18n()
 const dialogStore = useDialogStore()
@@ -380,8 +380,8 @@ const testResults = ref<{
 // 测试对话框状态
 const testDialog = ref<{
   isOpen: boolean
-  model: Record<string, any> | null
-  providers: Record<string, any>[]
+  model: ModelTestModel | null
+  providers: ModelTestProvider[]
 }>({
   isOpen: false,
   model: null,

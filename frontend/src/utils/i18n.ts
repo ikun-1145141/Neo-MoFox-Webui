@@ -1,4 +1,4 @@
-﻿import { readonly, ref } from 'vue'
+import { readonly, ref } from 'vue'
 import type { UISettings } from '../api/types/settings'
 
 export type Locale = UISettings['language']
@@ -986,6 +986,11 @@ const messages = {
       close: '关闭',
       testButton: '开始测试',
       running: '测试中…',
+      runAgain: '再次测试',
+      kindLabel: '模型类型',
+      listTitle: '测试项',
+      countSelected: '已选 {count}/{total}',
+      outputTitle: '测试输出',
       types: {
         llm: '大语言模型',
         embedding: '嵌入模型',
@@ -1012,9 +1017,9 @@ const messages = {
       rerank: {
         standard: '标准重排序测试',
         standardDesc: '对内置文档按查询相关性排序',
-        queryLabel: '查询（Query）',
+        queryLabel: '查询文本',
         queryPlaceholder: '输入用于重排序的查询',
-        topNLabel: '返回条数（top_n）',
+        topNLabel: '返回条数',
       },
       status: {
         idle: '未测试',
@@ -1023,6 +1028,9 @@ const messages = {
         fail: '失败',
       },
       result: {
+        response: '模型回复',
+        error: '失败原因',
+        score: '相关度 {score}',
         latency: '耗时 {ms} ms',
         dimensions: '输出维度: {dim}',
         embeddingPreview: '向量预览:',
@@ -2244,6 +2252,11 @@ const messages = {
       close: 'Close',
       testButton: 'Run Tests',
       running: 'Testing…',
+      runAgain: 'Run again',
+      kindLabel: 'Model type',
+      listTitle: 'Checks',
+      countSelected: '{count}/{total} selected',
+      outputTitle: 'Test output',
       types: {
         llm: 'LLM',
         embedding: 'Embedding',
@@ -2270,9 +2283,9 @@ const messages = {
       rerank: {
         standard: 'Standard rerank test',
         standardDesc: 'Re-rank built-in documents by query relevance',
-        queryLabel: 'Query',
+        queryLabel: 'Query text',
         queryPlaceholder: 'Enter the query used for reranking',
-        topNLabel: 'top_n',
+        topNLabel: 'Max. results',
       },
       status: {
         idle: 'Not tested',
@@ -2281,6 +2294,9 @@ const messages = {
         fail: 'Failed',
       },
       result: {
+        response: 'Model response',
+        error: 'Reason for failure',
+        score: 'Relevance {score}',
         latency: '{ms} ms',
         dimensions: 'Output dimension: {dim}',
         embeddingPreview: 'Vector preview:',
