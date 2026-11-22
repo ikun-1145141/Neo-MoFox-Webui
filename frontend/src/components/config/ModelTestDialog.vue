@@ -1,956 +1,258 @@
-<!--
-  @file ModelTestDialog.vue
-  @description 模型测试对话框（LLM / 嵌入 / 重排序）
-  
-  功能：
-  - 左侧选择模型种类（大模型 / 嵌入 / 重排序）
-  - 右侧展示该种类专属的测试项与参数
-  - 点击"开始测试"后并行执行所有勾选项，实时显示每项状态与结果
-  - 测试期间所有按钮置灰，全部完成后才允许关闭
-  - Material Design 3 样式
--->
+<script setup lang="ts">
+import { computed, nextTick, ref, useId, watch } from 'vue'
+import type { ModelTestModel, ModelTestProvider } from '@/api/types/config'
+import { useI18n } from '@/utils/i18n'
+import Icon from '../common/Icon.vue'
+import ModelTestDialogResult from './ModelTestDialogResult.vue'
+import { statusIcons } from './modelTestDialogTypes'
+import { modelKinds, useModelTestSession } from './useModelTestSession'
+
+const props = withDefaults(defineProps<{
+  isOpen: boolean
+  model: ModelTestModel | null
+  providers: ModelTestProvider[]
+  timeout?: number
+}>(), { timeout: 30 })
+const emit = defineEmits<{ close: [] }>()
+const { t } = useI18n()
+const tr = (key: string, params?: Record<string, string>) => t(`modelTestDialog.${key}`, params)
+const { activeKind, tests, checkedCount, blocked, batch, isRunning, dimensions, query, topN,
+  reset, switchKind, normalizeDimensions, normalizeTopN, run } = useModelTestSession(props)
+
+const id = useId()
+const dialog = ref<HTMLDialogElement | null>(null)
+const panel = ref<HTMLElement | null>(null)
+const pressedBackdrop = ref(false)
+
+watch([() => props.isOpen, dialog], ([open, el]) => {
+  if (!el) return
+  if (open && !el.open) {
+    reset()
+    el.showModal()
+  } else if (!open && el.open) el.close()
+}, { flush: 'post', immediate: true })
+
+const summary = computed(() => {
+  if (blocked.value) {
+    const provider = blocked.value === 'errors.providerNotFound' && props.model?.api_provider
+    return tr(blocked.value) + (provider ? ` · ${provider}` : '')
+  }
+  const { done, total, passed, failed } = batch.value
+  if (isRunning.value) return tr('summary.running', { done: String(done), total: String(total) })
+  if (!total) return ''
+  return failed ? tr('summary.done', { success: String(passed), fail: String(failed) })
+    : tr('summary.allPassed', { count: String(passed) })
+})
+const summaryState = computed(() => blocked.value ? 'blocked' : isRunning.value ? 'running'
+  : batch.value.failed ? 'fail' : 'success')
+const summaryIcons = { ...statusIcons, blocked: 'info-outline-rounded' }
+
+function close() { if (!isRunning.value) emit('close') }
+function start() {
+  if (blocked.value || isRunning.value) return
+  void run()
+  // The run button becomes disabled. The scrollable list stays available to keyboard users.
+  void nextTick(() => panel.value?.focus({ preventScroll: true }))
+}
+</script>
+
 <template>
   <Teleport to="body">
-    <div v-if="isOpen" class="dialog-overlay" @click="handleOverlayClick">
-      <div class="dialog-container" @click.stop>
-        <div class="dialog-header">
-          <div class="dialog-title">
-            <h2>{{ t('modelTestDialog.title') }}</h2>
-            <p class="subtitle">{{ modelName }}</p>
+    <dialog ref="dialog" class="model-test" :aria-labelledby="`${id}-title`" @cancel.prevent="close"
+      @pointerdown="pressedBackdrop = $event.target === dialog" @click.self="pressedBackdrop && close()">
+      <div v-if="isOpen" class="shell">
+        <header class="dialog-head">
+          <div class="identity">
+            <h2 :id="`${id}-title`" tabindex="-1" autofocus>{{ tr('title') }}</h2>
+            <p class="model-meta"><span class="model-name">{{ model?.name || tr('unknownModel') }}</span>
+              <template v-if="model?.api_provider"><span aria-hidden="true" class="meta-dot">·</span><span>{{ model.api_provider }}</span></template></p>
           </div>
-          <button
-            type="button"
-            class="close-btn"
-            :disabled="isRunning"
-            :title="t('modelTestDialog.close')"
-            @click="handleClose"
-          >
-            <Icon icon="material-symbols:close-rounded" :size="24" />
+          <button type="button" class="icon-button" :aria-label="tr('close')" :title="tr('close')" :disabled="isRunning" @click="close">
+            <Icon icon="close-rounded" :width="21" :height="21" />
           </button>
-        </div>
+        </header>
 
         <div class="dialog-body">
-          <!-- 左侧：模型种类 -->
-          <div class="type-sidebar">
-            <button
-              v-for="type in modelTypes"
-              :key="type.key"
-              type="button"
-              class="type-btn"
-              :class="{ active: activeType === type.key }"
-              :disabled="isRunning"
-              @click="switchType(type.key)"
-            >
-              <Icon :icon="type.icon" :size="20" />
-              <span>{{ type.label }}</span>
-            </button>
-          </div>
+          <aside class="rail">
+            <fieldset :disabled="isRunning" class="kind-list">
+              <legend>{{ tr('kindLabel') }}</legend>
+              <label v-for="kind in modelKinds" :key="kind.key" class="kind">
+                <input class="sr-only" type="radio" :name="`${id}-kind`" :checked="activeKind === kind.key" @change="switchKind(kind.key)" />
+                <span class="kind-face"><Icon :icon="kind.icon" :width="19" :height="19" />{{ tr(`types.${kind.key}`) }}</span>
+              </label>
+            </fieldset>
+          </aside>
 
-          <!-- 右侧：对应测试项 -->
-          <div class="test-panel">
-            <p v-if="hint" class="hint" :class="{ error: hintError }">
-              <Icon icon="material-symbols:info-outline-rounded" :size="16" />
-              <span>{{ hint }}</span>
-            </p>
-
-            <!-- LLM 测试项 -->
-            <template v-if="activeType === 'llm'">
-              <div class="test-item" v-for="test in llmTests" :key="test.key">
-                <label class="test-row" :class="{ disabled: isRunning }">
-                  <input
-                    type="checkbox"
-                    v-model="test.checked"
-                    :disabled="isRunning"
-                  />
-                  <span class="checkbox-box">
-                    <Icon v-show="test.checked" icon="material-symbols:check-rounded" :size="16" />
-                  </span>
-                  <Icon :icon="test.icon" :size="20" class="test-icon" />
+          <section :key="activeKind" ref="panel" class="test-panel" :aria-labelledby="`${id}-checks`" tabindex="0">
+            <div class="panel-heading">
+              <h3 :id="`${id}-checks`">{{ tr('listTitle') }}</h3>
+              <span>{{ tr('countSelected', { count: String(checkedCount), total: String(tests.length) }) }}</span>
+            </div>
+            <ul class="cards">
+              <li v-for="test in tests" :key="test.key" class="test-card">
+                <label class="test-row">
+                  <input v-model="test.checked" type="checkbox" class="sr-only" :disabled="isRunning"
+                    :aria-labelledby="`${id}-${test.key}`" :aria-describedby="`${id}-${test.key}-desc`" />
+                  <span class="check-face"><Icon icon="check-rounded" :width="14" :height="14" /></span>
+                  <span class="test-glyph"><Icon :icon="test.icon" :width="19" :height="19" /></span>
                   <span class="test-info">
-                    <span class="test-name">{{ test.label }}</span>
-                    <span class="test-desc">{{ test.desc }}</span>
+                    <span :id="`${id}-${test.key}`" class="test-name">{{ tr(test.message) }}</span>
+                    <span :id="`${id}-${test.key}-desc`" class="test-desc">{{ tr(`${test.message}Desc`) }}</span>
                   </span>
+                  <span class="state" :data-state="test.status"><Icon :icon="statusIcons[test.status]" :width="14" :height="14" :class="{ spinning: test.status === 'running' }" />{{ tr(`status.${test.status}`) }}</span>
                 </label>
-                <div class="test-extra">
-                  <TestResultRow :test="test" :is-running="isRunning" />
-                </div>
-                <p v-if="test.key === 'vlm'" class="vlm-hint">
-                  <Icon icon="material-symbols:info-outline-rounded" :size="15" />
-                  <span>{{ t('modelTestDialog.llm.vlmImageHint') }}</span>
-                </p>
-              </div>
-            </template>
+                <p v-if="test.key === 'vlm'" class="image-note"><Icon icon="info-outline-rounded" :width="14" :height="14" />{{ tr('llm.vlmImageHint') }}</p>
+                <ModelTestDialogResult v-if="test.status === 'success' || test.status === 'fail'" :test="test" />
+              </li>
+            </ul>
 
-            <!-- 嵌入测试项 -->
-            <template v-else-if="activeType === 'embedding'">
-              <div class="test-item" v-for="test in embeddingTests" :key="test.key">
-                <label class="test-row" :class="{ disabled: isRunning }">
-                  <input
-                    type="checkbox"
-                    v-model="test.checked"
-                    :disabled="isRunning"
-                  />
-                  <span class="checkbox-box">
-                    <Icon v-show="test.checked" icon="material-symbols:check-rounded" :size="16" />
-                  </span>
-                  <Icon :icon="test.icon" :size="20" class="test-icon" />
-                  <span class="test-info">
-                    <span class="test-name">{{ test.label }}</span>
-                    <span class="test-desc">{{ test.desc }}</span>
-                  </span>
-                </label>
-                <div class="test-extra">
-                  <TestResultRow :test="test" :is-running="isRunning" />
-                </div>
-              </div>
-              <div class="option-field">
-                <label for="embedding-dim">{{ t('modelTestDialog.embedding.dimensionLabel') }}</label>
-                <input
-                  id="embedding-dim"
-                  v-model.number="embeddingDimensions"
-                  type="number"
-                  min="1"
-                  max="65536"
-                  :disabled="isRunning"
-                  :placeholder="t('modelTestDialog.embedding.dimensionPlaceholder')"
-                  @change="embeddingDimensions = clampNumber(embeddingDimensions, 1, 65536)"
-                />
-                <p class="field-hint">{{ t('modelTestDialog.embedding.dimensionHint') }}</p>
-              </div>
-            </template>
-
-            <!-- 重排序测试项 -->
-            <template v-else>
-              <div class="test-item" v-for="test in rerankTests" :key="test.key">
-                <label class="test-row" :class="{ disabled: isRunning }">
-                  <input
-                    type="checkbox"
-                    v-model="test.checked"
-                    :disabled="isRunning"
-                  />
-                  <span class="checkbox-box">
-                    <Icon v-show="test.checked" icon="material-symbols:check-rounded" :size="16" />
-                  </span>
-                  <Icon :icon="test.icon" :size="20" class="test-icon" />
-                  <span class="test-info">
-                    <span class="test-name">{{ test.label }}</span>
-                    <span class="test-desc">{{ test.desc }}</span>
-                  </span>
-                </label>
-                <div class="test-extra">
-                  <TestResultRow :test="test" :is-running="isRunning" />
-                </div>
-              </div>
-              <div class="option-row">
-                <div class="option-field">
-                  <label for="rerank-query">{{ t('modelTestDialog.rerank.queryLabel') }}</label>
-                  <input
-                    id="rerank-query"
-                    v-model="rerankQuery"
-                    type="text"
-                    :disabled="isRunning"
-                    :placeholder="t('modelTestDialog.rerank.queryPlaceholder')"
-                  />
-                </div>
-                <div class="option-field narrow">
-                  <label for="rerank-topn">{{ t('modelTestDialog.rerank.topNLabel') }}</label>
-                  <input
-                    id="rerank-topn"
-                    v-model.number="rerankTopN"
-                    type="number"
-                    min="1"
-                    max="100"
-                    :disabled="isRunning"
-                    @change="rerankTopN = clampNumber(rerankTopN, 1, 100)"
-                  />
-                </div>
-              </div>
-            </template>
-          </div>
+            <div v-if="activeKind === 'embedding'" class="parameters">
+              <label class="field"><span>{{ tr('embedding.dimensionLabel') }}</span>
+                <input v-model.number="dimensions" type="number" min="1" max="65536" step="1" :disabled="isRunning"
+                  :aria-describedby="`${id}-dim-hint`" :placeholder="tr('embedding.dimensionPlaceholder')" @change="normalizeDimensions" /></label>
+              <p :id="`${id}-dim-hint`" class="field-hint">{{ tr('embedding.dimensionHint') }}</p>
+            </div>
+            <div v-else-if="activeKind === 'rerank'" class="parameters rerank-fields">
+              <label class="field"><span>{{ tr('rerank.queryLabel') }}</span><input v-model="query" type="text" :disabled="isRunning" :placeholder="tr('rerank.queryPlaceholder')" /></label>
+              <label class="field"><span>{{ tr('rerank.topNLabel') }}</span><input v-model.number="topN" type="number" min="1" max="100" step="1" :disabled="isRunning" @change="normalizeTopN" /></label>
+            </div>
+          </section>
         </div>
 
-        <div class="dialog-footer">
-          <div class="footer-status" v-if="summaryMessage">
-            <Icon :icon="summaryIcon" :size="18" />
-            <span>{{ summaryMessage }}</span>
+        <footer class="dialog-foot">
+          <div class="feedback" role="status" aria-atomic="true" :data-state="summaryState">
+            <template v-if="summary"><div class="feedback-line"><Icon :icon="summaryIcons[summaryState]" :width="17" :height="17" :class="{ spinning: isRunning }" /><span>{{ summary }}</span></div>
+              <progress v-if="isRunning" :value="batch.done" :max="batch.total" :aria-label="summary" /></template>
           </div>
-          <button
-            type="button"
-            class="cancel-btn"
-            :disabled="isRunning"
-            @click="handleClose"
-          >
-            {{ t('modelTestDialog.close') }}
-          </button>
-          <button
-            type="button"
-            class="submit-btn"
-            :disabled="isRunning"
-            @click="runTests"
-          >
-            <Icon
-              v-if="!isRunning"
-              icon="material-symbols:play-arrow-rounded"
-              :size="20"
-            />
-            <Icon
-              v-else
-              icon="material-symbols:progress-activity"
-              :size="20"
-              class="spinning"
-            />
-            <span>{{ isRunning ? t('modelTestDialog.running') : t('modelTestDialog.testButton') }}</span>
-          </button>
-        </div>
+          <div class="actions">
+            <button type="button" class="cancel" :disabled="isRunning" @click="close">{{ tr('close') }}</button>
+            <button type="button" class="run" :disabled="isRunning || !!blocked" @click="start"><Icon :icon="isRunning ? statusIcons.running : 'play-arrow-rounded'" :width="19" :height="19" :class="{ spinning: isRunning }" />{{ tr(isRunning ? 'running' : batch.total ? 'runAgain' : 'testButton') }}</button>
+          </div>
+        </footer>
       </div>
-    </div>
+    </dialog>
   </Teleport>
 </template>
 
-<script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { isAxiosError } from 'axios'
-import { useI18n } from '@/utils/i18n'
-import Icon from '../common/Icon.vue'
-import TestResultRow from './ModelTestDialogResult.vue'
-import { testModel as apiTestModel } from '@/api/modules/config'
-import type { ModelKind, TestItem, LLMTestKey } from './modelTestDialogTypes'
-import type { ModelTestRequest } from '@/api/types/config'
-import { clampNumber } from '@/utils/number'
-
-const { t } = useI18n()
-
-// Props
-interface Props {
-  isOpen: boolean
-  model: Record<string, any> | null
-  providers: Record<string, any>[] // 当前页面供应商列表（含未保存的编辑值）
-  timeout?: number
-}
-
-const props = withDefaults(defineProps<Props>(), {
-  isOpen: false,
-  model: null,
-  providers: () => [],
-  timeout: 30,
-})
-
-// Emits
-const emit = defineEmits<{
-  close: []
-}>()
-
-// ===== 状态 =====
-const activeType = ref<ModelKind>('llm')
-const isRunning = ref(false)
-const hint = ref('')
-const hintError = ref(false)
-
-// LLM 测试项
-const llmTests = ref<TestItem[]>([])
-// 嵌入测试项
-const embeddingTests = ref<TestItem[]>([])
-// 重排序测试项
-const rerankTests = ref<TestItem[]>([])
-
-// 输入项
-const embeddingDimensions = ref<number>(0)
-const rerankQuery = ref('中国最热门的旅游城市')
-const rerankTopN = ref(2)
-
-// 模型种类定义
-const modelTypes = computed(() => [
-  { key: 'llm' as const, label: t('modelTestDialog.types.llm'), icon: 'material-symbols:model-training-outline-rounded' },
-  { key: 'embedding' as const, label: t('modelTestDialog.types.embedding'), icon: 'material-symbols:data-object-outline-rounded' },
-  { key: 'rerank' as const, label: t('modelTestDialog.types.rerank'), icon: 'material-symbols:swap-vert-rounded' },
-])
-
-// 模型显示名
-const modelName = computed(() => props.model?.name || t('modelTestDialog.unknownModel'))
-
-// 测试小结
-const summaryMessage = computed(() => {
-  const tests = currentTests.value
-  if (!tests.some(t => t.status !== 'idle')) return ''
-  const done = tests.filter(t => t.status === 'success' || t.status === 'fail')
-  if (done.length === 0) return ''
-  const successCount = tests.filter(t => t.status === 'success').length
-  const failCount = tests.filter(t => t.status === 'fail').length
-  if (isRunning.value) {
-    return t('modelTestDialog.summary.running', { done: String(done.length), total: String(tests.filter(t => t.checked).length) })
-  }
-  return successCount > 0 && failCount === 0
-    ? t('modelTestDialog.summary.allPassed', { count: String(successCount) })
-    : t('modelTestDialog.summary.done', { success: String(successCount), fail: String(failCount) })
-})
-
-const summaryIcon = computed(() => {
-  const tests = currentTests.value
-  const failCount = tests.filter(t => t.status === 'fail').length
-  if (isRunning.value) return 'material-symbols:sync-rounded'
-  return failCount > 0
-    ? 'material-symbols:error-outline-rounded'
-    : 'material-symbols:check-circle-outline-rounded'
-})
-
-const currentTests = computed<TestItem[]>(() => {
-  if (activeType.value === 'llm') return llmTests.value
-  if (activeType.value === 'embedding') return embeddingTests.value
-  return rerankTests.value
-})
-
-// ===== 初始化测试项 =====
-function resetTests() {
-  llmTests.value = [
-    {
-      key: 'chat', label: t('modelTestDialog.llm.chat'), desc: t('modelTestDialog.llm.chatDesc'),
-      icon: 'material-symbols:chat-outline-rounded', checked: true,
-      status: 'idle', result: null, error: '',
-    },
-    {
-      key: 'stream', label: t('modelTestDialog.llm.stream'), desc: t('modelTestDialog.llm.streamDesc'),
-      icon: 'material-symbols:stream-rounded', checked: true,
-      status: 'idle', result: null, error: '',
-    },
-    {
-      key: 'tool_call', label: t('modelTestDialog.llm.toolCall'), desc: t('modelTestDialog.llm.toolCallDesc'),
-      icon: 'material-symbols:handyman-outline-rounded', checked: true,
-      status: 'idle', result: null, error: '',
-    },
-    {
-      key: 'vlm', label: t('modelTestDialog.llm.vlm'), desc: t('modelTestDialog.llm.vlmDesc'),
-      icon: 'material-symbols:image-outline-rounded', checked: false,
-      status: 'idle', result: null, error: '',
-    },
-  ]
-  embeddingTests.value = [
-    {
-      key: 'embedding', label: t('modelTestDialog.embedding.standard'), desc: t('modelTestDialog.embedding.standardDesc'),
-      icon: 'material-symbols:view-in-ar-outline-rounded', checked: true,
-      status: 'idle', result: null, error: '',
-    },
-  ]
-  rerankTests.value = [
-    {
-      key: 'rerank', label: t('modelTestDialog.rerank.standard'), desc: t('modelTestDialog.rerank.standardDesc'),
-      icon: 'material-symbols:list-alt-outline-rounded', checked: true,
-      status: 'idle', result: null, error: '',
-    },
-  ]
-  // 根据模型名猜测类型
-  const identifier = String(props.model?.model_identifier || props.model?.name || '').toLowerCase()
-  if (/(embed|bge|text-embedding)/.test(identifier)) {
-    activeType.value = 'embedding'
-  } else if (/rerank|re-rank|rank/.test(identifier)) {
-    activeType.value = 'rerank'
-  } else {
-    activeType.value = 'llm'
-  }
-}
-
-function switchType(type: ModelKind) {
-  activeType.value = type
-  hint.value = ''
-  hintError.value = false
-}
-
-// ===== 构建请求快照 =====
-function buildSnapshot(request: Partial<ModelTestRequest>): ModelTestRequest {
-  const model = props.model
-  const provider = props.providers.find(p => String(p?.name) === String(model?.api_provider))
-
-  if (!model) {
-    throw { notFound: true, message: (t('modelTestDialog.unknownModel') as string) }
-  }
-
-  if (!provider) {
-    throw { notFound: true, message: (t('modelTestDialog.errors.providerNotFound') as string) + `: ${model?.api_provider}` }
-  }
-
-  return {
-    ...request,
-    provider_name: provider.name,
-    model_name: model.name,
-    provider: {
-      name: provider.name,
-      base_url: provider.base_url,
-      api_key: Array.isArray(provider.api_key) ? [...provider.api_key] : provider.api_key,
-    },
-    model: {
-      name: model.name,
-      model_identifier: model.model_identifier,
-      api_provider: model.api_provider,
-    },
-    test_prompt: request.test_prompt ?? '你好',
-    timeout: props.timeout,
-  }
-}
-
-// ===== 执行测试 =====
-async function runTests() {
-  if (isRunning.value) return
-  if (!props.model) return
-
-  const tests = currentTests.value
-  const selected = tests.filter(t => t.checked)
-  if (selected.length === 0) {
-    hint.value = t('modelTestDialog.errors.noTestSelected')
-    hintError.value = true
-    return
-  }
-
-  const providerExists = props.providers.some(
-    p => String(p?.name) === String(props.model?.api_provider)
-  )
-  if (!providerExists) {
-    hint.value = (t('modelTestDialog.errors.providerNotFound') as string) + `: ${props.model?.api_provider}`
-    hintError.value = true
-    return
-  }
-
-  hint.value = ''
-  hintError.value = false
-  isRunning.value = true
-
-  // 重置勾选项状态，未勾选项保持未测试
-  selected.forEach(test => {
-    test.status = 'running'
-    test.result = null
-    test.error = ''
-  })
-
-  const tasks = selected.map((test) => runSingleTest(test))
-  await Promise.allSettled(tasks)
-
-  isRunning.value = false
-}
-
-async function runSingleTest(test: TestItem) {
-  try {
-    let request: ModelTestRequest
-    if (activeType.value === 'llm') {
-      // LLM 测试项统一使用后端默认提示词，无需前端提供测试提示词
-      request = buildSnapshot({
-        test_type: test.key as LLMTestKey,
-      })
-    } else if (activeType.value === 'embedding') {
-      request = buildSnapshot({
-        test_type: 'embedding',
-        test_prompt: '人工智能改变了世界',
-        dimensions: embeddingDimensions.value || null,
-      })
-    } else {
-      request = buildSnapshot({
-        test_type: 'rerank',
-        test_prompt: rerankQuery.value,
-        top_n: rerankTopN.value || null,
-      })
-    }
-
-    const result = await apiTestModel(request)
-    test.status = result.success ? 'success' : 'fail'
-    test.result = result
-    if (!result.success) {
-      test.error = result.error_message || t('modelTestDialog.errors.failed')
-    }
-  } catch (error: unknown) {
-    test.status = 'fail'
-    test.result = null
-    if (error && typeof error === 'object' && 'notFound' in error) {
-      test.error = (error as any).message
-    } else {
-      const message = isAxiosError(error)
-        ? error.response?.data?.message ?? error.response?.data?.detail ?? error.message
-        : error && typeof error === 'object' && 'message' in error ? error.message : null
-      test.error = typeof message === 'string' ? message : t('modelTestDialog.errors.failed')
-    }
-  }
-}
-
-// ===== 关闭 =====
-function handleClose() {
-  if (isRunning.value) return
-  emit('close')
-}
-
-function handleOverlayClick() {
-  if (isRunning.value) return
-  emit('close')
-}
-
-// 重置状态
-watch(() => props.isOpen, (open) => {
-  if (open) {
-    resetTests()
-    isRunning.value = false
-    hint.value = ''
-    hintError.value = false
-  }
-}, { immediate: true })
-</script>
-
 <style scoped>
-.dialog-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  animation: fadeIn 0.2s;
+.model-test {
+  --mt-line: color-mix(in srgb, var(--md-sys-color-outline-variant) 68%, transparent);
+  --mt-muted: var(--md-sys-color-on-surface-variant);
+  --mt-card: var(--md-sys-color-surface-container-lowest);
+  box-sizing: border-box; width: min(92vw, 860px); height: clamp(532px, 50dvh, 620px);
+  max-width: none; max-height: calc(100dvh - 32px); margin: auto; padding: 0; overflow: hidden;
+  border: 0; border-radius: var(--md-sys-shape-corner-extra-large); box-shadow: var(--md-sys-elevation-3);
+  background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); font-family: inherit;
 }
+.model-test::backdrop { background: color-mix(in srgb, var(--md-sys-color-scrim) 38%, transparent); }
+.model-test[open] { animation: mt-enter 160ms ease-out; }
+.shell { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+.shell :is(h2, h3, p, ul, fieldset) { margin: 0; }
+.shell button, .shell input { font: inherit; }
+.shell button { border: 0; cursor: pointer; }
+.shell button:disabled { cursor: default; }
+.shell :is(button, .field input):focus-visible, .sr-only:focus-visible + span { outline: 2px solid var(--md-sys-color-primary); outline-offset: 3px; }
+.test-panel:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: -3px; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); border: 0; white-space: nowrap; }
+.dialog-head, .dialog-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--md-sys-color-surface); }
+.dialog-head { padding: 17px 22px 16px 24px; border-block-end: 1px solid var(--mt-line); }
+.identity { min-width: 0; }
+.identity h2 { font-size: 23px; line-height: 1.3; font-weight: 600; letter-spacing: -.025em; }
+.identity h2:focus { outline: none; }
+.identity .model-meta { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 7px; margin-top: 3px; max-height: 3em; overflow: auto; overflow-wrap: anywhere; color: var(--mt-muted); font-size: 12px; line-height: 1.5; }
+.model-meta span { min-width: 0; }
+.model-name { font-family: ui-monospace, Consolas, monospace; }
+.meta-dot { color: var(--md-sys-color-outline); }
+.icon-button { flex: none; display: grid; place-items: center; width: 42px; height: 42px; padding: 0; border-radius: 50%; color: var(--mt-muted); background: transparent; }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+/* The rail chooses a model family, never an individual check. */
+.dialog-body { display: grid; grid-template-columns: 180px minmax(0, 1fr); min-height: 0; }
+.rail { min-width: 0; overflow: auto; padding: 16px 12px; background: var(--md-sys-color-surface-container-low); border-inline-end: 1px solid var(--mt-line); }
+.kind-list { min-width: 0; padding: 0; border: 0; }
+.kind-list legend, .panel-heading h3 { padding: 0; color: var(--mt-muted); font-size: 13px; line-height: 20px; font-weight: 600; }
+.kind-list legend { margin: 0 0 10px 12px; }
+.kind { position: relative; display: block; cursor: pointer; }
+.kind + .kind { margin-top: 4px; }
+.kind-face { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 12px; border-radius: var(--md-sys-shape-corner-medium); color: var(--mt-muted); font-size: 14px; line-height: 20px; }
+.kind-face > span, .image-note > span { flex: none; }
+.kind input:checked + .kind-face { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); font-weight: 600; }
+.kind-list:disabled .kind, .test-row:has(input:disabled) { cursor: default; }
+.kind-list:disabled .kind input:not(:checked) + .kind-face { opacity: .6; }
+
+.test-panel { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px 20px 18px; }
+.panel-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.panel-heading > span { color: var(--mt-muted); font-size: 12px; line-height: 18px; font-variant-numeric: tabular-nums; }
+.cards { display: grid; gap: 8px; list-style: none; padding: 0; }
+.test-card { min-width: 0; border: 1px solid var(--mt-line); border-radius: var(--md-sys-shape-corner-medium); background: var(--mt-card); }
+.test-row { position: relative; display: grid; grid-template-columns: 18px 30px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 61px; padding: 9px 14px; border-radius: inherit; cursor: pointer; }
+.check-face { box-sizing: border-box; display: grid; place-items: center; width: 18px; height: 18px; border: 2px solid var(--md-sys-color-outline); border-radius: var(--md-sys-shape-corner-extra-small); }
+.check-face > span { visibility: hidden; }
+.test-row input:checked + .check-face { background: var(--md-sys-color-primary); border-color: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+.test-row input:checked + .check-face > span { visibility: visible; }
+.test-row input:disabled + .check-face { opacity: .5; }
+.test-glyph { display: grid; place-items: center; width: 30px; height: 30px; border-radius: var(--md-sys-shape-corner-small); color: var(--mt-muted); background: var(--md-sys-color-surface-container-low); }
+.test-row input:checked ~ .test-glyph { color: var(--md-sys-color-primary); background: color-mix(in srgb, var(--md-sys-color-primary-container) 44%, var(--mt-card)); }
+.test-info { min-width: 0; display: grid; gap: 2px; overflow-wrap: anywhere; }
+.test-name { font-size: 15px; font-weight: 600; line-height: 20px; }
+.test-desc, .field-hint { font-size: 12px; line-height: 18px; color: var(--mt-muted); }
+.state { display: inline-flex; align-items: center; justify-self: end; gap: 4px; white-space: nowrap; padding: 2px 7px; border-radius: var(--md-sys-shape-corner-full); font-size: 12px; line-height: 18px; color: var(--mt-muted); }
+.state[data-state='running'] { color: var(--md-sys-color-on-primary-container); background: var(--md-sys-color-primary-container); }
+.state[data-state='success'] { color: var(--md-sys-color-on-tertiary-container); background: var(--md-sys-color-tertiary-container); }
+.state[data-state='fail'] { color: var(--md-sys-color-on-error-container); background: var(--md-sys-color-error-container); }
+.test-card .image-note { display: flex; align-items: baseline; gap: 5px; padding: 0 14px 10px 82px; color: var(--mt-muted); font-size: 12px; line-height: 17px; }
+.image-note > span { align-self: flex-start; margin-top: 1px; }
+
+.parameters { display: grid; gap: 6px; margin: 16px 0 0; }
+.rerank-fields { grid-template-columns: minmax(0, 1fr) minmax(105px, .38fr); gap: 12px; align-items: end; }
+.field { display: grid; min-width: 0; gap: 6px; }
+.field > span { color: var(--md-sys-color-on-surface); font-size: 13px; font-weight: 550; }
+.field input { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: 8px 12px; border: 1px solid var(--md-sys-color-outline); border-radius: var(--md-sys-shape-corner-small); color: var(--md-sys-color-on-surface); background: var(--mt-card); font-size: 14px; }
+.field input::placeholder { color: var(--mt-muted); }
+.field input:disabled { opacity: .65; }
+.dialog-foot { justify-content: flex-end; padding: 12px 22px; border-block-start: 1px solid var(--mt-line); }
+.feedback { min-width: 0; margin-inline-end: auto; color: var(--mt-muted); }
+.feedback-line { display: flex; align-items: center; gap: 7px; font-size: 13px; line-height: 19px; overflow-wrap: anywhere; }
+.feedback-line > span:first-child { flex: none; }
+.feedback[data-state='fail'], .feedback[data-state='blocked'] { color: var(--md-sys-color-error); }
+.feedback[data-state='success'] { color: var(--md-sys-color-tertiary); }
+.feedback progress { display: block; width: min(160px, 100%); height: 4px; margin-top: 5px; accent-color: var(--md-sys-color-primary); }
+.actions { flex: none; display: flex; align-items: center; gap: 8px; }
+.actions button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 42px; padding: 0 17px; border-radius: var(--md-sys-shape-corner-full); font-size: 14px; font-weight: 600; }
+.cancel { background: transparent; color: var(--mt-muted); }
+.actions .run { padding: 0 21px 0 16px; background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+.actions .run:disabled { color: var(--mt-muted); background: color-mix(in srgb, var(--md-sys-color-on-surface) 12%, transparent); }
+.icon-button:disabled, .cancel:disabled { opacity: .45; }
+@media (hover: hover) {
+  .icon-button:hover:not(:disabled), .cancel:hover:not(:disabled), .kind-list:not(:disabled) .kind:hover input:not(:checked) + span { background: color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent); }
+  .test-card:has(.test-row:hover input:not(:disabled)) { border-color: var(--md-sys-color-outline); }
+  .actions .run:hover:not(:disabled) { background: color-mix(in srgb, var(--md-sys-color-primary) 92%, var(--md-sys-color-on-primary)); box-shadow: var(--md-sys-elevation-1); }
 }
-
-.dialog-container {
-  background: var(--md-sys-color-surface);
-  border-radius: 16px;
-  width: min(92vw, 860px);
-  /* 固定高度：切换模型种类（项数不同）时弹窗高度保持不变，内容在内部滚动 */
-  height: min(50vh, 620px);
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  animation: slideUp 0.3s;
-  overflow: hidden;
+@media (max-width: 768px) {
+  .model-test { width: 95vw; height: 78dvh; max-height: calc(100dvh - 16px); border-radius: var(--md-sys-shape-corner-large); }
+  .dialog-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .rail { padding: 6px 12px; border-inline-end: 0; border-block-end: 1px solid var(--mt-line); }
+  .kind-list { display: flex; gap: 4px; }
+  .kind-list legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .kind { flex: 1; min-width: 0; }
+  .kind + .kind { margin: 0; }
+  .kind-face { justify-content: center; gap: 6px; padding-inline: 5px; text-align: center; }
+  .test-panel { padding: 12px 14px 16px; }
+  .dialog-head { padding: 13px 15px 12px 18px; }
+  .identity h2 { font-size: 21px; }
+  .dialog-foot { flex-wrap: wrap; gap: 5px 12px; padding: 10px 14px; }
+  .actions { margin-inline-start: auto; }
+  .rerank-fields { grid-template-columns: minmax(0, 1fr); }
 }
-
-@keyframes slideUp {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+@media (max-width: 480px) {
+  .kind-face { font-size: 13px; }
+  .test-row { grid-template-columns: 18px 24px minmax(0, 1fr) auto; gap: 7px; padding: 10px; }
+  .test-glyph { width: 24px; height: 27px; }
+  .state { gap: 3px; padding-inline: 4px; font-size: 11px; }
+  .test-card .image-note { padding-inline: 10px; }
 }
-
-.dialog-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--md-sys-color-outline-variant);
-  flex-shrink: 0;
-}
-
-.dialog-title {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-}
-
-.dialog-title h2 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--md-sys-color-on-surface);
-}
-
-.subtitle {
-  margin: 2px 0 0 0;
-  font-size: 13px;
-  color: var(--md-sys-color-on-surface-variant);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-
-.close-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  background: transparent;
-  color: var(--md-sys-color-on-surface-variant);
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.close-btn:hover:not(:disabled) {
-  background: var(--md-sys-color-surface-container-highest);
-  color: var(--md-sys-color-on-surface);
-}
-
-.close-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.dialog-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  overflow: hidden;
-}
-
-/* 左侧导航 */
-.type-sidebar {
-  width: 180px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px;
-  background: var(--md-sys-color-surface-container);
-  border-right: 1px solid var(--md-sys-color-outline-variant);
-  overflow-y: auto;
-}
-
-.type-btn {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  font-size: 14px;
-  font-weight: 500;
-  background: transparent;
-  color: var(--md-sys-color-on-surface-variant);
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-  text-align: left;
-}
-
-.type-btn:hover:not(:disabled) {
-  background: var(--md-sys-color-surface-container-high);
-  color: var(--md-sys-color-on-surface);
-}
-
-.type-btn.active {
-  background: var(--md-sys-color-secondary-container);
-  color: var(--md-sys-color-on-secondary-container);
-  font-weight: 600;
-}
-
-.type-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* 右侧测试面板 */
-.test-panel {
-  flex: 1;
-  min-width: 0;
-  overflow-y: auto;
-  padding: 20px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.hint {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  padding: 10px 14px;
-  font-size: 13px;
-  border-radius: 8px;
-  background: var(--md-sys-color-surface-container-high);
-  color: var(--md-sys-color-on-surface-variant);
-}
-
-.hint.error {
-  background: var(--md-sys-color-error-container);
-  color: var(--md-sys-color-on-error-container);
-}
-
-.test-item {
-  background: var(--md-sys-color-surface-container);
-  border: 1px solid var(--md-sys-color-outline-variant);
-  border-radius: 12px;
-  padding: 14px 16px;
-}
-
-.test-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.test-row.disabled {
-  cursor: not-allowed;
-  opacity: 0.85;
-}
-
-.test-row input[type="checkbox"] {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.checkbox-box {
-  position: relative;
-  width: 20px;
-  height: 20px;
-  margin-top: 2px;
-  border: 2px solid var(--md-sys-color-outline);
-  border-radius: 4px;
-  background: var(--md-sys-color-surface);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.checkbox-box :deep(svg) {
-  opacity: 0;
-  transform: scale(0);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  color: var(--md-sys-color-on-primary);
-}
-
-.test-row input[type="checkbox"]:checked + .checkbox-box {
-  background: var(--md-sys-color-primary);
-  border-color: var(--md-sys-color-primary);
-}
-
-.test-row input[type="checkbox"]:checked + .checkbox-box :deep(svg) {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.test-row:hover .checkbox-box {
-  border-color: var(--md-sys-color-primary);
-}
-
-.test-row input:disabled + .checkbox-box {
-  opacity: 0.5;
-}
-
-.test-icon {
-  color: var(--md-sys-color-primary);
-  flex-shrink: 0;
-}
-
-.test-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.test-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--md-sys-color-on-surface);
-}
-
-.test-desc {
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--md-sys-color-on-surface-variant);
-}
-
-.test-extra {
-  margin-top: 10px;
-}
-
-/* 参数输入 */
-.option-field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.option-row {
-  display: grid;
-  grid-template-columns: 1fr 140px;
-  gap: 12px;
-}
-
-.option-field label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--md-sys-color-on-surface-variant);
-}
-
-.option-field input {
-  padding: 10px 14px;
-  font-size: 14px;
-  background: var(--md-sys-color-surface-container);
-  color: var(--md-sys-color-on-surface);
-  border: 1px solid var(--md-sys-color-outline);
-  border-radius: 8px;
-  font-family: inherit;
-  transition: all 0.2s;
-}
-
-.option-field input:focus {
-  outline: none;
-  border-color: var(--md-sys-color-primary);
-  box-shadow: 0 0 0 2px var(--md-sys-color-primary-container);
-}
-
-.option-field input:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.field-hint {
-  margin: 0;
-  font-size: 12px;
-  color: var(--md-sys-color-on-surface-variant);
-  line-height: 1.4;
-}
-
-/* VLM 测试提示：说明测试发送的是红色正方形图片 */
-.vlm-hint {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 10px 2px 0 2px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--md-sys-color-on-secondary-container);
-  background: var(--md-sys-color-secondary-container);
-}
-
-.vlm-hint .iconify {
-  flex-shrink: 0;
-}
-
-/* 底部操作区 */
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 24px;
-  border-top: 1px solid var(--md-sys-color-outline-variant);
-  flex-shrink: 0;
-}
-
-.footer-status {
-  margin-right: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--md-sys-color-on-surface-variant);
-}
-
-.cancel-btn,
-.submit-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 2.5rem;
-  padding: 0 1.25rem;
-  font-size: 14px;
-  font-weight: 500;
-  border: none;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-  gap: 6px;
-}
-
-.cancel-btn {
-  background: transparent;
-  color: var(--md-sys-color-on-surface-variant);
-}
-
-.cancel-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--md-sys-color-surface-container) 60%, transparent);
-  color: var(--md-sys-color-on-surface);
-}
-
-.submit-btn {
-  background: var(--md-sys-color-primary);
-  color: var(--md-sys-color-on-primary);
-}
-
-.submit-btn:hover:not(:disabled) {
-  box-shadow: 0 2px 8px rgba(0, 88, 189, 0.3);
-  transform: translateY(-1px);
-}
-
-.submit-btn:disabled,
-.cancel-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.spinning {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* 移动端适配 */
-@media screen and (max-width: 768px) {
-  .dialog-container {
-    width: 95vw;
-    height: 78vh;
-    max-height: 78vh;
-  }
-
-  .dialog-body {
-    flex-direction: column;
-  }
-
-  .type-sidebar {
-    width: 100%;
-    flex-direction: row;
-    border-right: none;
-    border-bottom: 1px solid var(--md-sys-color-outline-variant);
-    padding: 10px 12px;
-    overflow-x: auto;
-  }
-
-  .type-btn {
-    flex-shrink: 0;
-    padding: 10px 14px;
-  }
-
-  .test-panel {
-    padding: 16px;
-  }
-
-  .option-row {
-    grid-template-columns: 1fr;
-  }
-
-  .dialog-footer {
-    flex-wrap: wrap;
-  }
-
-  .footer-status {
-    width: 100%;
-    margin-right: 0;
-  }
-}
+@media (max-width: 359px) { .kind-face > span { display: none; } }
+.spinning { animation: mt-spin 1s linear infinite; }
+@keyframes mt-spin { to { transform: rotate(360deg); } }
+@keyframes mt-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .model-test[open], .spinning { animation: none; } }
 </style>
